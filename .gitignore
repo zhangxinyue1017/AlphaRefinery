@@ -1,0 +1,35 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments and local env files
+.venv/
+venv/
+.env
+.env.*
+.python-version
+
+# Notebook / editor / OS junk
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local provider secrets
+llm_refine_provider_env.sh
+
+# Generated artifacts and runtime outputs
+artifacts/
