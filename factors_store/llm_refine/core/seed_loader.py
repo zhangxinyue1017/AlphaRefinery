@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -136,11 +137,30 @@ def resolve_preferred_refine_seed(family: SeedFamily) -> str:
     return family.canonical_seed
 
 
+@lru_cache(maxsize=512)
+def _resolve_registry_expression(factor_name: str) -> str:
+    text = str(factor_name or "").strip()
+    if not text or not text.startswith(("llm_refined.", "seed_baseline.")):
+        return ""
+    try:
+        from ...registry import create_default_registry
+
+        registry = create_default_registry()
+        spec = registry.get(text)
+        return str(spec.expr or "").strip()
+    except Exception:
+        return ""
+
+
 def resolve_family_formula(family: SeedFamily, factor_name: str) -> str:
-    raw = _PUBLIC_FORMULA_OVERRIDES.get(
-        factor_name,
-        family.formulas.get(factor_name, family.formulas.get(family.canonical_seed, "")),
-    )
+    raw = _PUBLIC_FORMULA_OVERRIDES.get(factor_name)
+    if not raw:
+        raw = family.formulas.get(factor_name, "")
+    if not raw:
+        raw = _resolve_registry_expression(factor_name)
+    if not raw:
+        canonical_raw = family.formulas.get(family.canonical_seed, "")
+        raw = _PUBLIC_FORMULA_OVERRIDES.get(family.canonical_seed, canonical_raw)
     return apply_direction_rule(raw, resolve_factor_direction(family, factor_name))
 
 

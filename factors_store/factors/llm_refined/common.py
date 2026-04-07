@@ -30,6 +30,7 @@ class FactorSpec:
     func: Callable[[dict[str, pd.Series]], pd.Series]
     required_fields: tuple[str, ...]
     notes: str
+    expr: str = ""
 
 
 def prepare_core_inputs(

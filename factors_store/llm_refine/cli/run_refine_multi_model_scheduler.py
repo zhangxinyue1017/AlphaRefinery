@@ -30,6 +30,15 @@ from ..search.scoring import pairwise_similarity
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
 from .run_refine_multi_model import build_arg_parser as build_multi_model_arg_parser
 
+_STAGE_MODE_CHOICES = (
+    "auto",
+    "new_family_broad",
+    "broad_followup",
+    "focused_refine",
+    "confirmation",
+    "donor_validation",
+)
+
 
 def _normalize_models(values: list[str]) -> list[str]:
     out: list[str] = []
@@ -138,6 +147,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="",
         help="optional comma-separated model list for expandability_parent when dual-parent round is triggered",
     )
+    parser.add_argument(
+        "--stage-mode",
+        default="auto",
+        choices=_STAGE_MODE_CHOICES,
+        help="explicit orchestration stage label for this scheduler run",
+    )
     return parser
 
 
@@ -146,6 +161,8 @@ def _build_round_cmd(
     *,
     parent: dict[str, Any],
     round_multi_root: Path,
+    child_stage_mode: str,
+    force_round1_seed_stage: bool = False,
     models_override: list[str] | None = None,
 ) -> list[str]:
     cmd = [
@@ -205,13 +222,30 @@ def _build_round_cmd(
         cmd.extend(["--policy-preset", str(args.policy_preset)])
     if str(args.target_profile).strip():
         cmd.extend(["--target-profile", str(args.target_profile)])
+    if str(child_stage_mode).strip():
+        cmd.extend(["--stage-mode", str(child_stage_mode)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     if args.auto_apply_promotion:
         cmd.append("--auto-apply-promotion")
-    if is_seed_stage_node_kind(str(parent.get("node_kind", ""))):
+    if force_round1_seed_stage or is_seed_stage_node_kind(str(parent.get("node_kind", ""))):
         cmd.append("--round1-seed-stage")
     return cmd
+
+
+def _resolve_child_stage_mode(stage_mode: str, *, round_idx: int) -> str:
+    stage = str(stage_mode or "auto").strip() or "auto"
+    if stage == "new_family_broad":
+        return "new_family_broad" if int(round_idx) == 1 else "broad_followup"
+    return stage
+
+
+def _pick_round_prompt_trace(sub_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    for item in sub_runs:
+        trace = dict(item.get("prompt_trace") or {})
+        if trace:
+            return trace
+    return {}
 
 
 def _resolve_dual_parent_model_allocations(args: argparse.Namespace, models: list[str]) -> dict[str, list[str]]:
@@ -423,6 +457,7 @@ def _build_scheduler_summary_payload(
     *,
     family: str,
     target_profile: str,
+    stage_mode: str,
     scheduler_dir: Path,
     archive_db: str,
     round_records: list[dict[str, Any]],
@@ -436,6 +471,7 @@ def _build_scheduler_summary_payload(
     last_round_winner = dict(last_round.get("winner") or {})
     return {
         "family": family,
+        "stage_mode": str(stage_mode or "auto"),
         "target_profile": target_profile,
         "scheduler_dir": str(scheduler_dir),
         "rounds_completed": len(round_records),
@@ -451,6 +487,7 @@ def _build_scheduler_summary_payload(
         "last_winner_name": str(last_round_winner.get("factor_name", "") or ""),
         "last_winner_expression": str(last_round_winner.get("expression", "") or ""),
         "last_round_winner": last_round_winner,
+        "prompt_trace": dict(last_round.get("prompt_trace") or {}),
         "best_node": final_best,
         "best_node_name": str(final_best.get("candidate_name", "") or final_best.get("factor_name", "") or ""),
         "best_node_expression": str(final_best.get("expression", "") or ""),
@@ -592,6 +629,7 @@ def main() -> int:
 
     plan = {
         "family": args.family,
+        "stage_mode": str(args.stage_mode or "auto"),
         "target_profile": str(args.target_profile),
         "started_at": utc_now_iso(),
         "max_rounds": int(args.max_rounds),
@@ -663,18 +701,23 @@ def main() -> int:
                     selected_models = models if len(selected_parents) == 1 else parent_model_allocations.get(parent_role, models)
                     parent_multi_root = round_multi_root / f"{idx:02d}_{parent_role}"
                     parent_multi_root.mkdir(parents=True, exist_ok=True)
+                    child_stage_mode = _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx)
                     cmd = _build_round_cmd(
                         args,
                         parent={
                             "factor_name": selected_parent.factor_name,
                             "expression": selected_parent.expression,
                             "candidate_id": selected_parent.candidate_id,
+                            "node_kind": selected_parent.node_kind,
                         },
                         round_multi_root=parent_multi_root,
+                        child_stage_mode=child_stage_mode,
+                        force_round1_seed_stage=child_stage_mode == "new_family_broad",
                         models_override=selected_models,
                     )
                     log_fp.write(
-                        f"[parent] role={parent_role} factor={selected_parent.factor_name} models={','.join(selected_models)}\n"
+                        f"[parent] role={parent_role} factor={selected_parent.factor_name} "
+                        f"stage_mode={child_stage_mode} models={','.join(selected_models)}\n"
                     )
                     log_fp.flush()
                     proc = subprocess.Popen(
@@ -692,6 +735,7 @@ def main() -> int:
                             "parent_role": parent_role,
                             "selected_models": list(selected_models),
                             "parent_multi_root": parent_multi_root,
+                            "child_stage_mode": child_stage_mode,
                         }
                     )
 
@@ -732,6 +776,7 @@ def main() -> int:
                     sub_runs.append(
                         {
                             "role": parent_role,
+                            "stage_mode": str(multi_run_summary.get("stage_mode") or launched.get("child_stage_mode") or ""),
                             "selected_parent": selected_parent.to_dict(),
                             "selected_parent_name": selected_parent.factor_name,
                             "selected_parent_expression": selected_parent.expression,
@@ -745,6 +790,7 @@ def main() -> int:
                             "successful_models": list(multi_run_summary.get("successful_models") or []),
                             "failed_models": list(multi_run_summary.get("failed_models") or []),
                             "children_collected": len(child_records),
+                            "prompt_trace": dict(multi_run_summary.get("prompt_trace") or {}),
                         }
                     )
 
@@ -769,6 +815,7 @@ def main() -> int:
             current_best = current_search.get("best_node") or {}
             record = {
                 "round": round_idx,
+                "child_stage_mode": _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx),
                 "status": round_status,
                 "returncode": 0 if round_status != "failed" else 1,
                 "log_path": str(log_path),
@@ -801,6 +848,14 @@ def main() -> int:
                 "latest_winner": latest_archive_winner,
                 "latest_archive_winner": latest_archive_winner,
                 "best_archive_winner": best_archive_winner,
+                "prompt_trace": _pick_round_prompt_trace(sub_runs)
+                or {
+                    "stage_mode": _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx),
+                    "seed_stage_active": _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx)
+                    == "new_family_broad",
+                    "selected_parent_kind": str(primary_parent.node_kind),
+                    "selected_parent_factor_name": str(primary_parent.factor_name),
+                },
                 "best_node": current_best,
                 "best_node_name": str(current_best.get("candidate_name", "") or current_best.get("factor_name", "") or ""),
                 "best_node_expression": str(current_best.get("expression", "") or ""),
@@ -813,6 +868,7 @@ def main() -> int:
                 _build_scheduler_summary_payload(
                     family=args.family,
                     target_profile=str(args.target_profile),
+                    stage_mode=str(args.stage_mode or "auto"),
                     scheduler_dir=scheduler_dir,
                     archive_db=str(args.archive_db),
                     round_records=round_records,
@@ -851,6 +907,7 @@ def main() -> int:
             _build_scheduler_summary_payload(
                 family=args.family,
                 target_profile=str(args.target_profile),
+                stage_mode=str(args.stage_mode or "auto"),
                 scheduler_dir=scheduler_dir,
                 archive_db=str(args.archive_db),
                 round_records=round_records,
@@ -873,6 +930,7 @@ def main() -> int:
             _build_scheduler_summary_payload(
                 family=args.family,
                 target_profile=str(args.target_profile),
+                stage_mode=str(args.stage_mode or "auto"),
                 scheduler_dir=scheduler_dir,
                 archive_db=str(args.archive_db),
                 round_records=round_records,
@@ -887,6 +945,7 @@ def main() -> int:
         _build_scheduler_summary_payload(
             family=args.family,
             target_profile=str(args.target_profile),
+            stage_mode=str(args.stage_mode or "auto"),
             scheduler_dir=scheduler_dir,
             archive_db=str(args.archive_db),
             round_records=round_records,

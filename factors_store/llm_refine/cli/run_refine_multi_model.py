@@ -23,6 +23,15 @@ from ..search.run_ingest import load_candidate_records_from_completed_runs
 from ..search.scoring import safe_float
 from .run_refine_loop import build_arg_parser as build_single_round_parser
 
+_STAGE_MODE_CHOICES = (
+    "auto",
+    "new_family_broad",
+    "broad_followup",
+    "focused_refine",
+    "confirmation",
+    "donor_validation",
+)
+
 
 def _env_or_default(name: str, default: str) -> str:
     value = os.getenv(name, "").strip()
@@ -81,6 +90,26 @@ def _classify_round_outcome(completed: list[dict[str, object]]) -> tuple[str, li
     return "ok", successful, failed
 
 
+def _read_child_run_summary(child_runs_dir: str | Path) -> dict[str, object]:
+    root = Path(child_runs_dir)
+    summary_paths = sorted(root.glob("*/summary.json"))
+    if not summary_paths:
+        return {}
+    try:
+        return json.loads(summary_paths[-1].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _pick_prompt_trace(completed: list[dict[str, object]]) -> dict[str, object]:
+    for item in completed:
+        summary = dict(item.get("child_summary") or {})
+        trace = dict(summary.get("prompt_trace") or {})
+        if trace:
+            return trace
+    return {}
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     single = build_single_round_parser()
     parser = argparse.ArgumentParser(
@@ -131,6 +160,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--round1-seed-stage",
         action="store_true",
         help="propagate seed-stage round1 prompt augmentation to child runs",
+    )
+    parser.add_argument(
+        "--stage-mode",
+        default="auto",
+        choices=_STAGE_MODE_CHOICES,
+        help="explicit orchestration stage label propagated to child runs",
     )
     parser.add_argument("--skip-eval", action="store_true", help="skip backtest stage in each child run")
     parser.add_argument("--dry-run", action="store_true", help="dry-run each child without provider call")
@@ -211,6 +246,8 @@ def _build_child_cmd(args: argparse.Namespace, *, model: str, round_id: int, chi
         cmd.extend(["--policy-preset", str(args.policy_preset)])
     if str(args.target_profile).strip():
         cmd.extend(["--target-profile", str(args.target_profile)])
+    if str(args.stage_mode).strip():
+        cmd.extend(["--stage-mode", str(args.stage_mode)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     if args.auto_apply_promotion:
@@ -274,6 +311,7 @@ def main() -> int:
     archive_db = Path(args.archive_db).expanduser().resolve()
     base_round = get_latest_family_round(db_path=archive_db, family=args.family) + 1
     initial_parent = _resolve_initial_parent(args)
+    stage_mode = str(args.stage_mode or "auto").strip() or "auto"
     policy = (
         SearchPolicy.multi_model_best_first(preset=args.policy_preset)
         .with_target_profile(args.target_profile)
@@ -306,7 +344,11 @@ def main() -> int:
         metrics=initial_parent,
     )
     selected_parent = engine.select_next() or seed_node
-    args.round1_seed_stage = bool(args.round1_seed_stage or is_seed_stage_node_kind(selected_parent.node_kind))
+    args.round1_seed_stage = bool(
+        args.round1_seed_stage
+        or stage_mode == "new_family_broad"
+        or is_seed_stage_node_kind(selected_parent.node_kind)
+    )
 
     ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
     multi_run_dir = Path(args.multi_runs_dir).expanduser().resolve() / f"{ts}_{args.family}"
@@ -343,6 +385,7 @@ def main() -> int:
         json.dumps(
             {
                 "family": args.family,
+                "stage_mode": stage_mode,
                 "target_profile": str(args.target_profile),
                 "archive_db": str(archive_db),
                 "base_round": base_round,
@@ -399,6 +442,7 @@ def main() -> int:
             log_fp = item.pop("log_fp")
             log_fp.close()
             item["returncode"] = ret
+            item["child_summary"] = _read_child_run_summary(str(item["child_runs_dir"]))
             completed.append(item)
             status = "ok" if ret == 0 else "failed"
             print(
@@ -431,6 +475,7 @@ def main() -> int:
     )
     summary = {
         "family": args.family,
+        "stage_mode": stage_mode,
         "target_profile": str(args.target_profile),
         "base_round": base_round,
         "max_parallel": max_parallel,
@@ -446,6 +491,13 @@ def main() -> int:
         "failed_model_count": len(failed),
         "search_policy": policy.to_dict(),
         "search_budget": budget.to_dict(),
+        "prompt_trace": _pick_prompt_trace(completed)
+        or {
+            "stage_mode": stage_mode,
+            "seed_stage_active": bool(args.round1_seed_stage),
+            "selected_parent_kind": str(selected_parent.node_kind),
+            "selected_parent_factor_name": str(selected_parent.factor_name),
+        },
         "child_runs": [
             {
                 "model": str(item["model"]),
@@ -453,6 +505,7 @@ def main() -> int:
                 "returncode": int(item["returncode"]),
                 "log_path": str(item["log_path"]),
                 "child_runs_dir": str(item["child_runs_dir"]),
+                "prompt_trace": dict((item.get("child_summary") or {}).get("prompt_trace") or {}),
             }
             for item in completed
         ],

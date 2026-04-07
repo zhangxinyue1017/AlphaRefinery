@@ -244,6 +244,7 @@ def main() -> int:
     broad_cmd = build_scheduler_cmd(
         python_executable=sys.executable,
         family=args.family,
+        stage_mode=str(broad_protocol["stage_preset"]),
         scheduler_runs_dir=broad_root,
         models=models,
         seed_pool=args.seed_pool,
@@ -349,6 +350,7 @@ def main() -> int:
         focused_cmd = build_scheduler_cmd(
             python_executable=sys.executable,
             family=args.family,
+            stage_mode=str(focused_protocol["stage_preset"]),
             scheduler_runs_dir=focused_root,
             models=models,
             seed_pool=args.seed_pool,

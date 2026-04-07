@@ -69,6 +69,15 @@ from ..parsing.validator import validate_expression
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
 from ..search.scoring import safe_float
 
+_STAGE_MODE_CHOICES = (
+    "auto",
+    "new_family_broad",
+    "broad_followup",
+    "focused_refine",
+    "confirmation",
+    "donor_validation",
+)
+
 
 def _env_or_default(name: str, default: str) -> str:
     value = os.getenv(name, "").strip()
@@ -142,6 +151,30 @@ def _rebuild_proposal(proposal: LLMProposal, candidates: tuple[RefinementCandida
 def _write_json(path: str | os.PathLike[str], payload: dict[str, object]) -> None:
     with open(path, "w", encoding="utf-8") as fp:
         json.dump(payload, fp, ensure_ascii=False, indent=2, default=str)
+
+
+def _build_prompt_trace(
+    *,
+    stage_mode: str,
+    seed_stage_active: bool,
+    selected_parent: object,
+    requested_candidate_count: int,
+    final_candidate_target: int,
+    role_slots: list[str],
+    bootstrap_frontier: list[dict[str, object]],
+    donor_motifs: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "stage_mode": str(stage_mode or "auto"),
+        "seed_stage_active": bool(seed_stage_active),
+        "selected_parent_kind": str(getattr(selected_parent, "node_kind", "") or ""),
+        "selected_parent_factor_name": str(getattr(selected_parent, "factor_name", "") or ""),
+        "requested_candidate_count": int(requested_candidate_count),
+        "final_candidate_target": int(final_candidate_target),
+        "role_slots": list(role_slots),
+        "bootstrap_frontier_count": len(list(bootstrap_frontier or [])),
+        "donor_motifs_count": len(list(donor_motifs or [])),
+    }
 
 
 def _hard_validation_filter_reason(candidate: RefinementCandidate) -> str:
@@ -296,6 +329,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="force round1 seed-stage prompt augmentation even when current parent is passed explicitly",
     )
+    parser.add_argument(
+        "--stage-mode",
+        default="auto",
+        choices=_STAGE_MODE_CHOICES,
+        help="explicit orchestration stage label used for prompt routing and trace auditing",
+    )
     return parser
 
 
@@ -312,12 +351,14 @@ def main() -> int:
         if args.round_id is not None
         else (get_latest_family_round(db_path=archive_db, family=family.family) + 1 if args.auto_parent else 1)
     )
+    stage_mode = str(args.stage_mode or "auto").strip() or "auto"
     explicit_parent_name = args.current_parent_name.strip()
     explicit_parent_expression = args.current_parent_expression.strip()
     bootstrap_frontier = build_bootstrap_frontier(seed_pool=seed_pool, family=family)
     bootstrap_parent = select_bootstrap_parent(bootstrap_frontier)
-    auto_seed_stage = not explicit_parent_name and latest_winner is None
-    seed_stage_active = bool(args.round1_seed_stage or auto_seed_stage)
+    forced_seed_stage = stage_mode == "new_family_broad"
+    auto_seed_stage = stage_mode == "auto" and not explicit_parent_name and latest_winner is None
+    seed_stage_active = bool(args.round1_seed_stage or forced_seed_stage or auto_seed_stage)
     effective_parent_name = (
         explicit_parent_name
         or (str(latest_winner.get("factor_name", "")) if latest_winner else str(bootstrap_parent.get("factor_name", "")))
@@ -404,6 +445,16 @@ def main() -> int:
         if seed_stage_active
         else []
     )
+    prompt_trace = _build_prompt_trace(
+        stage_mode=stage_mode,
+        seed_stage_active=seed_stage_active,
+        selected_parent=selected_parent,
+        requested_candidate_count=int(requested_candidate_count),
+        final_candidate_target=int(args.n_candidates),
+        role_slots=list(role_slots),
+        bootstrap_frontier=bootstrap_frontier,
+        donor_motifs=donor_motifs,
+    )
     prompt_parent_row = load_prompt_history_row(seed_pool, selected_parent.factor_name, family=family)
     prompt = build_refinement_prompt(
         seed_pool=seed_pool,
@@ -464,11 +515,13 @@ def main() -> int:
         metadata_dir / "search_plan.json",
         {
             "family": family.family,
+            "stage_mode": stage_mode,
             "selection_mode": "single_round_local_best_first",
             "search_policy": search_policy.to_dict(),
             "search_budget": search_budget.to_dict(),
             "initial_parent": seed_node.to_dict(),
             "selected_parent": selected_parent.to_dict(),
+            "prompt_trace": prompt_trace,
             "seed_stage_active": seed_stage_active,
             "requested_candidate_count": int(requested_candidate_count),
             "final_candidate_target": int(args.n_candidates),
@@ -905,6 +958,8 @@ def main() -> int:
             "run_id": run_id,
             "run_dir": str(run_dir),
             "round_id": int(effective_round_id),
+            "stage_mode": stage_mode,
+            "prompt_trace": prompt_trace,
             "seed_stage_active": seed_stage_active,
             "requested_candidate_count": int(requested_candidate_count),
             "final_candidate_target": int(args.n_candidates),

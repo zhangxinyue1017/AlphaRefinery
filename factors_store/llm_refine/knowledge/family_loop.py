@@ -340,6 +340,7 @@ def build_scheduler_cmd(
     *,
     python_executable: str,
     family: str,
+    stage_mode: str,
     scheduler_runs_dir: Path,
     models: list[str],
     seed_pool: str,
@@ -376,6 +377,8 @@ def build_scheduler_cmd(
         "factors_store.llm_refine.cli.run_refine_multi_model_scheduler",
         "--family",
         family,
+        "--stage-mode",
+        str(stage_mode),
         "--scheduler-runs-dir",
         str(scheduler_runs_dir),
         "--seed-pool",
@@ -862,6 +865,8 @@ def build_family_loop_summary(
         "focused_stage_preset": str(focused_stage_preset),
         "broad_run_dir": str(broad_run_dir) if broad_run_dir else "",
         "focused_run_dir": str(focused_run_dir) if focused_run_dir else "",
+        "broad_prompt_trace": dict(broad_summary.get("prompt_trace") or {}),
+        "focused_prompt_trace": dict(focused_summary.get("prompt_trace") or {}),
         "broad_stop_reason": broad_stop_reason,
         "focused_stop_reason": focused_stop_reason,
         "broad_best_node": broad_best,
@@ -885,6 +890,8 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     anchor = dict(anchor_selection.get("best_anchor") or {})
     focused = dict(summary.get("focused_best_node") or {})
     comparison = dict(summary.get("comparison") or {})
+    broad_trace = dict(summary.get("broad_prompt_trace") or {})
+    focused_trace = dict(summary.get("focused_prompt_trace") or {})
 
     def _metric_line(payload: dict[str, Any]) -> str:
         if not payload:
@@ -911,6 +918,20 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- reason: {summary.get('recommended_reason', '')}",
         f"- broad_stop_reason: `{summary.get('broad_stop_reason', '')}`",
         f"- focused_stop_reason: `{summary.get('focused_stop_reason', '')}`",
+        "",
+        "## Prompt Trace",
+        f"- broad_stage_mode: `{broad_trace.get('stage_mode', '')}`",
+        f"- broad_seed_stage_active: `{broad_trace.get('seed_stage_active', '')}`",
+        f"- broad_selected_parent_kind: `{broad_trace.get('selected_parent_kind', '')}`",
+        f"- broad_requested_candidate_count: `{broad_trace.get('requested_candidate_count', '')}`",
+        f"- broad_bootstrap_frontier_count: `{broad_trace.get('bootstrap_frontier_count', '')}`",
+        f"- broad_donor_motifs_count: `{broad_trace.get('donor_motifs_count', '')}`",
+        f"- focused_stage_mode: `{focused_trace.get('stage_mode', '')}`",
+        f"- focused_seed_stage_active: `{focused_trace.get('seed_stage_active', '')}`",
+        f"- focused_selected_parent_kind: `{focused_trace.get('selected_parent_kind', '')}`",
+        f"- focused_requested_candidate_count: `{focused_trace.get('requested_candidate_count', '')}`",
+        f"- focused_bootstrap_frontier_count: `{focused_trace.get('bootstrap_frontier_count', '')}`",
+        f"- focused_donor_motifs_count: `{focused_trace.get('donor_motifs_count', '')}`",
         "",
         "## Broad Strongest",
         f"- factor: `{broad.get('factor_name', '')}`",

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 """Family-organized LLM refined factor candidates."""
 
+import inspect
+import re
+
 from . import alpha003_family, alpha013_family, alpha016_family, alpha040_family, alpha044_family, alpha069_family, alpha095_family, alpha132_family, amplitude_structure_family, salience_panic_family, gp_relative_volume_pressure_family, gp_downside_price_position_family, weighted_upper_shadow_distribution_family, qp_high_price_distribution_pressure_family, ideal_amplitude_structure_family, qp_low_price_accumulation_pressure_family
 from .alpha003_family import *  # noqa: F401,F403
 from .alpha013_family import *  # noqa: F401,F403
@@ -42,6 +45,19 @@ FAMILY_MODULES = (
 
 FACTOR_SPECS = tuple(spec for module in FAMILY_MODULES for spec in module.FACTOR_SPECS)
 
+_EXPRESSION_RE = re.compile(r'expression\s*=\s*"(?P<expr>(?:[^"\\]|\\.)*)"')
+
+
+def _infer_expr_from_func(func) -> str:
+    try:
+        source = inspect.getsource(func)
+    except Exception:
+        return ""
+    match = _EXPRESSION_RE.search(source)
+    if not match:
+        return ""
+    return bytes(match.group("expr"), "utf-8").decode("unicode_escape").strip()
+
 
 def register_llm_refined(registry) -> int:
     for spec in FACTOR_SPECS:
@@ -50,6 +66,7 @@ def register_llm_refined(registry) -> int:
             spec.func,
             source=LLM_REFINED_SOURCE,
             required_fields=spec.required_fields,
+            expr=(str(spec.expr or "").strip() or _infer_expr_from_func(spec.func)),
             notes=spec.notes,
         )
     return len(FACTOR_SPECS)
