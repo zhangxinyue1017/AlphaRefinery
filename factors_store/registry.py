@@ -160,9 +160,9 @@ def create_default_registry() -> FactorRegistry:
     from .factors.qp_momentum import register_qp_momentum
     from .factors.qp_path_convexity import register_qp_path_convexity
     from .factors.qp_pressure import register_qp_pressure
+    from .factors.qp_volatility import register_qp_volatility
     from .factors.qp_salience import register_qp_salience
     from .factors.seed_baselines import register_seed_baselines
-    from .factors.qp_volatility import register_qp_volatility
 
     registry = FactorRegistry()
     register_alpha101(registry)
@@ -179,8 +179,8 @@ def create_default_registry() -> FactorRegistry:
     register_qp_momentum(registry)
     register_qp_path_convexity(registry)
     register_qp_pressure(registry)
-    register_qp_salience(registry)
-    register_seed_baselines(registry)
     register_qp_volatility(registry)
     register_qp_kline(registry)
+    register_qp_salience(registry)
+    register_seed_baselines(registry)
     return registry

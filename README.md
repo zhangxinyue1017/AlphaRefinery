@@ -3,8 +3,9 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg?style=flat)](https://www.python.org/)
 [![Registered Factors](https://img.shields.io/badge/Registered_Factors-1019-0A7F5A.svg?style=flat)](#project-status)
-[![LLM Refine](https://img.shields.io/badge/LLM_Refine-Best--First%20%2B%20Dual--Parent-4C8BF5.svg?style=flat)](./factors_store/llm_refine/README.md)
+[![LLM Refine](https://img.shields.io/badge/LLM_Refine-Family%20Loop%20%2B%20Round1%20Bootstrap-4C8BF5.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Target Search](https://img.shields.io/badge/Target--Conditioned_Search-v1-7B61FF.svg?style=flat)](./factors_store/llm_refine/README.md#target-conditioned-search)
+[![Research Funnel](https://img.shields.io/badge/Research_Funnel-Uplift%20%2B%20Stability-0F766E.svg?style=flat)](./factors_store/llm_refine/README.md)
 
 ## Overview
 
@@ -45,6 +46,7 @@ The system treats factor research as a structured search process over **factor f
 This is why AlphaRefinery includes mechanisms such as:
 
 - a unified `SearchEngine`,
+- a family-level controller (`broad -> anchor -> focused`),
 - dual-parent branch preservation,
 - Path Evaluation v2,
 - and target-conditioned search.
@@ -56,9 +58,10 @@ LLM-generated candidates are not the end result.
 What makes the research loop meaningful is the engineering layer behind them:
 
 - parsing and repair,
+- runtime donor retrieval and round1 bootstrap,
 - evaluation and redundancy gates,
 - archive and promotion workflows,
-- family summaries and reports.
+- family summaries, funnel evaluation, and reports.
 
 The focus is therefore not merely on **generation**, but on **selection, accumulation, and continuation**.
 
@@ -182,16 +185,28 @@ The `llm_refine` subsystem is currently the most active research engine in the p
 
 It supports:
 
-* single-parent refinement,
+* family loop (`broad -> anchor graduation -> focused`),
+* round1 bootstrap through preferred/oriented seeds, donor retrieval, and role-constrained generation,
 * focused multi-model rounds,
 * multi-round schedulers,
 * dual-parent branch preservation,
 * Path Evaluation,
 * target-conditioned search,
-* archive, reporting, and promotion workflows.
+* archive, reporting, promotion, and funnel evaluation workflows.
 
 This means the project does not treat LLMs as simple expression generators.
 Instead, LLM proposals are embedded into a broader research loop.
+
+### Round1 bootstrap strategy
+
+For new or weak families, round1 is no longer treated as a blind single-seed mutation step.
+
+It can combine:
+
+* preferred/oriented seed selection,
+* donor motif retrieval from adjacent families,
+* role-constrained candidate slots,
+* and a light rerank before full evaluation.
 
 ### Research artifact management
 
@@ -254,7 +269,8 @@ So while the system is already usable, it should still be viewed as an evolving 
 | Subsystem                           | Role                                                  | Typical Path                |
 | ----------------------------------- | ----------------------------------------------------- | --------------------------- |
 | Formal factors and computation      | Registry, data contract, formal factor implementation | `factors_store/`            |
-| LLM-driven factor research          | Family refine, search, dual-parent, path evaluation   | `factors_store/llm_refine/` |
+| LLM-driven factor research          | Family loop, round1 bootstrap, search, dual-parent    | `factors_store/llm_refine/` |
+| Research evaluation                 | Seed-to-winner uplift, funnel, profile split          | `artifacts/reports/evaluator/` |
 | Artifacts and downstream evaluation | Runs, reports, promotion, autofactorset ingest        | `artifacts/`                |
 
 ### 1. Formal code layer
@@ -389,6 +405,10 @@ source ./llm_refine_provider_env.sh
 This is recommended because the `run_refine_*` CLI tools contain fallback defaults.
 If the environment is not loaded explicitly, they may fall back to built-in provider or base URL settings, which is usually not the intended configuration.
 
+Most shared run / provider / path defaults are centralized in:
+
+* `factors_store/llm_refine/config.py`
+
 ### 1. Compute a formal factor directly
 
 ```python
@@ -410,18 +430,22 @@ factor = registry.compute("alpha101.alpha013", data)
 print(factor.dropna().head())
 ```
 
-### 2. Start an `llm_refine` family round
+### 2. Start a new family with the default family loop
 
 ```bash
 source ./llm_refine_provider_env.sh
 
 PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
-python -m factors_store.llm_refine.cli.run_refine_multi_model \
-  --family weighted_upper_shadow_distribution \
+python -m factors_store.llm_refine.cli.run_refine_family_loop \
+  --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
-  --policy-preset balanced \
-  --target-profile complementarity \
-  --n-candidates 6
+  --broad-policy-preset exploratory \
+  --focused-policy-preset balanced \
+  --target-profile raw_alpha \
+  --n-candidates 8 \
+  --broad-max-rounds 2 \
+  --focused-max-rounds 2 \
+  --auto-apply-promotion
 ```
 
 ---
@@ -439,28 +463,30 @@ source ./llm_refine_provider_env.sh
 
 Suitable for:
 
-* first-time validation of a new factor family,
-* checking whether the full prompt → parse → evaluate → archive pipeline is working.
+* starting a new family under the current default workflow,
+* letting the system run a broad pass, graduate one anchor, and continue with a focused pass.
 
 Recommended entry:
 
-* `run_refine_loop`
+* `run_refine_family_loop`
 
 ```bash
 PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
-python -m factors_store.llm_refine.cli.run_refine_loop \
-  --family salience_panic_score \
-  --n-candidates 3 \
-  --auto-parent \
-  --policy-preset balanced \
+python -m factors_store.llm_refine.cli.run_refine_family_loop \
+  --family qp_low_price_accumulation_pressure \
+  --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
+  --broad-policy-preset exploratory \
+  --focused-policy-preset balanced \
   --target-profile raw_alpha
 ```
 
 Typical outputs to inspect:
 
-* `artifacts/runs/llm_refine_single/...`
-* `research_gate_report.md`
-* `summary.json`
+* `artifacts/runs/llm_refine_family_loop/...`
+* `family_loop_summary.md`
+* broad and focused `summary.json`
+
+If you only need a smoke test for prompt / parser / evaluator wiring, use `run_refine_loop`.
 
 ### 2. Focused round around an existing parent
 
@@ -525,7 +551,32 @@ What to focus on:
 * whether `branch_value_score` or `target_conditioned_score` changes parent selection,
 * whether round 2 or round 3 starts to show meaningful divergence.
 
-### 4. Promote research results into formal Python factors
+### 4. Evaluate framework effectiveness
+
+Suitable for:
+
+* checking whether recent framework changes improved `seed -> winner` uplift,
+* comparing `raw_alpha` vs `complementarity`,
+* judging whether a family is producing stable top3 / keep / winner outcomes.
+
+Recommended entry:
+
+* `run_research_funnel.py`
+
+```bash
+cd /root/workspace/zxy_workspace/AlphaRefinery
+
+PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
+python -m factors_store.llm_refine.cli.run_research_funnel
+```
+
+Typical outputs to inspect:
+
+* `artifacts/reports/evaluator/run_uplift_summary.csv`
+* `artifacts/reports/evaluator/family_funnel_summary.csv`
+* `artifacts/reports/evaluator/family_profile_funnel_summary.csv`
+
+### 5. Promote research results into formal Python factors
 
 Suitable for:
 
@@ -555,7 +606,7 @@ python -m py_compile \
 
 After this step, a candidate factor is no longer just a research artifact — it becomes a formal, registrable factor.
 
-### 5. Run `autofactorset` admission
+### 6. Run `autofactorset` admission
 
 Suitable for:
 

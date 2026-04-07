@@ -115,17 +115,16 @@ def _safe_float(v: Any) -> float | None:
     return out
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate factors_store registry factors from manifest and optionally insert into autofactorset library.")
-    parser.add_argument("--manifest", required=True, help="YAML manifest path")
-    parser.add_argument("--run-root", default=None, help="Output root for bridge run artifacts")
-    parser.add_argument("--benchmark-path", default=str(DEFAULT_BENCHMARK_PATH), help="Optional benchmark csv path")
-    parser.add_argument("--label-horizon", type=int, default=1, help="Forward return horizon for bridge evaluation")
-    parser.add_argument("--insert-promoted", action="store_true", help="Insert promoted factors into autofactorset SQLite library")
-    parser.add_argument("--limit", type=int, default=None, help="Optional limit on candidate count for smoke testing")
-    args = parser.parse_args()
-
-    manifest_path = Path(args.manifest).expanduser().resolve()
+def evaluate_registry_manifest(
+    *,
+    manifest_path: str | Path,
+    run_root: str | Path | None = None,
+    benchmark_path: str | Path | None = DEFAULT_BENCHMARK_PATH,
+    label_horizon: int = 1,
+    insert_promoted: bool = False,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    manifest_path = Path(manifest_path).expanduser().resolve()
     payload = _load_manifest(manifest_path)
     defaults, options = _manifest_eval_defaults(payload)
 
@@ -136,25 +135,25 @@ def main() -> None:
 
     registry = create_default_registry()
     factor_names = [str(item["factor_name"]).strip() for item in payload["candidates"]]
-    if args.limit is not None and int(args.limit) > 0:
-        factor_names = factor_names[: int(args.limit)]
+    if limit is not None and int(limit) > 0:
+        factor_names = factor_names[: int(limit)]
     required_columns = _resolve_required_columns(registry, factor_names)
 
-    benchmark_path = Path(args.benchmark_path).expanduser().resolve() if args.benchmark_path else None
-    if benchmark_path is not None and not benchmark_path.exists():
-        benchmark_path = None
+    resolved_benchmark_path = Path(benchmark_path).expanduser().resolve() if benchmark_path else None
+    if resolved_benchmark_path is not None and not resolved_benchmark_path.exists():
+        resolved_benchmark_path = None
 
     data, meta = build_data_bundle(
         defaults["data_dir"],
-        benchmark_path=benchmark_path,
+        benchmark_path=resolved_benchmark_path,
         columns=required_columns,
         start=options.get("data_begin"),
         end=options.get("data_end"),
     )
-    prepared = prepare_backtest_inputs(data, horizon=int(args.label_horizon))
+    prepared = prepare_backtest_inputs(data, horizon=int(label_horizon))
 
     ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
-    run_root = Path(args.run_root).expanduser().resolve() if args.run_root else (
+    run_root = Path(run_root).expanduser().resolve() if run_root else (
         DEFAULT_INGEST_RUNS_DIR / f"{ts}_{manifest_path.stem}"
     )
     run_root.mkdir(parents=True, exist_ok=True)
@@ -164,8 +163,8 @@ def main() -> None:
 
     rows: list[dict[str, Any]] = []
     candidate_iter = payload["candidates"]
-    if args.limit is not None and int(args.limit) > 0:
-        candidate_iter = candidate_iter[: int(args.limit)]
+    if limit is not None and int(limit) > 0:
+        candidate_iter = candidate_iter[: int(limit)]
 
     for idx, candidate in enumerate(candidate_iter, start=1):
         factor_name = str(candidate["factor_name"]).strip()
@@ -181,7 +180,7 @@ def main() -> None:
                 factor_name=factor_name,
                 out_dir=run_root,
                 out_prefix=f"{idx:03d}_{_sanitize_slug(factor_name)}",
-                horizon=int(args.label_horizon),
+                horizon=int(label_horizon),
                 min_stocks=10,
                 winsorize=False,
                 zscore=False,
@@ -213,7 +212,7 @@ def main() -> None:
             inserted = False
             library_row_id: int | None = None
             cache_path_str: str | None = None
-            if args.insert_promoted and promoted and factor_name not in existing_names:
+            if insert_promoted and promoted and factor_name not in existing_names:
                 cfg.feature_cache_dir.mkdir(parents=True, exist_ok=True)
                 cache_path = cfg.feature_cache_dir / _stable_cache_filename(factor_name)
                 factor_series.to_frame(name=factor_name).to_parquet(cache_path)
@@ -296,13 +295,13 @@ def main() -> None:
             {
                 "manifest_path": str(manifest_path),
                 "run_root": str(run_root),
-                "label_horizon": int(args.label_horizon),
+                "label_horizon": int(label_horizon),
                 "input_cache_key": input_cache_key,
                 "data_meta": {
                     "rows_after_filter": meta.get("rows_after_filter"),
                     "instruments_after_filter": meta.get("instruments_after_filter"),
                 },
-                "insert_promoted": bool(args.insert_promoted),
+                "insert_promoted": bool(insert_promoted),
                 "rows": _json_float_sanitize(rows),
             },
             ensure_ascii=False,
@@ -316,15 +315,48 @@ def main() -> None:
     inserted = int(df["inserted_into_library"].fillna(False).astype(bool).sum()) if "inserted_into_library" in df.columns else 0
     errors = int((df["status"] == "error").sum()) if "status" in df.columns else 0
 
-    print(f"[manifest] {manifest_path}")
-    print(f"[run_root] {run_root}")
-    print(f"[total] {len(df)}")
-    print(f"[ok] {ok}")
-    print(f"[errors] {errors}")
-    print(f"[promoted] {promoted}")
-    print(f"[inserted] {inserted}")
-    print(f"[summary] {summary_path}")
-    print(f"[results] {full_path}")
+    return {
+        "manifest_path": str(manifest_path),
+        "run_root": str(run_root),
+        "summary_path": str(summary_path),
+        "results_path": str(full_path),
+        "total": len(df),
+        "ok": ok,
+        "errors": errors,
+        "promoted": promoted,
+        "inserted": inserted,
+        "input_cache_key": input_cache_key,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate factors_store registry factors from manifest and optionally insert into autofactorset library.")
+    parser.add_argument("--manifest", required=True, help="YAML manifest path")
+    parser.add_argument("--run-root", default=None, help="Output root for bridge run artifacts")
+    parser.add_argument("--benchmark-path", default=str(DEFAULT_BENCHMARK_PATH), help="Optional benchmark csv path")
+    parser.add_argument("--label-horizon", type=int, default=1, help="Forward return horizon for bridge evaluation")
+    parser.add_argument("--insert-promoted", action="store_true", help="Insert promoted factors into autofactorset SQLite library")
+    parser.add_argument("--limit", type=int, default=None, help="Optional limit on candidate count for smoke testing")
+    args = parser.parse_args()
+
+    result = evaluate_registry_manifest(
+        manifest_path=args.manifest,
+        run_root=args.run_root,
+        benchmark_path=args.benchmark_path,
+        label_horizon=int(args.label_horizon),
+        insert_promoted=bool(args.insert_promoted),
+        limit=args.limit,
+    )
+
+    print(f"[manifest] {result['manifest_path']}")
+    print(f"[run_root] {result['run_root']}")
+    print(f"[total] {result['total']}")
+    print(f"[ok] {result['ok']}")
+    print(f"[errors] {result['errors']}")
+    print(f"[promoted] {result['promoted']}")
+    print(f"[inserted] {result['inserted']}")
+    print(f"[summary] {result['summary_path']}")
+    print(f"[results] {result['results_path']}")
 
 
 if __name__ == "__main__":

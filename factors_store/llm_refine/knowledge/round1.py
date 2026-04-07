@@ -76,6 +76,8 @@ def resolve_requested_candidate_count(
     final_target = max(int(final_candidate_target), 1)
     if not seed_stage_active:
         return final_target
+    if final_target >= 8:
+        return max(len(role_slots), final_target)
     return max(final_target + int(DEFAULT_ROUND1_EXTRA_CANDIDATES), len(role_slots), final_target)
 
 

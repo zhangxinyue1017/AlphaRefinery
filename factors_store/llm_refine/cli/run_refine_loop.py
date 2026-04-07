@@ -144,6 +144,17 @@ def _write_json(path: str | os.PathLike[str], payload: dict[str, object]) -> Non
         json.dump(payload, fp, ensure_ascii=False, indent=2, default=str)
 
 
+def _hard_validation_filter_reason(candidate: RefinementCandidate) -> str:
+    warnings = tuple(str(item) for item in candidate.validation_warnings)
+    if any(item.startswith("contains dotted factor references:") for item in warnings):
+        return "contains dotted factor reference(s) unsupported by expression engine"
+    if any(item.startswith("contains unsupported keyword arguments:") for item in warnings):
+        return "contains unsupported keyword argument(s) for current expression engine"
+    if any(item.startswith("contains tokens outside current whitelist:") for item in warnings):
+        return "contains tokens outside current expression whitelist"
+    return ""
+
+
 def _build_parse_retry_user_prompt(*, original_user_prompt: str, parse_error: str) -> str:
     return (
         f"{original_user_prompt}\n\n"
@@ -613,7 +624,34 @@ def main() -> int:
                     )
                 )
             )
-        kept_candidates, dropped_structure = filter_structurally_redundant(tuple(rebuilt_candidates))
+        valid_rebuilt_candidates: list[RefinementCandidate] = []
+        dropped_validation: list[dict[str, object]] = []
+        for candidate in rebuilt_candidates:
+            filter_reason = _hard_validation_filter_reason(candidate)
+            if not filter_reason:
+                valid_rebuilt_candidates.append(candidate)
+                continue
+            dropped_validation.append(
+                {
+                    "candidate": candidate,
+                    "filter_stage": "validation",
+                    "filter_reason": filter_reason,
+                }
+            )
+        if dropped_validation:
+            print(
+                "[validation-filter] dropped "
+                f"{len(dropped_validation)} candidate(s) before structure filter / backtest"
+            )
+            for item in dropped_validation:
+                candidate = item["candidate"]
+                print(
+                    "[validation-filter] "
+                    f"{candidate.name}: {item['filter_reason']}"
+                )
+        if not valid_rebuilt_candidates:
+            raise ValueError("all rebuilt candidates were removed by hard validation filter")
+        kept_candidates, dropped_structure = filter_structurally_redundant(tuple(valid_rebuilt_candidates))
         if dropped_structure:
             print(
                 "[structure-filter] dropped "
@@ -684,6 +722,28 @@ def main() -> int:
                     "explanation": item["candidate"].explanation,
                     "rationale": item["candidate"].rationale,
                     "validation_warnings": list(item["candidate"].validation_warnings),
+                    "filter_stage": str(item["filter_stage"]),
+                    "filter_reason": str(item["filter_reason"]),
+                    "status": "drop_invalid_expression",
+                    "created_at": started_at,
+                }
+                for item in dropped_validation
+            ]
+            + [
+                {
+                    "candidate_id": item["candidate"].candidate_id,
+                    "family": item["candidate"].family,
+                    "round_id": item["candidate"].round_id,
+                    "parent_candidate_id": item["candidate"].parent_candidate_id,
+                    "factor_name": f"{args.name_prefix}.{item['candidate'].name}",
+                    "expression": item["candidate"].expression,
+                    "expression_hash": expression_hash(item["candidate"].expression),
+                    "candidate_role": item["candidate"].candidate_role,
+                    "source_model": item["candidate"].source_model,
+                    "source_provider": item["candidate"].source_provider,
+                    "explanation": item["candidate"].explanation,
+                    "rationale": item["candidate"].rationale,
+                    "validation_warnings": list(item["candidate"].validation_warnings),
                     "filter_stage": item["filter_stage"],
                     "filter_reason": item["filter_reason"],
                     "status": "drop_redundant_structure",
@@ -720,6 +780,7 @@ def main() -> int:
             round_id=int(effective_round_id),
             parent_child_pairs=(
                 [(effective_parent_candidate_id, candidate.candidate_id) for candidate in proposal.candidates]
+                + [(effective_parent_candidate_id, item["candidate"].candidate_id) for item in dropped_validation]
                 + [(effective_parent_candidate_id, item["candidate"].candidate_id) for item in dropped_structure]
                 + [(effective_parent_candidate_id, item["candidate"].candidate_id) for item in light_rerank_dropped]
             ),

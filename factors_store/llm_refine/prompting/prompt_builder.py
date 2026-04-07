@@ -22,8 +22,24 @@ DEFAULT_WINDOWS = (3, 5, 10, 14, 15, 20, 28, 40, 60, 100, 120, 180, 250, 375)
 DEFAULT_OPERATORS = PROMPT_OPERATOR_DESCRIPTIONS
 
 
+def _prompt_expression_text(expression: str, *, max_chars: int = 240) -> str:
+    text = str(expression or "").strip()
+    if len(text) <= max_chars:
+        return text
+    head = max_chars // 2 - 8
+    tail = max_chars - head - 5
+    return f"{text[:head]} ... {text[-tail:]}"
+
+
+def _family_formula_lines(family: SeedFamily) -> str:
+    return "\n".join(
+        f"- {name}: {_prompt_expression_text(resolve_family_formula(family, name))}"
+        for name in family.formulas
+    )
+
+
 def _family_summary(family: SeedFamily) -> str:
-    formulas = "\n".join(f"- {name}: {expr}" for name, expr in family.formulas.items())
+    formulas = _family_formula_lines(family)
     weaknesses = "\n".join(f"- {item}" for item in family.likely_weaknesses)
     axes = "\n".join(f"- {item}" for item in family.refinement_axes)
     aliases = ", ".join(family.aliases) if family.aliases else "(none)"
@@ -52,15 +68,18 @@ def _family_summary(family: SeedFamily) -> str:
 
 
 def _family_formulas_block(family: SeedFamily) -> str:
-    return "\n".join(f"- {name}: {expr}" for name, expr in family.formulas.items())
+    return _family_formula_lines(family)
 
 
 def _family_weakness_block(family: SeedFamily) -> str:
     return "\n".join(f"{idx}. {item}" for idx, item in enumerate(family.likely_weaknesses, start=1))
 
 
-def _family_axes_block(family: SeedFamily) -> str:
-    return "\n".join(f"- {item}" for item in family.refinement_axes)
+def _family_axes_block(family: SeedFamily, *, max_items: int = 3) -> str:
+    axes = list(family.refinement_axes[: max(int(max_items), 0)])
+    if not axes:
+        return "- (none)"
+    return "\n".join(f"- {item}" for item in axes)
 
 
 def _family_constraint_block(items: tuple[str, ...]) -> str:
@@ -94,6 +113,31 @@ def _family_operator_hint_block(family: SeedFamily) -> str:
     ).strip()
 
 
+def _family_expression_safety_block(family: SeedFamily) -> str:
+    if family.family not in {
+        "qp_low_price_accumulation_pressure",
+        "qp_high_price_distribution_pressure",
+    }:
+        return ""
+    return dedent(
+        """
+        该 family 的表达式安全提示：
+        - 不要直接输出已注册因子名或内部 helper 名，例如：
+          `qp_pressure.net_pressure_20`、`qp_pressure.low_price_volume_share_20`、
+          `low_price_volume_share(...)`、`high_price_volume_share(...)`、
+          `buy_pressure(...)`、`sell_pressure(...)`、
+          `share_of_volume_traded_on_low_price_days(...)`。
+        - 上面这些名称只代表 family 逻辑标签，不是当前表达式引擎可直接调用的 token。
+        - 请用当前 contract 的基础原语重写，例如：
+          `if_then_else` + `ts_quantile` + `ts_sum` + `div` + `add` + `mul`。
+        - 例如“低价日成交占比”应写成类似：
+          `div(ts_sum(if_then_else(le(close, ts_quantile(close, 20, 0.3)), volume, 0), 20), add(ts_sum(volume, 20), 1e-12))`
+        - `ts_quantile` 第三个参数请用位置参数 `0.3/0.7`，不要写成 `q=0.3`。
+        - 不要输出带点号的属性式引用，不要把 peer factor 名直接当成 expression。
+        """
+    ).strip()
+
+
 def _candidate_role_block(roles: tuple[str, ...], n_candidates: int) -> str:
     roles = list(roles[: int(n_candidates)])
     labels = {
@@ -118,7 +162,7 @@ def _bootstrap_frontier_block(frontier: list[dict[str, object]]) -> str:
     lines: list[str] = []
     for idx, item in enumerate(frontier, start=1):
         factor_name = str(item.get("factor_name", "")).strip() or f"bootstrap_{idx}"
-        expression = str(item.get("expression", "")).strip()
+        expression = _prompt_expression_text(str(item.get("expression", "")).strip())
         metric_parts: list[str] = []
         for label, value in (
             ("ICIR", item.get("quick_rank_icir")),
@@ -141,7 +185,7 @@ def _donor_motif_block(donor_motifs: list[dict[str, object]]) -> str:
     for item in donor_motifs:
         source_family = str(item.get("source_family", "")).strip() or "-"
         source_factor = str(item.get("source_factor_name", "")).strip() or "-"
-        expression = str(item.get("source_expression", "")).strip()
+        expression = _prompt_expression_text(str(item.get("source_expression", "")).strip())
         rationale = str(item.get("rationale", "")).strip()
         metric_parts: list[str] = []
         motif_score = item.get("motif_score")
@@ -433,7 +477,7 @@ def _effective_expression_block(expression: str, family: SeedFamily, *, factor_n
     if adjusted == expression:
         return ""
     if resolve_factor_direction(family, factor_name or family.canonical_seed) in {"use_negative_sign", "use_positive_sign"}:
-        return f"当前 parent 有效方向表达式：{adjusted}"
+        return f"当前 parent 有效方向表达式：{_prompt_expression_text(adjusted)}"
     return ""
 
 
@@ -510,7 +554,7 @@ def build_refinement_prompt(
         # 1. 现有因子信息
         当前 parent 因子名称：{effective_parent_name}
         因子家族：{family.family}
-        当前 parent 因子原始表达式：{effective_parent_expression}
+        当前 parent 因子原始表达式：{_prompt_expression_text(effective_parent_expression)}
         {_effective_expression_block(effective_parent_expression, family, factor_name=effective_parent_name)}
         家族内已有公式：
         {_family_formulas_block(family)}
@@ -550,6 +594,7 @@ def build_refinement_prompt(
         {json.dumps(list(DEFAULT_WINDOWS), ensure_ascii=False)}
 
         {(_family_operator_hint_block(family) + chr(10)) if _family_operator_hint_block(family) else ""}
+        {(_family_expression_safety_block(family) + chr(10)) if _family_expression_safety_block(family) else ""}
 
         注意：
         1. 原因子默认应继承当前 family 的有效符号方向：{family.direction}
@@ -566,8 +611,15 @@ def build_refinement_prompt(
         - 禁止项：
         {_family_constraint_block(family.hard_constraints)}
 
-        优先考虑以下改进方向：
+        可参考的探索方向（低优先级弱提示，不要求覆盖）：
         {_family_axes_block(family)}
+
+        关于上面这些探索方向，请严格遵守：
+        - 它们只是 seed-pool 中预先写下的启发式参考，不是必须完成的任务清单。
+        - 如果这些方向与当前 parent、recent winners / failures、lineage 经验冲突，请优先相信已经被验证的主线。
+        - 不要为了覆盖这些方向而强行跨 family 拼接 theme，或把公式带离当前 parent 的核心经济逻辑。
+        - 如果某个方向明显会增加复杂度、冗余或过度发散，请忽略它，而不是硬做。
+        - 优先做“贴着当前有效主线的小步改写”，把这些方向当作可选灵感，而不是优化目标本身。
 
         同时你需要兼顾：
         - 提高稳定性

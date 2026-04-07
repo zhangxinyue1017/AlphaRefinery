@@ -144,58 +144,54 @@ def _baseline_items(
     items: list[dict[str, Any]] = []
     effective_parent_name = str(parent_factor_name or "").strip() or resolve_preferred_refine_seed(family)
 
-    def _expr_for(name: str) -> str:
+    def _resolve_compute_name(name: str) -> str:
+        candidates = [name]
+        if name.startswith("llmgen."):
+            candidates.append(f"llm_refined.{name.split('.', 1)[1]}")
+        elif name.startswith("llm_refined."):
+            candidates.append(f"llmgen.{name.split('.', 1)[1]}")
+        for candidate_name in candidates:
+            try:
+                registry.get(candidate_name)
+                return candidate_name
+            except KeyError:
+                continue
+        return name
+
+    def _expr_for(name: str, *, compute_name: str) -> str:
         if name in family.formulas:
             return resolve_family_formula(family, name)
         try:
-            return registry.get(name).expr or ""
+            return registry.get(compute_name).expr or ""
         except KeyError:
             return ""
 
-    items.append(
-        {
-            "factor_name": family.canonical_seed,
-            "role": "parent" if family.canonical_seed == effective_parent_name else "canonical_seed",
+    def _baseline_item(name: str, *, role: str) -> dict[str, Any]:
+        compute_name = _resolve_compute_name(name)
+        return {
+            "factor_name": name,
+            "compute_factor_name": compute_name,
+            "role": role,
             "model": "Baseline",
             "provider": "baseline_registry",
-            "expression": _expr_for(family.canonical_seed),
+            "expression": _expr_for(name, compute_name=compute_name),
             "candidate_rank": 0,
             "validation_warnings": (),
-            "candidate_id": make_seed_candidate_id(family.canonical_seed),
+            "candidate_id": make_seed_candidate_id(name),
             "round_id": 0,
             "parent_candidate_id": "",
         }
+
+    items.append(
+        _baseline_item(
+            family.canonical_seed,
+            role="parent" if family.canonical_seed == effective_parent_name else "canonical_seed",
+        )
     )
     if effective_parent_name != family.canonical_seed and effective_parent_name not in family.aliases:
-        items.append(
-            {
-                "factor_name": effective_parent_name,
-                "role": "parent",
-                "model": "Baseline",
-                "provider": "baseline_registry",
-                "expression": _expr_for(effective_parent_name),
-                "candidate_rank": 0,
-                "validation_warnings": (),
-                "candidate_id": make_seed_candidate_id(effective_parent_name),
-                "round_id": 0,
-                "parent_candidate_id": "",
-            }
-        )
+        items.append(_baseline_item(effective_parent_name, role="parent"))
     for alias in family.aliases:
-        items.append(
-            {
-                "factor_name": alias,
-                "role": "parent" if alias == effective_parent_name else "peer",
-                "model": "Baseline",
-                "provider": "baseline_registry",
-                "expression": _expr_for(alias),
-                "candidate_rank": 0,
-                "validation_warnings": (),
-                "candidate_id": make_seed_candidate_id(alias),
-                "round_id": 0,
-                "parent_candidate_id": "",
-            }
-        )
+        items.append(_baseline_item(alias, role="parent" if alias == effective_parent_name else "peer"))
     return items
 
 
@@ -293,7 +289,8 @@ def _compute_factor_series(
     registry: FactorRegistry,
     data: dict[str, pd.Series],
 ) -> pd.Series:
-    return registry.compute(item["factor_name"], data)
+    compute_name = str(item.get("compute_factor_name") or item["factor_name"])
+    return registry.compute(compute_name, data)
 
 
 def _compute_item_series(
@@ -422,6 +419,22 @@ def _core_metric_presence(row: pd.Series | dict[str, Any]) -> dict[str, bool]:
     return {key: not np.isnan(_num(row, key)) for key in CORE_FULL_METRICS}
 
 
+def _has_reference_metrics(row: pd.Series | dict[str, Any] | None) -> bool:
+    if row is None:
+        return False
+    for key in (
+        "quick_rank_ic_mean",
+        "quick_rank_icir",
+        "net_ann_return",
+        "net_excess_ann_return",
+        "net_sharpe",
+        "mean_turnover",
+    ):
+        if not np.isnan(_num(row, key)):
+            return True
+    return False
+
+
 def _metrics_completeness(row: pd.Series | dict[str, Any]) -> tuple[float, int]:
     presence = _core_metric_presence(row)
     present = sum(1 for ok in presence.values() if ok)
@@ -436,7 +449,7 @@ def _candidate_decision(row: pd.Series, parent: pd.Series | None) -> tuple[str, 
         return existing_decision, existing_reason
     if str(row.get("role")) != "candidate":
         return str(row.get("role", "")), "baseline row"
-    if parent is None:
+    if parent is None or not _has_reference_metrics(parent):
         return "research_drop", "missing parent baseline"
     if pd.notna(row.get("error")) and str(row.get("error")).strip():
         return "research_drop", "evaluation failed"

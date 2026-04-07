@@ -13,14 +13,19 @@ from ..config import (
     DEFAULT_FAMILY_LOOP_ANCHOR_MIN_MATERIAL_ICIR_GAIN,
     DEFAULT_FAMILY_LOOP_ANCHOR_MIN_METRICS_COMPLETENESS,
     DEFAULT_FAMILY_LOOP_ANCHOR_MIN_SHARPE,
+    DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_PARENT_CORR,
+    DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_SIBLING_CORR,
+    DEFAULT_FAMILY_LOOP_BROAD_STAGE_PRESET,
     DEFAULT_FAMILY_LOOP_BROAD_MAX_ROUNDS,
     DEFAULT_FAMILY_LOOP_BROAD_POLICY_PRESET,
     DEFAULT_FAMILY_LOOP_BROAD_STOP_IF_NO_NEW_WINNER,
+    DEFAULT_FAMILY_LOOP_FOCUSED_STAGE_PRESET,
     DEFAULT_FAMILY_LOOP_FOCUSED_MAX_ROUNDS,
     DEFAULT_FAMILY_LOOP_FOCUSED_N_CANDIDATES,
     DEFAULT_FAMILY_LOOP_FOCUSED_POLICY_PRESET,
     DEFAULT_FAMILY_LOOP_FOCUSED_STOP_IF_NO_NEW_WINNER,
     DEFAULT_FAMILY_LOOP_RUNS_DIR,
+    FAMILY_LOOP_STAGE_PRESETS,
 )
 from ..core.archive import utc_now_iso
 from ..knowledge.family_loop import (
@@ -30,6 +35,7 @@ from ..knowledge.family_loop import (
     build_scheduler_cmd,
     collect_anchor_candidates,
     render_family_loop_markdown,
+    resolve_stage_protocol,
     run_scheduler_stage,
     select_best_anchor,
 )
@@ -61,16 +67,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--broad-stage-preset",
+        default=DEFAULT_FAMILY_LOOP_BROAD_STAGE_PRESET,
+        choices=tuple(FAMILY_LOOP_STAGE_PRESETS.keys()),
+        help="stage-aware protocol preset for the broad stage",
+    )
+    parser.add_argument(
+        "--focused-stage-preset",
+        default=DEFAULT_FAMILY_LOOP_FOCUSED_STAGE_PRESET,
+        choices=tuple(FAMILY_LOOP_STAGE_PRESETS.keys()),
+        help="stage-aware protocol preset for the focused stage",
+    )
+    parser.add_argument(
         "--broad-policy-preset",
-        default=DEFAULT_FAMILY_LOOP_BROAD_POLICY_PRESET,
+        default=None,
         choices=SearchPolicy.available_presets(),
-        help="policy preset for the broad stage",
+        help="optional override for the broad-stage policy preset",
     )
     parser.add_argument(
         "--focused-policy-preset",
-        default=DEFAULT_FAMILY_LOOP_FOCUSED_POLICY_PRESET,
+        default=None,
         choices=SearchPolicy.available_presets(),
-        help="policy preset for the focused stage",
+        help="optional override for the focused-stage policy preset",
     )
     parser.add_argument(
         "--target-profile",
@@ -78,19 +96,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=SearchPolicy.available_target_profiles(),
         help="target-conditioned profile shared by broad and focused stages",
     )
-    parser.add_argument("--n-candidates", type=int, default=int(scheduler.get_default("n_candidates")))
-    parser.add_argument("--focused-n-candidates", type=int, default=DEFAULT_FAMILY_LOOP_FOCUSED_N_CANDIDATES)
-    parser.add_argument("--broad-max-rounds", type=int, default=DEFAULT_FAMILY_LOOP_BROAD_MAX_ROUNDS)
-    parser.add_argument("--focused-max-rounds", type=int, default=DEFAULT_FAMILY_LOOP_FOCUSED_MAX_ROUNDS)
+    parser.add_argument("--n-candidates", type=int, default=None, help="optional override for broad-stage candidate budget")
+    parser.add_argument(
+        "--focused-n-candidates",
+        type=int,
+        default=None,
+        help="optional override for focused-stage candidate budget",
+    )
+    parser.add_argument("--broad-max-rounds", type=int, default=None, help="optional override for broad-stage max rounds")
+    parser.add_argument(
+        "--focused-max-rounds",
+        type=int,
+        default=None,
+        help="optional override for focused-stage max rounds",
+    )
     parser.add_argument(
         "--broad-stop-if-no-new-winner",
         type=int,
-        default=DEFAULT_FAMILY_LOOP_BROAD_STOP_IF_NO_NEW_WINNER,
+        default=None,
     )
     parser.add_argument(
         "--focused-stop-if-no-new-winner",
         type=int,
-        default=DEFAULT_FAMILY_LOOP_FOCUSED_STOP_IF_NO_NEW_WINNER,
+        default=None,
     )
 
     parser.add_argument("--anchor-min-icir", type=float, default=DEFAULT_FAMILY_LOOP_ANCHOR_MIN_ICIR)
@@ -106,6 +134,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_FAMILY_LOOP_ANCHOR_MAX_PARENT_SIMILARITY,
         help="corr-like redundancy guard: reject near-parent candidates without material gain",
+    )
+    parser.add_argument(
+        "--anchor-max-true-parent-corr",
+        type=float,
+        default=DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_PARENT_CORR,
+        help="true series correlation guard against near-parent candidates",
+    )
+    parser.add_argument(
+        "--anchor-max-true-sibling-corr",
+        type=float,
+        default=DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_SIBLING_CORR,
+        help="true series correlation guard against stronger sibling candidates",
     )
     parser.add_argument(
         "--anchor-min-material-excess-gain",
@@ -153,6 +193,20 @@ def main() -> int:
     models = _normalize_models(args.models)
     if not models:
         raise SystemExit("至少提供一个 model")
+    broad_protocol = resolve_stage_protocol(
+        stage_preset=str(args.broad_stage_preset),
+        policy_preset=args.broad_policy_preset,
+        n_candidates=args.n_candidates,
+        max_rounds=args.broad_max_rounds,
+        stop_if_no_new_winner=args.broad_stop_if_no_new_winner,
+    )
+    focused_protocol = resolve_stage_protocol(
+        stage_preset=str(args.focused_stage_preset),
+        policy_preset=args.focused_policy_preset,
+        n_candidates=args.focused_n_candidates,
+        max_rounds=args.focused_max_rounds,
+        stop_if_no_new_winner=args.focused_stop_if_no_new_winner,
+    )
 
     family_loop_dir = Path(args.family_loop_runs_dir).expanduser().resolve() / (
         time.strftime("%Y%m%d_%H%M%S", time.gmtime()) + f"_{args.family}"
@@ -167,18 +221,18 @@ def main() -> int:
         "generated_at": utc_now_iso(),
         "models": models,
         "target_profile": str(args.target_profile),
-        "broad_policy_preset": str(args.broad_policy_preset),
-        "focused_policy_preset": str(args.focused_policy_preset),
-        "broad_max_rounds": int(args.broad_max_rounds),
-        "focused_max_rounds": int(args.focused_max_rounds),
-        "n_candidates": int(args.n_candidates),
-        "focused_n_candidates": int(args.focused_n_candidates),
+        "broad_stage_preset": str(args.broad_stage_preset),
+        "focused_stage_preset": str(args.focused_stage_preset),
+        "broad_protocol": dict(broad_protocol),
+        "focused_protocol": dict(focused_protocol),
         "anchor_gate": {
             "min_icir": float(args.anchor_min_icir),
             "min_sharpe": float(args.anchor_min_sharpe),
             "max_turnover": float(args.anchor_max_turnover),
             "min_metrics_completeness": float(args.anchor_min_metrics_completeness),
             "max_parent_similarity": float(args.anchor_max_parent_similarity),
+            "max_true_parent_corr": float(args.anchor_max_true_parent_corr),
+            "max_true_sibling_corr": float(args.anchor_max_true_sibling_corr),
             "min_material_excess_gain": float(args.anchor_min_material_excess_gain),
             "min_material_icir_gain": float(args.anchor_min_material_icir_gain),
         },
@@ -193,7 +247,7 @@ def main() -> int:
         scheduler_runs_dir=broad_root,
         models=models,
         seed_pool=args.seed_pool,
-        n_candidates=int(args.n_candidates),
+        n_candidates=int(broad_protocol["n_candidates"]),
         runs_dir=args.runs_dir,
         archive_db=args.archive_db,
         name_prefix=args.name_prefix,
@@ -204,15 +258,15 @@ def main() -> int:
         max_tokens=int(args.max_tokens),
         timeout=float(args.timeout),
         additional_notes=args.additional_notes,
-        policy_preset=args.broad_policy_preset,
+        policy_preset=str(broad_protocol["policy_preset"]),
         target_profile=args.target_profile,
         panel_path=args.panel_path,
         benchmark_path=args.benchmark_path,
         start=args.start,
         end=args.end,
         max_parallel=int(args.max_parallel),
-        max_rounds=int(args.broad_max_rounds),
-        stop_if_no_new_winner=int(args.broad_stop_if_no_new_winner),
+        max_rounds=int(broad_protocol["max_rounds"]),
+        stop_if_no_new_winner=int(broad_protocol["stop_if_no_new_winner"]),
         skip_eval=bool(args.skip_eval),
         dry_run=bool(args.dry_run),
         auto_apply_promotion=bool(args.auto_apply_promotion),
@@ -256,17 +310,24 @@ def main() -> int:
         or args.current_parent_expression
         or ""
     )
-    anchor_policy = SearchPolicy.multi_model_best_first(preset=args.broad_policy_preset).with_target_profile(
+    anchor_policy = SearchPolicy.multi_model_best_first(preset=str(broad_protocol["policy_preset"])).with_target_profile(
         args.target_profile
     )
     collected = collect_anchor_candidates(
         archive_db=args.archive_db,
         scheduler_dir=broad_run_dir,
+        seed_pool_path=args.seed_pool,
         family=args.family,
         parent_name=broad_parent_name,
         parent_expression=broad_parent_expression,
+        panel_path=str(args.panel_path or ""),
+        benchmark_path=str(args.benchmark_path or ""),
+        start=str(args.start or ""),
+        end=str(args.end or ""),
         policy=anchor_policy,
         max_parent_similarity=float(args.anchor_max_parent_similarity),
+        max_true_parent_corr=float(args.anchor_max_true_parent_corr),
+        max_true_sibling_corr=float(args.anchor_max_true_sibling_corr),
         min_material_excess_gain=float(args.anchor_min_material_excess_gain),
         min_material_icir_gain=float(args.anchor_min_material_icir_gain),
     )
@@ -291,7 +352,7 @@ def main() -> int:
             scheduler_runs_dir=focused_root,
             models=models,
             seed_pool=args.seed_pool,
-            n_candidates=min(int(args.focused_n_candidates), int(args.n_candidates)),
+            n_candidates=int(focused_protocol["n_candidates"]),
             runs_dir=args.runs_dir,
             archive_db=args.archive_db,
             name_prefix=args.name_prefix,
@@ -302,15 +363,15 @@ def main() -> int:
             max_tokens=int(args.max_tokens),
             timeout=float(args.timeout),
             additional_notes=args.additional_notes,
-            policy_preset=args.focused_policy_preset,
+            policy_preset=str(focused_protocol["policy_preset"]),
             target_profile=args.target_profile,
             panel_path=args.panel_path,
             benchmark_path=args.benchmark_path,
             start=args.start,
             end=args.end,
             max_parallel=int(args.max_parallel),
-            max_rounds=int(args.focused_max_rounds),
-            stop_if_no_new_winner=int(args.focused_stop_if_no_new_winner),
+            max_rounds=int(focused_protocol["max_rounds"]),
+            stop_if_no_new_winner=int(focused_protocol["stop_if_no_new_winner"]),
             skip_eval=bool(args.skip_eval),
             dry_run=bool(args.dry_run),
             auto_apply_promotion=bool(args.auto_apply_promotion),
@@ -328,14 +389,16 @@ def main() -> int:
         family=args.family,
         target_profile=str(args.target_profile),
         loop_dir=family_loop_dir,
+        broad_stage_preset=str(broad_protocol["stage_preset"]),
+        focused_stage_preset=str(focused_protocol["stage_preset"]),
         broad_run_dir=broad_run_dir,
         broad_summary=broad_summary,
         anchor_selection=anchor_selection,
         focused_run_dir=focused_run_dir,
         focused_summary=focused_summary,
+        broad_returncode=int(broad_returncode),
+        focused_returncode=int(focused_returncode),
     )
-    summary["broad_returncode"] = int(broad_returncode)
-    summary["focused_returncode"] = int(focused_returncode)
     _write_json(summary_json_path, summary)
     summary_md_path.write_text(render_family_loop_markdown(summary), encoding="utf-8")
     return int(focused_returncode if best_anchor else 0)

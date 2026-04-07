@@ -53,6 +53,7 @@ DEFAULT_MULTI_SCHEDULER_RUNS_DIR = RUNS_DIR / "llm_refine_multi_scheduler"  # Mu
 DEFAULT_FAMILY_EXPLORE_RUNS_DIR = RUNS_DIR / "llm_refine_family_explore"  # Breadth-first family explore runs.
 DEFAULT_FAMILY_LOOP_RUNS_DIR = RUNS_DIR / "llm_refine_family_loop"  # Broad -> anchor -> focused family-loop runs.
 DEFAULT_AUTOFACTORSET_RUNS_DIR = RUNS_DIR / "autofactorset_ingest"  # Library admission / autofactorset runs.
+DEFAULT_AUTOFACTORSET_MANIFESTS_DIR = ARTIFACTS_DIR / "autofactorset_ingest" / "manifests"  # Bridge manifest outputs.
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +149,8 @@ DEFAULT_ROUND1_CANDIDATE_ROLES = (
 # These control the v1 broad -> anchor -> focused family controller.
 # ---------------------------------------------------------------------------
 
+DEFAULT_FAMILY_LOOP_BROAD_STAGE_PRESET = "new_family_broad"  # Default stage preset for the broad stage.
+DEFAULT_FAMILY_LOOP_FOCUSED_STAGE_PRESET = "focused_refine"  # Default stage preset for the focused stage.
 DEFAULT_FAMILY_LOOP_BROAD_POLICY_PRESET = "exploratory"  # Broad stage policy preset.
 DEFAULT_FAMILY_LOOP_FOCUSED_POLICY_PRESET = "balanced"  # Focused stage policy preset.
 DEFAULT_FAMILY_LOOP_FOCUSED_N_CANDIDATES = 6  # Focused stage candidate budget per model.
@@ -155,6 +158,32 @@ DEFAULT_FAMILY_LOOP_BROAD_MAX_ROUNDS = 2  # Broad stage max scheduler rounds.
 DEFAULT_FAMILY_LOOP_FOCUSED_MAX_ROUNDS = 2  # Focused stage max scheduler rounds.
 DEFAULT_FAMILY_LOOP_BROAD_STOP_IF_NO_NEW_WINNER = 2  # Broad stage early-stop patience.
 DEFAULT_FAMILY_LOOP_FOCUSED_STOP_IF_NO_NEW_WINNER = 2  # Focused stage early-stop patience.
+FAMILY_LOOP_STAGE_PRESETS = {
+    "new_family_broad": {
+        "policy_preset": DEFAULT_FAMILY_LOOP_BROAD_POLICY_PRESET,
+        "n_candidates": 8,
+        "max_rounds": DEFAULT_FAMILY_LOOP_BROAD_MAX_ROUNDS,
+        "stop_if_no_new_winner": DEFAULT_FAMILY_LOOP_BROAD_STOP_IF_NO_NEW_WINNER,
+    },
+    "focused_refine": {
+        "policy_preset": DEFAULT_FAMILY_LOOP_FOCUSED_POLICY_PRESET,
+        "n_candidates": DEFAULT_FAMILY_LOOP_FOCUSED_N_CANDIDATES,
+        "max_rounds": DEFAULT_FAMILY_LOOP_FOCUSED_MAX_ROUNDS,
+        "stop_if_no_new_winner": DEFAULT_FAMILY_LOOP_FOCUSED_STOP_IF_NO_NEW_WINNER,
+    },
+    "confirmation": {
+        "policy_preset": "conservative",
+        "n_candidates": 4,
+        "max_rounds": 1,
+        "stop_if_no_new_winner": 1,
+    },
+    "donor_validation": {
+        "policy_preset": "balanced",
+        "n_candidates": 3,
+        "max_rounds": 1,
+        "stop_if_no_new_winner": 1,
+    },
+}  # Stage-aware protocol presets used by family_loop v1.5.
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +196,8 @@ DEFAULT_FAMILY_LOOP_ANCHOR_MIN_SHARPE = 3.0  # Minimum Sharpe required for ancho
 DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TURNOVER = 0.45  # Maximum turnover allowed for anchor graduation.
 DEFAULT_FAMILY_LOOP_ANCHOR_MIN_METRICS_COMPLETENESS = 0.75  # Minimum metrics completeness ratio.
 DEFAULT_FAMILY_LOOP_ANCHOR_MAX_PARENT_SIMILARITY = 0.92  # Corr-like similarity guard against near-parent clones.
+DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_PARENT_CORR = 0.995  # True series corr guard against parent clones.
+DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_SIBLING_CORR = 0.98  # True series corr guard against stronger sibling clones.
 DEFAULT_FAMILY_LOOP_ANCHOR_MIN_MATERIAL_EXCESS_GAIN = 0.02  # Minimum excess gain to justify a near-parent variant.
 DEFAULT_FAMILY_LOOP_ANCHOR_MIN_MATERIAL_ICIR_GAIN = 0.05  # Minimum ICIR gain to justify a near-parent variant.
 
@@ -189,6 +220,7 @@ __all__ = (
     "DEFAULT_FAMILY_EXPLORE_RUNS_DIR",
     "DEFAULT_FAMILY_LOOP_RUNS_DIR",
     "DEFAULT_AUTOFACTORSET_RUNS_DIR",
+    "DEFAULT_AUTOFACTORSET_MANIFESTS_DIR",
     "DEFAULT_EVALUATOR_OUTPUT_DIR",
     "DEFAULT_NEXT_EXPERIMENTS_OUTPUT_DIR",
     "DEFAULT_PENDING_CURATED_DIR",
@@ -219,6 +251,8 @@ __all__ = (
     "DEFAULT_ROUND1_EXTRA_CANDIDATES",
     "DEFAULT_ROUND1_LIGHT_RERANK_MAX_SELECTED_SIMILARITY",
     "DEFAULT_ROUND1_CANDIDATE_ROLES",
+    "DEFAULT_FAMILY_LOOP_BROAD_STAGE_PRESET",
+    "DEFAULT_FAMILY_LOOP_FOCUSED_STAGE_PRESET",
     "DEFAULT_FAMILY_LOOP_BROAD_POLICY_PRESET",
     "DEFAULT_FAMILY_LOOP_FOCUSED_POLICY_PRESET",
     "DEFAULT_FAMILY_LOOP_FOCUSED_N_CANDIDATES",
@@ -226,11 +260,14 @@ __all__ = (
     "DEFAULT_FAMILY_LOOP_FOCUSED_MAX_ROUNDS",
     "DEFAULT_FAMILY_LOOP_BROAD_STOP_IF_NO_NEW_WINNER",
     "DEFAULT_FAMILY_LOOP_FOCUSED_STOP_IF_NO_NEW_WINNER",
+    "FAMILY_LOOP_STAGE_PRESETS",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MIN_ICIR",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MIN_SHARPE",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TURNOVER",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MIN_METRICS_COMPLETENESS",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MAX_PARENT_SIMILARITY",
+    "DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_PARENT_CORR",
+    "DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_SIBLING_CORR",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MIN_MATERIAL_EXCESS_GAIN",
     "DEFAULT_FAMILY_LOOP_ANCHOR_MIN_MATERIAL_ICIR_GAIN",
 )

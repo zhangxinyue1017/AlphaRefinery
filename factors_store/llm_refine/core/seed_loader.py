@@ -16,6 +16,82 @@ def _normalize_formula_text(expression: str) -> str:
     return str(expression or "").strip()
 
 
+def _qp_price_state_expr(*, side: str, window: int = 20) -> str:
+    if side == "low":
+        return f"le(close, ts_quantile(close, {int(window)}, 0.3))"
+    if side == "high":
+        return f"ge(close, ts_quantile(close, {int(window)}, 0.7))"
+    raise ValueError(f"unsupported qp price state side: {side}")
+
+
+def _qp_bucket_volume_expr(*, side: str, volume_field: str = "volume", window: int = 20) -> str:
+    state = _qp_price_state_expr(side=side, window=window)
+    return f"ts_sum(if_then_else({state}, {volume_field}, 0), {int(window)})"
+
+
+def _qp_bucket_pv_expr(*, side: str, volume_field: str = "volume", window: int = 20) -> str:
+    state = _qp_price_state_expr(side=side, window=window)
+    return f"ts_sum(if_then_else({state}, mul(close, {volume_field}), 0), {int(window)})"
+
+
+def _qp_total_volume_expr(*, volume_field: str = "volume", window: int = 20) -> str:
+    return f"ts_sum({volume_field}, {int(window)})"
+
+
+def _qp_overall_vwap_expr(*, volume_field: str = "volume", window: int = 20) -> str:
+    total_pv = f"ts_sum(mul(close, {volume_field}), {int(window)})"
+    total_volume = _qp_total_volume_expr(volume_field=volume_field, window=window)
+    return f"div({total_pv}, add({total_volume}, 1e-12))"
+
+
+def _qp_bucket_share_expr(*, side: str, volume_field: str = "volume", window: int = 20) -> str:
+    bucket_volume = _qp_bucket_volume_expr(side=side, volume_field=volume_field, window=window)
+    total_volume = _qp_total_volume_expr(volume_field=volume_field, window=window)
+    return f"div({bucket_volume}, add({total_volume}, 1e-12))"
+
+
+def _qp_bucket_vwap_expr(*, side: str, volume_field: str = "volume", window: int = 20) -> str:
+    bucket_pv = _qp_bucket_pv_expr(side=side, volume_field=volume_field, window=window)
+    bucket_volume = _qp_bucket_volume_expr(side=side, volume_field=volume_field, window=window)
+    return f"div({bucket_pv}, add({bucket_volume}, 1e-12))"
+
+
+def _qp_pressure_component_expr(*, kind: str, window: int = 20) -> str:
+    overall_vwap = _qp_overall_vwap_expr(window=window)
+    if kind == "buy_pressure":
+        low_share = _qp_bucket_share_expr(side="low", window=window)
+        low_vwap = _qp_bucket_vwap_expr(side="low", window=window)
+        return (
+            f"mul({low_share}, "
+            f"div(sub({overall_vwap}, {low_vwap}), add(abs({overall_vwap}), 1e-12)))"
+        )
+    if kind == "sell_pressure":
+        high_share = _qp_bucket_share_expr(side="high", window=window)
+        high_vwap = _qp_bucket_vwap_expr(side="high", window=window)
+        return (
+            f"mul({high_share}, "
+            f"div(sub({high_vwap}, {overall_vwap}), add(abs({overall_vwap}), 1e-12)))"
+        )
+    if kind == "net_pressure":
+        buy_pressure = _qp_pressure_component_expr(kind="buy_pressure", window=window)
+        sell_pressure = _qp_pressure_component_expr(kind="sell_pressure", window=window)
+        return f"sub({buy_pressure}, {sell_pressure})"
+    raise ValueError(f"unsupported qp pressure component kind: {kind}")
+
+
+_PUBLIC_FORMULA_OVERRIDES = {
+    "qp_pressure.low_price_volume_share_20": _qp_bucket_share_expr(side="low", window=20),
+    "qp_pressure.high_price_volume_share_20": _qp_bucket_share_expr(side="high", window=20),
+    "qp_pressure.low_price_volume_bias_20": (
+        f"sub({_qp_bucket_share_expr(side='low', window=20)}, "
+        f"{_qp_bucket_share_expr(side='high', window=20)})"
+    ),
+    "qp_pressure.buy_pressure_20": _qp_pressure_component_expr(kind="buy_pressure", window=20),
+    "qp_pressure.sell_pressure_20": _qp_pressure_component_expr(kind="sell_pressure", window=20),
+    "qp_pressure.net_pressure_20": _qp_pressure_component_expr(kind="net_pressure", window=20),
+}
+
+
 def _is_already_signed(expression: str, *, negative: bool) -> bool:
     text = _normalize_formula_text(expression)
     if not text:
@@ -61,7 +137,10 @@ def resolve_preferred_refine_seed(family: SeedFamily) -> str:
 
 
 def resolve_family_formula(family: SeedFamily, factor_name: str) -> str:
-    raw = family.formulas.get(factor_name, family.formulas.get(family.canonical_seed, ""))
+    raw = _PUBLIC_FORMULA_OVERRIDES.get(
+        factor_name,
+        family.formulas.get(factor_name, family.formulas.get(family.canonical_seed, "")),
+    )
     return apply_direction_rule(raw, resolve_factor_direction(family, factor_name))
 
 
