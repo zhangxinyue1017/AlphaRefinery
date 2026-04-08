@@ -22,10 +22,10 @@ rather than generic runtime defaults.
 # These are the canonical filesystem roots used by llm_refine.
 # ---------------------------------------------------------------------------
 
-PROJECT_ROOT = Path("/root/workspace/zxy_workspace/AlphaRefinery")  # Repository root.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # Repository root.
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"  # Shared artifact root.
 RUNS_DIR = ARTIFACTS_DIR / "runs"  # All run outputs live here.
-CONFIG_DIR = ARTIFACTS_DIR / "config"  # Seed pool and other yaml/json configs.
+CONFIG_DIR = PROJECT_ROOT / "config"  # Tracked seed pool and other yaml/json configs.
 REPORTS_DIR = ARTIFACTS_DIR / "reports"  # Generated markdown/json/csv reports.
 PROMOTIONS_DIR = ARTIFACTS_DIR / "llm_refine_promotions"  # Pending promotion payloads.
 FACTORS_DIR = PROJECT_ROOT / "factors_store" / "factors"  # Registered factor implementations.
@@ -69,7 +69,8 @@ DEFAULT_PENDING_CURATED_DIR = PROMOTIONS_DIR / "pending"  # Pending curated prom
 # ---------------------------------------------------------------------------
 # Provider defaults
 # These are only fallback defaults.
-# Normal workflow should still source `llm_refine_provider_env.sh` first.
+# Normal workflow should still source local `llm_refine_provider_env.sh` first
+# after copying `llm_refine_provider_env.example.sh`.
 # ---------------------------------------------------------------------------
 
 DEFAULT_PROVIDER_NAME = "kuai"  # Fallback provider label stored in artifacts.
@@ -92,6 +93,7 @@ DEFAULT_N_CANDIDATES = 3  # Default number of candidates requested per model cal
 DEFAULT_POLICY_PRESET = "balanced"  # Default high-level search preset.
 DEFAULT_TARGET_PROFILE = "raw_alpha"  # Default target-conditioned profile.
 DEFAULT_MAX_PARALLEL = 0  # 0 means "use all available child slots/models".
+DEFAULT_AUTO_APPLY_PROMOTION = True  # Default to auto-applying pending curated promotions into llm_refined modules.
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +239,7 @@ __all__ = (
     "DEFAULT_POLICY_PRESET",
     "DEFAULT_TARGET_PROFILE",
     "DEFAULT_MAX_PARALLEL",
+    "DEFAULT_AUTO_APPLY_PROMOTION",
     "DEFAULT_MULTI_SCHEDULER_MAX_ROUNDS",
     "DEFAULT_MULTI_SCHEDULER_STOP_IF_NO_NEW_WINNER",
     "DEFAULT_MULTI_SCHEDULER_SLEEP_BETWEEN_ROUNDS",

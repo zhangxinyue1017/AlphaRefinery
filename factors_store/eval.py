@@ -9,14 +9,18 @@ from ._bootstrap import ensure_project_roots
 
 ensure_project_roots()
 
-from gp_factor_qlib.evaluation.quick_ic.evaluation import evaluate_ic  # noqa: E402
-from gp_factor_qlib.evaluation.single_factor_eval import (  # noqa: E402
+from ._vendor.gpqlib_runtime.evaluation.quick_ic.evaluation import evaluate_ic  # noqa: E402
+from ._vendor.gpqlib_runtime.evaluation.quick_ic.orthogonalize import (  # noqa: E402
+    avg_abs_corr_to_bases,
+    gram_schmidt_orthogonalize,
+)
+from ._vendor.gpqlib_runtime.evaluation.single_factor_eval import (  # noqa: E402
     BacktestConfig,
     run_single_factor_backtest,
     write_backtest_report,
 )
-from gp_factor_qlib.evaluation.single_factor_eval.report import build_summary_row  # noqa: E402
-from gp_factor_qlib.risk.factors.cne5_core import compute_cne5  # noqa: E402
+from ._vendor.gpqlib_runtime.evaluation.single_factor_eval.report import build_summary_row  # noqa: E402
+from ._vendor.gpqlib_runtime.risk.factors.cne5_core import compute_cne5  # noqa: E402
 
 EPS = 1e-12
 
@@ -153,14 +157,136 @@ def build_proxy_exposures(data: dict[str, pd.Series]) -> pd.DataFrame:
     return exposures
 
 
+def build_style_exposures(
+    data: dict[str, pd.Series],
+    *,
+    extra_exposures: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    exposures = build_proxy_exposures(data)
+    if extra_exposures is None or extra_exposures.empty:
+        return exposures
+
+    extra = _coerce_datetime_instrument_index(extra_exposures, reference_index=exposures.index)
+    extra = extra.reindex(exposures.index)
+    extra = (
+        extra.groupby(level=0, group_keys=False)
+        .apply(lambda d: d.fillna(d.median(numeric_only=True)))
+        .fillna(0.0)
+    )
+    merged = pd.concat([exposures, extra], axis=1)
+    merged = merged.loc[:, ~merged.columns.duplicated(keep="first")]
+    std = merged.std(axis=0, skipna=True)
+    keep_cols = std[std > EPS].index.tolist()
+    return merged[keep_cols]
+
+
+def neutralize_factor(
+    factor: pd.Series,
+    *,
+    exposures: pd.DataFrame,
+    min_stocks: int = 10,
+) -> pd.Series:
+    if not isinstance(factor, pd.Series):
+        raise TypeError("factor must be a pandas Series")
+    if exposures.empty:
+        return factor.astype(float).rename(factor.name)
+
+    aligned_factor = factor.astype(float)
+    aligned_exposures = exposures.reindex(aligned_factor.index)
+    aligned_exposures = aligned_exposures.select_dtypes(include=[np.number]).copy()
+    if aligned_exposures.empty:
+        return aligned_factor.rename(factor.name)
+
+    std = aligned_exposures.std(axis=0, skipna=True)
+    keep_cols = std[std > EPS].index.tolist()
+    aligned_exposures = aligned_exposures[keep_cols]
+    if aligned_exposures.empty:
+        return aligned_factor.rename(factor.name)
+
+    aligned_exposures = (
+        aligned_exposures.groupby(level=0, group_keys=False)
+        .apply(lambda d: d.fillna(d.median(numeric_only=True)))
+        .fillna(0.0)
+    )
+    residual = gram_schmidt_orthogonalize(
+        aligned_factor,
+        aligned_exposures,
+        min_stocks=int(min_stocks),
+    )
+    return residual.rename(factor.name)
+
+
+def style_exposure_diagnostics(
+    factor: pd.Series,
+    *,
+    exposures: pd.DataFrame,
+) -> dict[str, object]:
+    if exposures.empty:
+        return {
+            "style_exposure_count": 0,
+            "avg_abs_style_corr": np.nan,
+            "max_abs_style_corr": np.nan,
+            "top_style_exposure": "",
+            "top_style_corr": np.nan,
+        }
+
+    aligned_factor = factor.astype(float)
+    aligned_exposures = exposures.reindex(aligned_factor.index)
+    aligned_exposures = aligned_exposures.select_dtypes(include=[np.number]).copy()
+    if aligned_exposures.empty:
+        return {
+            "style_exposure_count": 0,
+            "avg_abs_style_corr": np.nan,
+            "max_abs_style_corr": np.nan,
+            "top_style_exposure": "",
+            "top_style_corr": np.nan,
+        }
+
+    std = aligned_exposures.std(axis=0, skipna=True)
+    keep_cols = std[std > EPS].index.tolist()
+    aligned_exposures = aligned_exposures[keep_cols]
+    if aligned_exposures.empty:
+        return {
+            "style_exposure_count": 0,
+            "avg_abs_style_corr": np.nan,
+            "max_abs_style_corr": np.nan,
+            "top_style_exposure": "",
+            "top_style_corr": np.nan,
+        }
+
+    corr_map: dict[str, float] = {}
+    for col in aligned_exposures.columns:
+        corr = aligned_factor.corr(aligned_exposures[col])
+        if pd.notna(corr):
+            corr_map[str(col)] = float(corr)
+    if not corr_map:
+        return {
+            "style_exposure_count": int(aligned_exposures.shape[1]),
+            "avg_abs_style_corr": np.nan,
+            "max_abs_style_corr": np.nan,
+            "top_style_exposure": "",
+            "top_style_corr": np.nan,
+        }
+
+    top_name, top_corr = max(corr_map.items(), key=lambda item: abs(item[1]))
+    return {
+        "style_exposure_count": int(aligned_exposures.shape[1]),
+        "avg_abs_style_corr": float(avg_abs_corr_to_bases(aligned_factor, aligned_exposures)),
+        "max_abs_style_corr": float(abs(top_corr)),
+        "top_style_exposure": top_name,
+        "top_style_corr": float(top_corr),
+    }
+
+
 def prepare_backtest_inputs(
     data: dict[str, pd.Series],
     *,
     horizon: int = 5,
+    extra_style_exposures: pd.DataFrame | None = None,
 ) -> dict[str, pd.Series | pd.DataFrame]:
     label = make_forward_return(data["close"], horizon=horizon).rename("label")
     price_panel = build_price_panel(data)
-    exposures = build_proxy_exposures(data)
+    exposures = build_style_exposures(data, extra_exposures=extra_style_exposures)
     return {
         "label": label,
         "price_panel": price_panel,
@@ -238,6 +364,106 @@ def run_factor_backtest(
         config=config,
     )
     return result
+
+
+def run_factor_backtest_dual(
+    factor: pd.Series,
+    *,
+    data: dict[str, pd.Series] | None = None,
+    prepared: dict[str, pd.Series | pd.DataFrame] | None = None,
+    factor_name: str,
+    horizon: int = 5,
+    min_stocks: int = 10,
+    winsorize: bool = False,
+    zscore: bool = False,
+    pure_mode: str = "none",
+    rolling_window: int = 60,
+    n_groups: int = 5,
+    long_group: int | None = None,
+    short_group: int | None = None,
+    cost_bps: float = 10.0,
+    enable_alphalens: bool = False,
+    alphalens_periods: tuple[int, ...] = (1, 5, 10),
+    alphalens_quantiles: int = 5,
+    alphalens_max_loss: float = 0.35,
+) -> dict[str, object]:
+    if prepared is None:
+        if data is None:
+            raise ValueError("provide either data or prepared backtest inputs")
+        prepared = prepare_backtest_inputs(data, horizon=horizon)
+
+    exposures = prepared["exposures"]
+    if not isinstance(exposures, pd.DataFrame):
+        raise TypeError("prepared backtest inputs have unexpected exposure type")
+
+    raw_result = run_factor_backtest(
+        factor,
+        prepared=prepared,
+        factor_name=factor_name,
+        horizon=horizon,
+        min_stocks=min_stocks,
+        winsorize=winsorize,
+        zscore=zscore,
+        pure_mode=pure_mode,
+        rolling_window=rolling_window,
+        n_groups=n_groups,
+        long_group=long_group,
+        short_group=short_group,
+        cost_bps=cost_bps,
+        enable_alphalens=enable_alphalens,
+        alphalens_periods=alphalens_periods,
+        alphalens_quantiles=alphalens_quantiles,
+        alphalens_max_loss=alphalens_max_loss,
+    )
+
+    diagnostics = style_exposure_diagnostics(factor, exposures=exposures)
+    neutralization_status = "ok"
+    neutralized_result: dict[str, object] | None = None
+    neutralized_factor_nonnull = 0
+    neutralized_factor_std = np.nan
+
+    try:
+        neutralized_factor = neutralize_factor(
+            factor,
+            exposures=exposures,
+            min_stocks=min_stocks,
+        )
+        neutralized_factor = neutralized_factor.reindex(factor.index).astype(float).rename(factor_name)
+        neutralized_factor_nonnull = int(neutralized_factor.notna().sum())
+        neutralized_factor_std = float(neutralized_factor.std(skipna=True))
+        if neutralized_factor_nonnull <= 0 or not np.isfinite(neutralized_factor_std) or neutralized_factor_std <= EPS:
+            neutralization_status = "degenerate_residual"
+        else:
+            neutralized_result = run_factor_backtest(
+                neutralized_factor,
+                prepared=prepared,
+                factor_name=factor_name,
+                horizon=horizon,
+                min_stocks=min_stocks,
+                winsorize=winsorize,
+                zscore=zscore,
+                pure_mode=pure_mode,
+                rolling_window=rolling_window,
+                n_groups=n_groups,
+                long_group=long_group,
+                short_group=short_group,
+                cost_bps=cost_bps,
+                enable_alphalens=enable_alphalens,
+                alphalens_periods=alphalens_periods,
+                alphalens_quantiles=alphalens_quantiles,
+                alphalens_max_loss=alphalens_max_loss,
+            )
+    except Exception as exc:
+        neutralization_status = f"failed: {exc}"
+
+    return {
+        "raw_result": raw_result,
+        "neutralized_result": neutralized_result,
+        "style_diagnostics": diagnostics,
+        "neutralization_status": neutralization_status,
+        "neutralized_factor_nonnull": neutralized_factor_nonnull,
+        "neutralized_factor_std": neutralized_factor_std,
+    }
 
 
 def summarize_backtest_result(result: dict[str, object]) -> dict[str, object]:

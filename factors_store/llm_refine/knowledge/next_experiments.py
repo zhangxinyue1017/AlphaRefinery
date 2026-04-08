@@ -695,6 +695,32 @@ def retrieve_runtime_donor_motifs(
     max_donor_families: int = 2,
     max_donor_factors: int = 4,
 ) -> list[dict[str, Any]]:
+    def _choose(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        chosen_local: list[dict[str, Any]] = []
+        chosen_families_local: list[str] = []
+        per_family_counts_local: dict[str, int] = {}
+        seen_pairs_local: set[tuple[str, str]] = set()
+        for item_local in items:
+            family_name = str(item_local.get("source_family", "")).strip()
+            factor_name = str(item_local.get("source_factor_name", "")).strip()
+            if not family_name or not factor_name:
+                continue
+            pair = (family_name, factor_name)
+            if pair in seen_pairs_local:
+                continue
+            if family_name not in chosen_families_local and len(chosen_families_local) >= int(max_donor_families):
+                continue
+            if int(per_family_counts_local.get(family_name, 0)) >= 2:
+                continue
+            seen_pairs_local.add(pair)
+            if family_name not in chosen_families_local:
+                chosen_families_local.append(family_name)
+            per_family_counts_local[family_name] = int(per_family_counts_local.get(family_name, 0)) + 1
+            chosen_local.append(item_local)
+            if len(chosen_local) >= int(max_donor_factors):
+                break
+        return chosen_local
+
     family_states = build_family_inventory(seed_pool=seed_pool, db_path=db_path)
     state_by_family = {item.family: item for item in family_states}
     target_state = state_by_family.get(str(target_family).strip())
@@ -755,31 +781,67 @@ def retrieve_runtime_donor_motifs(
         ),
         reverse=True,
     )
+    chosen = _choose(scored)
+    if chosen:
+        return chosen
 
-    chosen: list[dict[str, Any]] = []
-    chosen_families: list[str] = []
-    per_family_counts: dict[str, int] = {}
-    seen_pairs: set[tuple[str, str]] = set()
-    for item in scored:
-        family_name = str(item.get("source_family", "")).strip()
-        factor_name = str(item.get("source_factor_name", "")).strip()
-        if not family_name or not factor_name:
+    fallback_scored: list[dict[str, Any]] = []
+    for source_state in family_states:
+        if source_state.family == target_state.family or source_state.archive_run_count <= 0:
             continue
-        pair = (family_name, factor_name)
-        if pair in seen_pairs:
-            continue
-        if family_name not in chosen_families and len(chosen_families) >= int(max_donor_families):
-            continue
-        if int(per_family_counts.get(family_name, 0)) >= 2:
-            continue
-        seen_pairs.add(pair)
-        if family_name not in chosen_families:
-            chosen_families.append(family_name)
-        per_family_counts[family_name] = int(per_family_counts.get(family_name, 0)) + 1
-        chosen.append(item)
-        if len(chosen) >= int(max_donor_factors):
-            break
-    return chosen
+        for record in _source_records_for_family(db_path=db_path, family=source_state.family, limit=5):
+            source_keywords = _source_keywords(record, source_state.keywords)
+            source_themes = _infer_source_themes(source_family_themes=source_state.themes, record=record)
+            theme_score, theme_overlap = _theme_pair_score(target_state.themes, source_themes)
+            if theme_score <= 0.0:
+                continue
+            quality_score = max(float(record.get("net_sharpe") or 0.0), 0.0) * 0.18
+            quality_score += max(float(record.get("net_excess_ann_return") or 0.0), 0.0) * 0.25
+            fallback_score = theme_score + quality_score
+            overlap_keywords = tuple(sorted(set(target_state.keywords) & set(source_keywords)))
+            fallback_scored.append(
+                {
+                    "source_family": source_state.family,
+                    "source_factor_name": str(record.get("factor_name", "")),
+                    "source_expression": str(record.get("expression", "")),
+                    "source_model": str(record.get("source_model", "")),
+                    "source_status": str(record.get("status", "")),
+                    "source_tags": tuple(record.get("expression_tags") or ()),
+                    "source_themes": tuple(source_themes),
+                    "theme_overlap": tuple(theme_overlap),
+                    "overlap_keywords": tuple(overlap_keywords),
+                    "motif_score": round(float(fallback_score), 4),
+                    "quick_rank_ic_mean": record.get("quick_rank_ic_mean"),
+                    "quick_rank_icir": record.get("quick_rank_icir"),
+                    "net_ann_return": record.get("net_ann_return"),
+                    "net_excess_ann_return": record.get("net_excess_ann_return"),
+                    "net_sharpe": record.get("net_sharpe"),
+                    "mean_turnover": record.get("mean_turnover"),
+                    "retrieval_mode": "theme_fallback",
+                    "rationale": (
+                        _build_rationale(
+                            family_state=target_state,
+                            source_record={**record, "family": source_state.family},
+                            source_themes=tuple(source_themes),
+                            theme_overlap=tuple(theme_overlap),
+                            overlap_keywords=tuple(overlap_keywords),
+                        )
+                        + " Fallback donor selection was used because strict motif-overlap retrieval returned no candidates."
+                    ),
+                }
+            )
+
+    fallback_scored.sort(
+        key=lambda item: (
+            float(item.get("motif_score") or 0.0),
+            1.0 if str(item.get("source_status", "")) in {"research_winner", "winner"} else 0.0,
+            float(item.get("net_excess_ann_return") or 0.0),
+            float(item.get("quick_rank_icir") or 0.0),
+            float(item.get("net_sharpe") or 0.0),
+        ),
+        reverse=True,
+    )
+    return _choose(fallback_scored)
 
 
 def render_next_experiments_markdown(

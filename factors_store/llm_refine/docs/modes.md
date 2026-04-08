@@ -13,6 +13,7 @@
 
 ```bash
 cd /root/workspace/zxy_workspace/AlphaRefinery
+cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
 

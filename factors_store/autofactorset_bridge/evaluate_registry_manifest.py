@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from ..data_paths import DEFAULT_BENCHMARK_PATH
 from ..data import build_data_bundle
 from ..eval import prepare_backtest_inputs, run_factor_backtest_report, summarize_backtest_result
 from ..registry import create_default_registry
@@ -26,7 +27,6 @@ from gp_factor_qlib.autofactorset.eval_service import (
 from gp_factor_qlib.autofactorset.library_db import LibraryStore, similarity_versus_library
 
 
-DEFAULT_BENCHMARK_PATH = Path("/root/dmd/BaoStock/Index/sh.000001.csv")
 DEFAULT_INGEST_RUNS_DIR = Path("/root/workspace/zxy_workspace/AlphaRefinery/artifacts/runs/autofactorset_ingest")
 
 

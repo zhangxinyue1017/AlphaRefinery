@@ -1,0 +1,762 @@
+version: 2
+created_at: "2026-03-23"
+project: "factors_store"
+purpose: "Seeded factor refinement for LLM-guided formula rewriting"
+
+evaluation_defaults:
+  panel_path: ""
+  start: "2018-01-01"
+  apply_filters: true
+  stock_only: true
+  exclude_st: true
+  exclude_suspended: true
+  min_listed_days: 60
+  backtest: true
+  workers: 8
+  horizon: 5
+  n_groups: 5
+  pure_mode: "none"
+  cost_bps: 10.0
+
+evaluation_protocol:
+  search:
+    start: "2016-01-01"
+    end: "2022-12-30"
+  selection:
+    start: "2023-01-03"
+    end: "2026-03-09"
+  prompt_history_stage: "search"
+  keep_decision_stage: "selection"
+  promote_stage: "selection"
+
+refinement_principles:
+  - "Do not invent factors from scratch; start from strong seeds."
+  - "Preserve the economic story of the parent factor."
+  - "Prefer low-complexity edits: window changes, variable substitutions, neutralization, decay, smoothing, or interaction terms."
+  - "Penalize duplicate variants that are too correlated with the parent family."
+  - "Optimize for stability, lower turnover, and lower redundancy, not only headline IC."
+
+seed_groups:
+  - family: "open_volume_correlation"
+    priority: "high"
+    canonical_seed: "alpha101.alpha003"
+    aliases:
+      - "alpha101.alpha006"
+    relation_note: "alpha003 与 alpha006 本质上是同一套开盘价-成交活跃度逻辑，只是一个偏 rank 形式、一个偏 raw 形式。"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/alpha101_like.py"
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha101.alpha003: "-corr(rank(open), rank(volume), 10)"
+      alpha101.alpha006: "-corr(open, volume, 10)"
+    interpretation: "衡量开盘价相对位置与成交活跃度是否同步；更强的信号往往来自短期量价背离，或开盘阶段出现拥挤交易行为。"
+    likely_weaknesses:
+      - "同家族冗余度较高。"
+      - "raw 形式更容易受尺度和流动性水平影响。"
+      - "可能带有流动性或规模暴露。"
+    primary_objective: "提升 RankICIR"
+    secondary_objective: "在不明显丢失 alpha 的前提下降低换手"
+    hard_constraints:
+      - "必须保留开盘价与成交活跃度之间的核心逻辑"
+      - "最多只允许引入一个新的原始字段"
+      - "不能只靠符号翻转完成改写"
+    candidate_roles:
+      - "conservative"
+      - "decorrelating"
+      - "enhancing"
+    anti_patterns:
+      - "只改时间窗"
+      - "只多包一层 rank 或类似包装"
+      - "三个候选几乎只是近重复变体"
+      - "完全改写成另一套逻辑"
+    allowed_edit_types:
+      - "时间窗替换"
+      - "算子替换"
+      - "插入归一化"
+      - "插入平滑或衰减"
+      - "增加一条辅助分支"
+    refinement_axes:
+      - "把 volume 替换为 amount、turnover 或 volume/advN"
+      - "比较 raw、rank、zscore 三种输入形式"
+      - "适度缩短或拉长相关性窗口"
+      - "在相关性计算前尝试行业中性化"
+      - "对相关性结果加入 decay 或平滑"
+      - "和波动惩罚项结合，抑制过度拥挤个股"
+
+  - family: "close_volume_covariance"
+    priority: "high"
+    canonical_seed: "alpha101.alpha013"
+    aliases: []
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/alpha101_like.py"
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha101.alpha013: "-rank(cov(rank(close), rank(volume), 5))"
+    interpretation: "捕捉短周期内收盘价强弱与成交活跃度是否同步；更有效的部分通常来自量价背离或确认失败后的修复。"
+    likely_weaknesses:
+      - "与 high-volume covariance 家族非常接近。"
+      - "短窗口容易带来较大噪声。"
+      - "对极端换手日比较敏感。"
+    primary_objective: "降低换手"
+    secondary_objective: "在不削弱家族辨识度的前提下提升 RankICIR"
+    hard_constraints:
+      - "必须保留收盘价与参与度确认之间的核心逻辑"
+      - "最多只允许新增一层嵌套"
+      - "不能直接退化成 alpha016 那种 high-volume 重复体"
+    candidate_roles:
+      - "conservative"
+      - "decorrelating"
+      - "enhancing"
+    anti_patterns:
+      - "只改时间窗"
+      - "只把 close 机械替换成 high"
+      - "三个候选共享同一个主 skeleton"
+      - "完全换成另一套逻辑"
+    allowed_edit_types:
+      - "算子替换"
+      - "插入归一化"
+      - "插入平滑或衰减"
+      - "时间窗替换"
+      - "增加一条辅助分支"
+    refinement_axes:
+      - "把 close 替换为 vwap、close/open 混合项或残差 close"
+      - "把 volume 替换为 amount 或 turnover"
+      - "加入滚动波动惩罚以减少噪声"
+      - "对 covariance 输出再做 ts_rank 或 decay"
+      - "测试 3/5/10/20 天等相近窗口"
+
+  - family: "high_volume_covariance"
+    priority: "high"
+    canonical_seed: "alpha101.alpha016"
+    aliases: []
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/alpha101_like.py"
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha101.alpha016: "-rank(cov(rank(high), rank(volume), 5))"
+    interpretation: "衡量短周期内日内高点是否得到成交活跃度确认；通常可用来捕捉拥挤交易或冲高失败后的回落信号。"
+    likely_weaknesses:
+      - "与 alpha013、alpha044 亲缘关系很近。"
+      - "可能过度聚焦日内尖峰。"
+      - "容易与波动或动量反转逻辑重叠。"
+    primary_objective: "降低与相邻家族的冗余"
+    secondary_objective: "保持或提升 RankICIR"
+    hard_constraints:
+      - "必须保留高点确认或冲高失败的核心逻辑"
+      - "不能退化成纯 close-volume 家族"
+      - "最多只允许引入一个新的原始字段"
+    candidate_roles:
+      - "conservative"
+      - "decorrelating"
+      - "enhancing"
+    anti_patterns:
+      - "只改时间窗"
+      - "三个候选都只是 high 到 vwap 的轻微替换"
+      - "泛化成普通波动率公式"
+      - "完全改写逻辑"
+    allowed_edit_types:
+      - "算子替换"
+      - "插入归一化"
+      - "时间窗替换"
+      - "价格代理替换"
+      - "增加一条辅助分支"
+    refinement_axes:
+      - "把 high 替换为 max(vwap, close)、high-low spread 或 upper shadow"
+      - "把 covariance 替换为 correlation"
+      - "用 volume/advN 代替 raw volume"
+      - "在交互前对 high 或 vwap 做行业中性化"
+      - "和 shadow 或 amplitude 因子做轻量组合"
+
+  - family: "high_ranked_volume_correlation"
+    priority: "high"
+    canonical_seed: "alpha101.alpha044"
+    aliases: []
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/alpha101_like.py"
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha101.alpha044: "-corr(high, rank(volume), 5)"
+    interpretation: "衡量短周期内日内高点是否伴随相对更高的成交活跃度，是一类更纯粹的高点-量能确认信号。"
+    likely_weaknesses:
+      - "在很短窗口下容易不稳定。"
+      - "可能只是同一套量能确认逻辑的另一种视角。"
+      - "可能需要平滑或轻微非线性才能更稳。"
+    primary_objective: "提升 RankICIR"
+    secondary_objective: "降低冗余并把换手控制在合理范围"
+    hard_constraints:
+      - "必须保留高点与相对成交活跃度之间的核心逻辑"
+      - "不能只是把 5 日窗口换成别的窗口"
+      - "不能生成三个同一个主 skeleton 的候选"
+    candidate_roles:
+      - "conservative"
+      - "decorrelating"
+      - "enhancing"
+    anti_patterns:
+      - "只改时间窗"
+      - "只额外包一层 rank 或类似包装"
+      - "三个候选共享同一个主 skeleton"
+      - "完全换成另一套逻辑"
+    allowed_edit_types:
+      - "时间窗替换"
+      - "算子替换"
+      - "插入归一化"
+      - "插入平滑或衰减"
+      - "价格或成交代理替换"
+    refinement_axes:
+      - "把 high 替换为 upper shadow、high/close ratio 或 high-vwap spread"
+      - "把 rank(volume) 替换为 rank(amount) 或 rank(turnover)"
+      - "对相关性结果加入 rolling decay 或 ts_rank"
+      - "比较 5/10/20 日等相近窗口"
+
+  - family: "high_volatility_times_volume_correlation"
+    priority: "high"
+    canonical_seed: "alpha101.alpha040"
+    aliases: []
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/alpha101_like.py"
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha101.alpha040: "-rank(std(high, 10)) * corr(high, volume, 10)"
+    interpretation: "把高点波动代理和高点-成交确认结合起来，常用来识别既波动又拥挤的标的。"
+    likely_weaknesses:
+      - "乘法结构可能放大噪声。"
+      - "过度依赖单一波动代理 `std(high,10)`。"
+      - "有机会做得更简洁或更稳健。"
+    primary_objective: "提升稳定性"
+    secondary_objective: "在不过度增复杂度的前提下保住收益强度"
+    hard_constraints:
+      - "必须保留高波动高点与拥挤交易结合的核心逻辑"
+      - "最多只允许引入一个新的原始字段"
+      - "不能把公式复杂度明显堆高到超出 parent"
+    candidate_roles:
+      - "conservative"
+      - "decorrelating"
+      - "enhancing"
+    anti_patterns:
+      - "只改时间窗"
+      - "通过堆分支无意义增肥"
+      - "三个候选都只是同一种乘法结构"
+      - "完全换成别的逻辑"
+    allowed_edit_types:
+      - "算子替换"
+      - "波动代理替换"
+      - "插入归一化"
+      - "插入平滑或衰减"
+      - "增加一条辅助分支"
+    refinement_axes:
+      - "把 std(high,10) 替换为 amplitude、upper shadow std 或 realized vol"
+      - "对相关性分支做 decay、clipping 或其他归一化"
+      - "尝试把乘法改成加权和或比值形式"
+      - "优先测试更低换手的版本"
+
+  - family: "industry_neutral_nonlinear_flow"
+    priority: "high"
+    canonical_seed: "alpha101.alpha069"
+    aliases: []
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/alpha101_like.py"
+    formulas:
+      alpha101.alpha069: "-rank(ts_max(delta(indneutralize(vwap, industry), 3), 5)) ^ ts_rank(corr(0.490655*close + 0.509345*vwap, adv20, 5), 9)"
+    interpretation: "这是一个更复杂的家族，把行业中性化后的相对价格强弱与非线性的价格-流动性交互结合起来。"
+    likely_weaknesses:
+      - "比简单量价家族更复杂，也更难解释。"
+      - "幂运算可能过度放大尾部。"
+      - "样本外可能更脆弱。"
+    primary_objective: "在保留核心逻辑的前提下降低复杂度"
+    secondary_objective: "提升稳定性并降低换手"
+    hard_constraints:
+      - "必须保留行业中性相对强弱与流动性确认的双分支逻辑"
+      - "不能把流动性确认分支完全删掉"
+      - "最多只允许再增加一层嵌套"
+    candidate_roles:
+      - "conservative"
+      - "decorrelating"
+      - "enhancing"
+    anti_patterns:
+      - "只改时间窗"
+      - "只是把幂换成乘法但其他都不动"
+      - "完全去掉行业中性逻辑"
+      - "彻底改写成别的因子"
+    allowed_edit_types:
+      - "算子替换"
+      - "插入平滑或衰减"
+      - "插入归一化"
+      - "时间窗替换"
+      - "增加一条辅助分支"
+    refinement_axes:
+      - "把幂运算替换为乘法、比值或裁剪后的非线性"
+      - "尝试不同的中性化目标：vwap、close、high-low 中位价"
+      - "把 adv20 替换为基于 amount 的流动性代理"
+      - "对右侧相关性分支做平滑"
+      - "在保留行业中性逻辑的前提下降低整体复杂度"
+
+  - family: "amount_volatility"
+    priority: "medium"
+    canonical_seed: "alpha191.alpha095"
+    aliases: []
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha191.alpha095: "std(amount, 20)"
+    interpretation: "A pure turnover-value instability signal; as a negative factor it often captures crowding, event-driven churn, or unstable participation."
+    likely_weaknesses:
+      - "Very close to a raw liquidity/risk proxy."
+      - "Can be dominated by size and trading-intensity exposure."
+      - "Economic logic may be too broad unless combined with price structure."
+    refinement_axes:
+      - "use -std(amount,20) explicitly"
+      - "normalize by mean(amount,20)"
+      - "replace amount with turnover or amount/float_cap"
+      - "interact with returns, amplitude, or shadow factors"
+      - "cross-sectionally neutralize size or liquidity exposure"
+
+  - family: "amount_level"
+    priority: "medium"
+    canonical_seed: "alpha191.alpha132"
+    aliases: []
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/alpha191_like.py"
+    formulas:
+      alpha191.alpha132: "mean(amount, 20)"
+    interpretation: "A simple trading-value level factor; as a negative factor it often leans toward less crowded, less fully priced names."
+    likely_weaknesses:
+      - "Very likely to overlap with size and liquidity."
+      - "Too simple to be a standalone long-term family."
+      - "Needs normalization or interaction to become more structural."
+    refinement_axes:
+      - "use -mean(amount,20) explicitly"
+      - "scale by float cap, turnover, or average true range"
+      - "combine with amount volatility or return asymmetry"
+      - "add industry or size neutralization"
+
+  - family: "salience_panic_score"
+    priority: "medium"
+    canonical_seed: "qp_salience.std_score_60"
+    aliases:
+      - "qp_salience.terrified_score_60"
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/qp_salience.py"
+    formulas:
+      qp_salience.std_score_60: "ts_std(mul(div(abs(sub(returns, cs_mean(returns))), add(add(abs(returns), abs(cs_mean(returns))), 0.1)), returns), 60)"
+      qp_salience.terrified_score_60: "mul(0.5, add(ts_mean(mul(div(abs(sub(returns, cs_mean(returns))), add(add(abs(returns), abs(cs_mean(returns))), 0.1)), returns), 60), ts_std(mul(div(abs(sub(returns, cs_mean(returns))), add(add(abs(returns), abs(cs_mean(returns))), 0.1)), returns), 60)))"
+    interpretation: "Salience-panic family from QuantsPlaybook. Higher salience-weighted return volatility or terrified score often reflects crowded fear or unstable attention, so the useful direction is typically the negative sign."
+    likely_weaknesses:
+      - "May overlap with volatility or crash-sensitivity effects."
+      - "Can be noisy around event-driven return spikes."
+      - "Needs clearer separation between panic, volatility, and raw turnover exposure."
+    refinement_axes:
+      - "keep the negative sign and refine the panic proxy rather than flipping direction"
+      - "blend salience panic with turnover or amount normalization"
+      - "replace pure std leg with smoother ts_rank, ema, or decay"
+      - "interact with amplitude, shadow, or reversal structure"
+      - "test whether avg_score/std_score mixtures are more robust than raw terrified_score"
+
+  - family: "amplitude_structure"
+    priority: "medium"
+    canonical_seed: "qp_volatility.amplitude_spread_5"
+    aliases:
+      - "qp_volatility.amplitude_high_20"
+      - "qp_volatility.amplitude_spread_de_turn20"
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/qp_volatility.py"
+    formulas:
+      qp_volatility.amplitude_spread_5: "sub(div(ts_sum(mul(sub(div(high, add(low, 1e-12)), 1), greater(ts_rank(close, 5), 0.8)), 5), add(ts_sum(greater(ts_rank(close, 5), 0.8), 5), 1e-12)), div(ts_sum(mul(sub(div(high, add(low, 1e-12)), 1), less(ts_rank(close, 5), 0.2)), 5), add(ts_sum(less(ts_rank(close, 5), 0.2), 5), 1e-12)))"
+      qp_volatility.amplitude_high_20: "div(ts_sum(mul(sub(div(high, add(low, 1e-12)), 1), greater(ts_rank(close, 20), 0.8)), 20), add(ts_sum(greater(ts_rank(close, 20), 0.8), 20), 1e-12))"
+      qp_volatility.amplitude_spread_de_turn20: "cross_sectional_residual(amplitude_high_20 - amplitude_low_20, turnover_mean_20)"
+    interpretation: "Amplitude-structure family from QuantsPlaybook. Use the negative sign. The core hypothesis is that abnormally strong high-state amplitude or high-minus-low amplitude spread reflects over-heated trading structure, crowding, or unstable range expansion rather than healthy trend. Refinements should preserve the amplitude-state comparison and improve confirmation, conditioning, or robustness instead of collapsing into generic volatility."
+    likely_weaknesses:
+      - "Short-window amplitude spread may be unstable and noisy around isolated range spikes."
+      - "Can easily collapse into a generic volatility, range, or reversal factor if the state-comparison structure is lost."
+      - "May need turnover, amount, pressure, or vwap-style confirmation to separate crowding from healthy expansion."
+    refinement_axes:
+      - "keep the negative sign and keep an explicit high-state versus low-state comparison; do not rewrite it as plain std or plain amplitude mean"
+      - "replace the state anchor with upper shadow, lower shadow, intraday position, turnover state, rel_volume, or rel_amount when the same crowding story still makes sense"
+      - "use where/count/sumif to build conditional state concentration terms, such as counting heated days or summing range only when turnover or price-position confirms"
+      - "smooth the state legs with mean, ema, decay_linear, or bucket_sum-based aggregation instead of only changing the window"
+      - "test normalized spread forms such as high_state / (low_state + eps), zscored high_state minus zscored low_state, or pressure-confirmed amplitude spread"
+
+  - family: "qp_amplitude_sliced_momentum"
+    priority: "medium"
+    canonical_seed: "qp_momentum.amp_spread_ret_60_q30"
+    aliases:
+      - "qp_momentum.amp_spread_ret_120_q30"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/qp_momentum.py"
+    formulas:
+      qp_momentum.amp_spread_ret_60_q30: "sum(low_amplitude_day_returns, 60, q=0.3) - sum(high_amplitude_day_returns, 60, q=0.3)"
+      qp_momentum.amp_spread_ret_120_q30: "sum(low_amplitude_day_returns, 120, q=0.3) - sum(high_amplitude_day_returns, 120, q=0.3)"
+    interpretation: "Amplitude-sliced momentum family. Keep the main idea of comparing returns earned on calmer low-amplitude days against returns earned on noisy high-amplitude days. Higher values mean medium-horizon momentum is carried more by stable, lower-amplitude trading than by crowded bursts. Use bucket_sum or closely related conditional operators so the sliced structure remains explicit rather than drifting into ordinary momentum."
+    likely_weaknesses:
+      - "May partly overlap with anti-spike or low-volatility momentum if the low-bucket versus high-bucket contrast becomes too weak."
+      - "Bucket cut choices like q=0.3 and lookback length can be parameter-sensitive."
+      - "Can drift into a disguised reversal or generic quality-momentum proxy if the sliced return construction is dropped."
+    refinement_axes:
+      - "retain the low-bucket minus high-bucket sliced-momentum structure and implement it with bucket_sum or explicit conditional aggregation"
+      - "replace the return leg with capped returns, cs_zscore(returns), vol-adjusted returns, or where-filtered returns that downweight noisy spikes"
+      - "replace amplitude as the slicing key with upper shadow, lower shadow, intraday position, turnover state, rel_volume, or rel_amount when the stable-versus-crowded narrative still holds"
+      - "change the aggregation form with bucket_sum, bucket_sum on signed returns, count(gt(return_leg,0), w) minus count(lt(return_leg,0), w), or smoothed bucket legs before taking the spread"
+      - "blend the sliced spread with pressure, vwap bias, or shadow confirmation instead of only retuning q or the window"
+
+  - family: "qp_high_amplitude_reversal"
+    priority: "medium"
+    canonical_seed: "qp_momentum.amp_high_ret_60_q30"
+    aliases:
+      - "qp_momentum.amp_high_ret_120_q30"
+      - "cicc_daily.mmt_range_m_21_q20"
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/qp_momentum.py"
+      - "factors_store/factors/cicc_daily.py"
+    formulas:
+      qp_momentum.amp_high_ret_60_q30: "sum(high_amplitude_day_returns, 60, q=0.3)"
+      qp_momentum.amp_high_ret_120_q30: "sum(high_amplitude_day_returns, 120, q=0.3)"
+      cicc_daily.mmt_range_m_21_q20: "sum(high_amplitude_day_returns, 21, q=0.2) - sum(low_amplitude_day_returns, 21, q=0.2)"
+    interpretation: "High-amplitude reversal family. Use the negative sign. The useful hypothesis is that returns concentrated in the highest-amplitude days are more likely to be noisy, crowded, or over-extended bursts than durable trend. Refinements should preserve the explicit high-bucket return concentration idea, preferably through bucket_sum or conditional aggregation, instead of turning into a generic reversal factor."
+    likely_weaknesses:
+      - "Can become too close to generic over-heating, reversal, or volatility logic if the high-bucket concentration structure is lost."
+      - "Pure high-amplitude return sums may be noisy without a calmer-day reference leg or extra pressure/liquidity confirmation."
+      - "Window-only edits are likely to produce redundant variants."
+    refinement_axes:
+      - "keep the negative sign and keep an explicit high-bucket return concentration term built with bucket_sum, sumif, or where"
+      - "replace the return leg with clipped returns, cs_zscore(returns), vol-adjusted returns, or sign-aware aggregates such as count(gt(returns,0), w) minus count(lt(returns,0), w) inside the heated state"
+      - "replace amplitude with upper shadow, intraday position, turnover state, rel_volume, or pressure-based crowding keys when preserving the burst-versus-follow-through story"
+      - "blend the high-bucket burst term with pressure, vwap centroid, turnover, or amount confirmation rather than only changing lookback length"
+      - "test high-bucket only, high-minus-low, or high / (low + eps) structures, but avoid collapsing into plain reversal"
+      - "test whether high-amplitude reversal is stronger with upper-shadow or amplitude-spread confirmation"
+      - "separate true reversal bursts from healthy breakout continuation"
+
+  - family: "lower_shadow_stability"
+    priority: "medium"
+    canonical_seed: "cicc_daily.vol_w_downshadow_std_3m"
+    aliases: []
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/cicc_daily.py"
+      - "factors_store/factors/qp_kline.py"
+    formulas:
+      cicc_daily.vol_w_downshadow_std_3m: "std((close - low) / low, 63)"
+    interpretation: "Lower-shadow stability family. Use the negative sign. The core idea is that highly unstable lower-shadow behavior reflects erratic downside probing, inconsistent intraday repair, or noisy dip-buying, whereas calmer and more repeatable lower-shadow structure is more likely to signal orderly support."
+    likely_weaknesses:
+      - "Can overlap with generic lower-shadow, downside-position, or short-horizon volatility logic if the shadow-specific interpretation is lost."
+      - "Raw lower-shadow ratios can be sensitive to small-price denominators, especially in distressed or limit-hit names."
+      - "Without amount, turnover, or pressure confirmation, the factor may mix healthy support with chaotic bounce behavior."
+    refinement_axes:
+      - "keep the negative sign and preserve the lower-shadow dispersion or instability interpretation instead of collapsing into plain return volatility"
+      - "replace raw lower shadow with williams lower shadow, intraday rebound ratio, close-to-low recovery, or lower-shadow normalized by amplitude"
+      - "blend lower-shadow stability with turnover, amount, pressure, or downside-position confirmation"
+      - "test std, mean absolute deviation, clipped std, or decay-smoothed instability summaries over comparable windows"
+      - "compare pure lower-shadow instability with lower-minus-upper shadow asymmetry or lower-shadow plus reversal-event interaction"
+
+  - family: "qp_apb_price_bias"
+    priority: "medium"
+    canonical_seed: "qp_pressure.apb_5"
+    aliases:
+      - "qp_pressure.apb_30"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/qp_pressure.py"
+    formulas:
+      qp_pressure.apb_5: "mean(vwap, 5) / volume_weighted_mean(vwap, volume, 5) - 1"
+      qp_pressure.apb_30: "mean(vwap, 30) / volume_weighted_mean(vwap, volume, 30) - 1"
+    interpretation: "APB family from the pressure theme. These factors compare a simple average trade-price anchor against a volume-weighted trade-price anchor; stronger positive values usually mean成交重心并不只是被少数大成交高价日抬起来，而更像是稳定的价格重心偏离。"
+    likely_weaknesses:
+      - "5日版本可能偏短，容易受局部成交簇扰动。"
+      - "30日版本更稳，但可能部分退化成慢速均价偏离。"
+      - "和 vwap 锚定类 family 有潜在重叠。"
+    refinement_axes:
+      - "保留 simple-mean versus volume-weighted-mean 的双锚点逻辑"
+      - "把 vwap 替换为 close、typical price 或 close-vwap 混合锚点"
+      - "比较 5/10/20/30 日窗口，但避免只做机械换窗"
+      - "加入 amount、turnover 或 relative volume 作为确认项"
+      - "测试对 denominator 做平滑、decay 或稳健裁剪"
+
+  - family: "qp_low_price_accumulation_pressure"
+    priority: "medium"
+    canonical_seed: "qp_pressure.net_pressure_20"
+    aliases:
+      - "qp_pressure.low_price_volume_bias_20"
+      - "qp_pressure.low_price_volume_share_20"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/qp_pressure.py"
+    formulas:
+      qp_pressure.net_pressure_20: "buy_pressure(low_price_volume_share, low_price_discount_to_window_vwap, 20) - sell_pressure(high_price_volume_share, high_price_premium_to_window_vwap, 20)"
+      qp_pressure.low_price_volume_bias_20: "low_price_volume_share(20, q=0.3) - high_price_volume_share(20, q=0.3)"
+      qp_pressure.low_price_volume_share_20: "share_of_volume_traded_on_low_price_days(close, volume, 20, q=0.3)"
+    interpretation: "Low-price accumulation pressure family. These factors describe whether成交量更多集中在近窗价格分位较低的交易日，以及这种低位承接是否足以抵消高位派发压力。更高值通常更接近吸筹、承接或筹码在低位被重新分配。"
+    likely_weaknesses:
+      - "可能和简单的低价反转或价格位置因子混在一起。"
+      - "若没有价格折价/溢价确认，纯 share 指标有时会偏机械。"
+      - "窗口与 bucket 设定变化会带来较强参数敏感性。"
+    refinement_axes:
+      - "保留低价成交集中与净承接压力的核心逻辑"
+      - "比较 share、bias、net 三种结构而不是只改单一参数"
+      - "用 amount、turnover 或 relative volume 替代 raw volume"
+      - "用 vwap、rolling mean 或 lower-tail anchor 重新定义低价区"
+      - "把低位承接与 momentum、amplitude 或 shadow 结构结合"
+
+  - family: "qp_high_price_distribution_pressure"
+    priority: "medium"
+    canonical_seed: "qp_pressure.high_price_volume_share_20"
+    aliases:
+      - "qp_pressure.sell_pressure_20"
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/qp_pressure.py"
+    formulas:
+      qp_pressure.high_price_volume_share_20: "share_of_volume_traded_on_high_price_days(close, volume, 20, q=0.3)"
+      qp_pressure.sell_pressure_20: "high_price_volume_share(20, q=0.3) * premium_of_high_price_vwap_to_window_vwap(20)"
+    interpretation: "High-price distribution pressure family. Higher values indicate more成交量集中在高价态，且高价成交相对整体窗口成交重心存在溢价，更像高位派发、拥挤兑现或冲高分布。因此有用方向通常是负号。"
+    likely_weaknesses:
+      - "容易和高位振幅、上影线或短期反转逻辑重叠。"
+      - "纯 high-share 指标可能过于粗糙，缺少价格确认时不够稳。"
+      - "高位派发有时会和强趋势股混淆。"
+    refinement_axes:
+      - "保留高价态成交集中与派发压力的核心逻辑"
+      - "显式以负号方向 refine，而不是来回测试正负号"
+      - "把 high-price share 与 premium、amplitude 或 upper shadow 结合"
+      - "测试 amount、turnover 或 rel_volume 版本的高位派发代理"
+      - "加入趋势过滤，区分高位派发与健康强趋势"
+
+  - family: "qp_weighted_price_centroid"
+    priority: "medium"
+    canonical_seed: "qp_pressure.vwap_minus_mean_30"
+    aliases:
+      - "qp_pressure.vwap_minus_mean_5"
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/qp_pressure.py"
+    formulas:
+      qp_pressure.vwap_minus_mean_30: "volume_weighted_mean(close, volume, 30) - mean(close, 30)"
+      qp_pressure.vwap_minus_mean_5: "volume_weighted_mean(close, volume, 5) - mean(close, 5)"
+    interpretation: "Weighted-price centroid family. These factors compare the成交量加权价格重心和简单均价重心；当加权重心显著高于均价时，往往意味着成交主要发生在更贵的位置，更接近高位换手或价格重心上移后的脆弱结构，因此当前样本下更有用的方向是负号。"
+    likely_weaknesses:
+      - "短窗版本容易受单次大成交扰动。"
+      - "和 APB family 同属价格重心主题，存在语义近邻。"
+      - "如果没有流量或趋势确认，可能退化成普通均价偏离。"
+    refinement_axes:
+      - "保留 volume-weighted centroid versus simple mean centroid 的核心逻辑"
+      - "显式以负号方向 refine，聚焦高价换手和分布脆弱性"
+      - "把 close 换成 vwap、typical price 或高低收混合价"
+      - "把 centroid 偏离与 turnover、amount 或 net pressure 结合"
+      - "比较短窗与长窗，但优先寻找结构差而不是纯窗口差"
+
+  - family: "gp_relative_volume_pressure"
+    priority: "medium"
+    canonical_seed: "gp_mined.volume_mean30_over_volume"
+    aliases:
+      - "gp_mined.volume_mean60_over_volume"
+      - "gp_mined.down_volume_share_30"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/gp_mined.py"
+    formulas:
+      gp_mined.volume_mean30_over_volume: "div(ts_mean(volume, 30), add(volume, 1e-12))"
+      gp_mined.volume_mean60_over_volume: "div(ts_mean(volume, 60), add(volume, 1e-12))"
+      gp_mined.down_volume_share_30: "div(ts_sum(greater(sub(delay(volume, 1), volume), 0), 30), add(ts_sum(abs(sub(volume, delay(volume, 1))), 30), 1e-12))"
+    interpretation: "GP-mined relative-volume family. These factors measure whether current participation is weak relative to recent history, often surfacing names where crowding has faded or supply pressure is stabilizing."
+    likely_weaknesses:
+      - "Can overlap with raw liquidity and size exposure."
+      - "Window-only variants may be too redundant."
+      - "Needs stronger economic interpretation beyond simple mean-reversion in volume."
+    refinement_axes:
+      - "replace raw volume with amount, turnover, or rel_volume(N)"
+      - "combine relative volume with price position or volatility filters"
+      - "test 20/30/60-day normalization but avoid trivial duplicates"
+      - "blend level and shrinking-volume-share views into one cleaner structure"
+      - "control liquidity exposure while preserving participation-dry-up logic"
+
+  - family: "gp_downside_price_position"
+    priority: "medium"
+    canonical_seed: "gp_mined.low_over_high"
+    aliases:
+      - "gp_mined.low_minus_high_over_prev_close"
+      - "gp_mined.low5min_over_close"
+      - "gp_mined.low10min_over_close"
+      - "gp_mined.low_over_close"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/gp_mined.py"
+    formulas:
+      gp_mined.low_over_high: "div(low, high)"
+      gp_mined.low_minus_high_over_prev_close: "div(sub(low, high), add(delay(close, 1), 1e-12))"
+      gp_mined.low5min_over_close: "div(ts_min(low, 5), close)"
+      gp_mined.low10min_over_close: "div(ts_min(low, 10), close)"
+      gp_mined.low_over_close: "div(low, close)"
+    interpretation: "GP-mined downside-position family. These factors describe where the lower tail of price action sits relative to the day or recent close, often capturing downside exhaustion, lower-tail anchoring, or mean-reversion after pressure."
+    likely_weaknesses:
+      - "Different variants can be highly redundant."
+      - "May partly reflect simple volatility or intraday range."
+      - "Needs cleaner distinction between downside positioning and raw amplitude."
+    refinement_axes:
+      - "blend low-position ratios with vwap or open anchors"
+      - "separate downside exhaustion from pure range width"
+      - "combine with relative volume or turnover confirmation"
+      - "smooth rolling-low variants with ts_rank or decay"
+      - "test whether downside-position factors improve when normalized by amplitude or prev_close"
+
+  - family: "gp_historical_anchor_ratio"
+    priority: "medium"
+    canonical_seed: "gp_mined.close_mean60_over_close"
+    aliases:
+      - "gp_mined.close_quantile10_over_close"
+      - "gp_mined.open_quantile5_over_close"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/gp_mined.py"
+    formulas:
+      gp_mined.close_mean60_over_close: "div(ts_mean(close, 60), close)"
+      gp_mined.close_quantile10_over_close: "div(ts_quantile(close, 10, 0.2), close)"
+      gp_mined.open_quantile5_over_close: "div(ts_quantile(open, 5, 0.2), close)"
+    interpretation: "GP-mined historical-anchor family. These factors compare current price against smoother historical anchors, capturing whether price sits far from its recent central or lower-tail reference level."
+    likely_weaknesses:
+      - "Window variants and quantile variants may be structurally close."
+      - "Can collapse into simple price-distance mean-reversion."
+      - "Needs stronger confirmation from flow or volatility context."
+    refinement_axes:
+      - "replace mean anchors with vwap, median, or quantile anchors"
+      - "combine anchor distance with volume, amount, or turnover"
+      - "compare long anchor versus short anchor structures"
+      - "normalize by realized volatility or amplitude"
+      - "separate lower-tail anchor effects from generic moving-average reversion"
+
+  - family: "gp_return_open_marketfit"
+    priority: "medium"
+    canonical_seed: "gp_mined.cov_ret_open_beta_r2_abs"
+    aliases: []
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/gp_mined.py"
+    formulas:
+      gp_mined.cov_ret_open_beta_r2_abs: "abs(add(ts_cov(returns, open, 5), regression_rsq(returns, market_return, 60, 10)))"
+    interpretation: "GP-mined hybrid family combining short-horizon return/open covariance with market-fit strength. It measures whether return behavior is locally tied to the open while also carrying a strong market-model fit."
+    likely_weaknesses:
+      - "Economic interpretation is less clean than classic price-volume families."
+      - "Absolute-value structure may hide directionality."
+      - "May mix true alpha with market-exposure or beta-fit effects."
+    refinement_axes:
+      - "remove or soften the absolute-value transform"
+      - "separate the covariance leg and market-fit leg before recombining"
+      - "replace market_return fit with turnover or liquidity confirmation"
+      - "test whether residual returns are more stable than raw returns"
+      - "simplify the hybrid structure without losing the useful interaction"
+
+  - family: "daytime_reversal_tug_of_war"
+    priority: "medium"
+    canonical_seed: "factor365.positive_intraday_reversal_frequency_20"
+    aliases:
+      - "factor365.abnormal_positive_intraday_reversal_frequency_12m"
+    direction: "positive_as_is"
+    implementation_paths:
+      - "factors_store/factors/factor365_daily.py"
+    formulas:
+      factor365.positive_intraday_reversal_frequency_20: "ts_mean(mul(lt(sub(div(open, preclose), 1), 0), gt(sub(div(close, open), 1), 0)), 20)"
+      factor365.abnormal_positive_intraday_reversal_frequency_12m: "div(group_month_mean(mul(lt(sub(div(open, preclose), 1), 0), gt(sub(div(close, open), 1), 0))), ts_mean(group_month_mean(mul(lt(sub(div(open, preclose), 1), 0), gt(sub(div(close, open), 1), 0))), 12))"
+    interpretation: "Overnight-versus-daytime tug-of-war family. These factors measure how often a negative overnight shock is pulled back by positive intraday trading, and whether that reversal frequency is unusually elevated versus history. Higher values suggest stronger disagreement between overnight pricing and daytime liquidity provision."
+    likely_weaknesses:
+      - "Base event-frequency version may be too coarse and partly overlap with simple overnight reversal."
+      - "Abnormal-frequency version adds regime sensitivity but may become unstable if monthly aggregation is noisy."
+      - "Without pressure, volume, or shadow confirmation, the family can mix healthy dip-buying with noisy event-driven rebounds."
+    refinement_axes:
+      - "preserve the overnight-down then intraday-up event logic rather than collapsing into plain overnight_return or plain intraday reversal"
+      - "condition the event on pressure, rel_volume, amount, turnover, or upper-shadow context"
+      - "replace raw event mean with weighted frequency, abnormal frequency, or recent-versus-history ratios"
+      - "separate mild dip-buying from panic-rebound days using amplitude, lower shadow, or downside-position filters"
+      - "test whether reversal events are stronger when combined with weak close-to-close trend or crowding unwind signals"
+
+  - family: "abnormal_volume_attention"
+    priority: "medium"
+    canonical_seed: "factor365.abnormal_volume_average_20"
+    aliases:
+      - "factor365.abnvold_20"
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/factor365_daily.py"
+    formulas:
+      factor365.abnormal_volume_average_20: "ts_mean(div(volume, add(ts_mean(volume, 242), 1e-12)), 20)"
+      factor365.abnvold_20: "ts_max(div(volume, add(ts_mean(volume, 242), 1e-12)), 20)"
+    interpretation: "Abnormal-volume attention family. Use the negative sign. In the current backtest these factors behave more like crowding or overheated attention shocks than constructive participation, so the useful direction is the inverse of recent average abnormality or peak abnormal-volume spikes."
+    likely_weaknesses:
+      - "Can overlap with raw liquidity, size, or event-day activity without enough price-structure context."
+      - "Average and max versions may become redundant if refinements only change the summarization window."
+      - "Pure abnormal-volume signals may capture attention without distinguishing constructive accumulation from crowded speculation."
+    refinement_axes:
+      - "keep the negative sign and keep the long-baseline abnormal-volume normalization"
+      - "refine how recent shocks are summarized without collapsing into raw liquidity"
+      - "blend average-versus-peak attention views instead of only changing 20-day or 242-day windows"
+      - "combine abnormal volume with returns, pressure, amplitude, upper shadow, or downside-position confirmation"
+      - "replace raw volume with amount, turnover, rel_volume, or float-adjusted activity proxies"
+      - "test mean, max, decay, or event-count summaries while avoiding trivial window-only variants"
+
+  - family: "weighted_upper_shadow_distribution"
+    priority: "medium"
+    canonical_seed: "factor365.weighted_upper_shadow_frequency_40_hl10"
+    aliases: []
+    direction: "use_negative_sign"
+    implementation_paths:
+      - "factors_store/factors/factor365_daily.py"
+    formulas:
+      factor365.weighted_upper_shadow_frequency_40_hl10: "weighted_mean(1((high - max(open, close)) / preclose > 0.01), 40, half_life=10)"
+    interpretation: "Weighted upper-shadow distribution family. Use the negative sign. The core idea is that repeated upper-shadow events, especially when recent events are upweighted, reflect supply overhead, failed follow-through, or high-price rejection rather than healthy strength."
+    likely_weaknesses:
+      - "Threshold-based event definitions can be sensitive to volatility regime and price level."
+      - "Without turnover or pressure confirmation, repeated upper shadows may mix distribution with ordinary noisy trend."
+      - "A single fixed threshold may underfit large-cap calm names and overfit high-volatility names."
+    refinement_axes:
+      - "keep the negative sign and preserve the repeated upper-shadow event-frequency structure"
+      - "replace the fixed threshold with volatility-scaled, amplitude-scaled, or rank-based upper-shadow thresholds"
+      - "blend upper-shadow frequency with turnover, amount, pressure, or centroid-distribution confirmation"
+      - "test count, weighted count, and shadow-length-weighted event summaries instead of only retuning the window"
+      - "compare pure upper-shadow frequency with high-price distribution or reversal-event interaction terms"
+
+  - family: "ideal_amplitude_structure"
+    priority: "medium"
+    canonical_seed: "factor365.ideal_amplitude_20_q25"
+    aliases:
+      - "factor365.ideal_amplitude_20_q25_oriented"
+    direction: "use_negative_sign"
+    preferred_refine_seed: "factor365.ideal_amplitude_20_q25_oriented"
+    implementation_paths:
+      - "factors_store/factors/factor365_daily.py"
+    formulas:
+      factor365.ideal_amplitude_20_q25: "mean(amplitude on top-close states, 20, q=0.25) - mean(amplitude on bottom-close states, 20, q=0.25)"
+      factor365.ideal_amplitude_20_q25_oriented: "mean(amplitude on top-close states, 20, q=0.25) - mean(amplitude on bottom-close states, 20, q=0.25)"
+    formula_directions:
+      factor365.ideal_amplitude_20_q25_oriented: "positive_as_is"
+    interpretation: "Ideal-amplitude structure family. Use the negative sign by default. It compares amplitude observed on high-close states versus low-close states, aiming to detect whether large ranges are concentrated in elevated price states where over-heating or unstable continuation is more likely."
+    likely_weaknesses:
+      - "Can overlap with existing amplitude-spread or high-state amplitude families if refinements stay too close to the same state split."
+      - "Close-ranked state definitions may be noisy in short windows and regime-dependent in stronger trends."
+      - "Without flow or shadow confirmation, high-state amplitude does not always distinguish crowding from healthy breakout behavior."
+    refinement_axes:
+      - "preserve the explicit high-close versus low-close amplitude comparison instead of collapsing into plain amplitude mean or std"
+      - "replace close-ranked state splits with vwap position, upper-shadow state, lower-shadow state, intraday position, or turnover-conditioned states"
+      - "test high-minus-low, high / (low + eps), zscored spread, or pressure-confirmed spread forms"
+      - "blend the amplitude-state contrast with pressure, reversal-event frequency, upper shadow, or abnormal-volume context"
+      - "compare different quantile cuts or smoothed state definitions, but avoid trivial parameter-only variants"
+
+llm_refinement_template:
+  objective: "Generate 3 formula refinements from one seed factor, focused on stability, lower turnover, lower redundancy, or stronger economic interpretation."
+  required_output_sections:
+    - "parent_factor"
+    - "diagnosed_weaknesses"
+    - "refinement_rationale"
+    - "candidate_formulas"
+    - "expected_behavior_change"
+    - "risk_notes"
+  constraints:
+    - "Use only fields available in the current factors_store contract."
+    - "Prefer formulas expressible by existing operators."
+    - "Keep each candidate close to the parent family."
+    - "Avoid rephrasing the same formula with trivial window changes only."

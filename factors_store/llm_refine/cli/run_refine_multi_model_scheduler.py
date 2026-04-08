@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import (
+    DEFAULT_AUTO_APPLY_PROMOTION,
     DEFAULT_MULTI_SCHEDULER_MAX_ROUNDS,
     DEFAULT_MULTI_SCHEDULER_RUNS_DIR,
     DEFAULT_MULTI_SCHEDULER_SLEEP_BETWEEN_ROUNDS,
@@ -124,7 +125,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="dry-run each round without provider calls")
     parser.add_argument(
         "--auto-apply-promotion",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_AUTO_APPLY_PROMOTION,
         help="automatically apply pending curated promotion patches in each child run after evaluation",
     )
     parser.add_argument(
@@ -226,8 +228,7 @@ def _build_round_cmd(
         cmd.extend(["--stage-mode", str(child_stage_mode)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
-    if args.auto_apply_promotion:
-        cmd.append("--auto-apply-promotion")
+    cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
     if force_round1_seed_stage or is_seed_stage_node_kind(str(parent.get("node_kind", ""))):
         cmd.append("--round1-seed-stage")
     return cmd
@@ -453,6 +454,17 @@ def _pick_best_winner_payload(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     return max(candidates, key=_winner_sort_key)
 
 
+def _pick_best_keep_payload(payloads: list[dict[str, Any]]) -> dict[str, Any]:
+    keep_candidates = [
+        dict(item)
+        for item in payloads
+        if dict(item or {}) and str(dict(item).get("status", "")).strip().lower() in {"research_keep", "keep"}
+    ]
+    if not keep_candidates:
+        return {}
+    return max(keep_candidates, key=_winner_sort_key)
+
+
 def _build_scheduler_summary_payload(
     *,
     family: str,
@@ -469,6 +481,8 @@ def _build_scheduler_summary_payload(
     final_best = current_search.get("best_node") or {}
     last_round = round_records[-1] if round_records else {}
     last_round_winner = dict(last_round.get("winner") or {})
+    last_round_best_candidate = dict(last_round.get("global_best_candidate") or last_round_winner)
+    last_round_best_keep = dict(last_round.get("global_best_keep") or {})
     return {
         "family": family,
         "stage_mode": str(stage_mode or "auto"),
@@ -487,6 +501,12 @@ def _build_scheduler_summary_payload(
         "last_winner_name": str(last_round_winner.get("factor_name", "") or ""),
         "last_winner_expression": str(last_round_winner.get("expression", "") or ""),
         "last_round_winner": last_round_winner,
+        "last_best_candidate_name": str(last_round_best_candidate.get("factor_name", "") or ""),
+        "last_best_candidate_expression": str(last_round_best_candidate.get("expression", "") or ""),
+        "last_round_best_candidate": last_round_best_candidate,
+        "last_best_keep_name": str(last_round_best_keep.get("factor_name", "") or ""),
+        "last_best_keep_expression": str(last_round_best_keep.get("expression", "") or ""),
+        "last_round_best_keep": last_round_best_keep,
         "prompt_trace": dict(last_round.get("prompt_trace") or {}),
         "best_node": final_best,
         "best_node_name": str(final_best.get("candidate_name", "") or final_best.get("factor_name", "") or ""),
@@ -785,6 +805,12 @@ def main() -> int:
                             "returncode": returncode,
                             "multi_run_dir": str(multi_run_dir) if multi_run_dir is not None else "",
                             "winner": multi_run_summary.get("winner") or {},
+                            "global_best_candidate": multi_run_summary.get("global_best_candidate")
+                            or multi_run_summary.get("winner")
+                            or {},
+                            "global_best_keep": multi_run_summary.get("global_best_keep") or {},
+                            "winner_selection_mode": str(multi_run_summary.get("winner_selection_mode") or ""),
+                            "global_rerank_preview": list(multi_run_summary.get("global_rerank_preview") or []),
                             "successful_model_count": int(multi_run_summary.get("successful_model_count") or 0),
                             "failed_model_count": int(multi_run_summary.get("failed_model_count") or 0),
                             "successful_models": list(multi_run_summary.get("successful_models") or []),
@@ -809,6 +835,12 @@ def main() -> int:
             best_archive_winner = get_best_family_winner(db_path=args.archive_db, family=args.family)
             round_winner = _pick_best_winner_payload(
                 [dict(item.get("winner") or {}) for item in sub_runs]
+            )
+            round_best_candidate = _pick_best_winner_payload(
+                [dict(item.get("global_best_candidate") or {}) for item in sub_runs]
+            )
+            round_best_keep = _pick_best_keep_payload(
+                [dict(item.get("global_best_keep") or {}) for item in sub_runs]
             )
             primary_parent = selected_parents[0]["node"]
             current_search = engine.summary()
@@ -845,6 +877,12 @@ def main() -> int:
                 "winner": round_winner,
                 "winner_name": str(round_winner.get("factor_name", "") or ""),
                 "winner_expression": str(round_winner.get("expression", "") or ""),
+                "global_best_candidate": round_best_candidate,
+                "global_best_candidate_name": str(round_best_candidate.get("factor_name", "") or ""),
+                "global_best_candidate_expression": str(round_best_candidate.get("expression", "") or ""),
+                "global_best_keep": round_best_keep,
+                "global_best_keep_name": str(round_best_keep.get("factor_name", "") or ""),
+                "global_best_keep_expression": str(round_best_keep.get("expression", "") or ""),
                 "latest_winner": latest_archive_winner,
                 "latest_archive_winner": latest_archive_winner,
                 "best_archive_winner": best_archive_winner,

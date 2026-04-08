@@ -32,4 +32,8 @@ venv/
 llm_refine_provider_env.sh
 
 # Generated artifacts and runtime outputs
-artifacts/
+artifacts/**
+!artifacts/
+!artifacts/**/
+!artifacts/README.md
+!artifacts/**/README.md

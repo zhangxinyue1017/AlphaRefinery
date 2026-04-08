@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from ..data_paths import DEFAULT_PANEL_PATH
 
 DEFAULT_ALPHA101_SUMMARY = Path(
     "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/backtests/alpha/alpha101_full_from2018_summary_20260319_061948.csv"
@@ -106,7 +107,7 @@ def build_manifest(
         ],
         "eval_defaults": {
             "data_source": "baostock_parquet",
-            "data_dir": "/root/dmd/BaoStock/panel.parquet",
+            "data_dir": str(DEFAULT_PANEL_PATH),
             "eval_options": {
                 "data_begin": "2023-07-01",
                 "data_end": "2026-03-01",

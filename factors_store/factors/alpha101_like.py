@@ -18,6 +18,7 @@ from numpy import sign
 
 from ..contract import LIBRARY_OPTIONAL_FIELDS, LIBRARY_REQUIRED_FIELDS, validate_data
 from ..data import to_worldquant_frame, wide_frame_to_series
+from ..data_paths import DEFAULT_INDUSTRY_CSV_PATH
 from ..operators import (
     wide_correlation as correlation,
     wide_covariance as covariance,
@@ -46,7 +47,7 @@ class Alphas:
     pass
 
 
-_INDUSTRY_CSV_PATH = Path("/root/dmd/BaoStock/Industry/stock_industry.csv")
+_INDUSTRY_CSV_PATH = DEFAULT_INDUSTRY_CSV_PATH
 _UNKNOWN_GROUP = "UNKNOWN"
 
 

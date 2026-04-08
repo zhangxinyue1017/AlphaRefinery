@@ -15,8 +15,8 @@ import pandas as pd
 from ..contract import validate_data
 from ..registry import FactorRegistry
 
-from gp_factor_qlib.core.expression_tree import ExprNode, parse_qlib_expr  # noqa: E402
-from gp_factor_qlib.engine.gp_engine import compute_factor_series  # noqa: E402
+from .._vendor.gpqlib_runtime.core.expression_tree import ExprNode, parse_qlib_expr  # noqa: E402
+from .._vendor.gpqlib_runtime.engine.gp_engine import compute_factor_series  # noqa: E402
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 
 from ...data import build_data_bundle
-from ...eval import prepare_backtest_inputs, run_factor_backtest, summarize_backtest_result
+from ...data_paths import DEFAULT_BENCHMARK_PATH
+from ...eval import prepare_backtest_inputs, run_factor_backtest_dual, summarize_backtest_result
 from ...registry import FactorRegistry, create_default_registry
 from ..core.archive import (
     DEFAULT_ARCHIVE_DB,
@@ -27,7 +28,6 @@ from ..core.seed_loader import resolve_family_formula, resolve_preferred_refine_
 from .promotion import write_pending_curated_manifest
 from .redundancy import factor_series_correlation
 
-DEFAULT_BENCHMARK_PATH = Path("/root/dmd/BaoStock/Index/sh.000001.csv")
 PARENT_CORR_THRESHOLD = 0.995
 FAMILY_CORR_THRESHOLD = 0.98
 WINNER_SCORE_WEIGHTS: dict[str, float] = {
@@ -45,6 +45,11 @@ CORE_FULL_METRICS: tuple[str, ...] = (
     "net_sharpe",
     "mean_turnover",
 )
+NEW_FAMILY_BROAD_MATERIAL_THRESHOLDS: dict[str, float] = {
+    "quick_rank_icir": 0.02,
+    "net_ann_return": 0.20,
+    "net_excess_ann_return": 0.05,
+}
 
 
 def _needs_benchmark(family: SeedFamily, proposal: LLMProposal) -> bool:
@@ -406,7 +411,7 @@ def _parent_reference(
 
 
 def _num(row: pd.Series | dict[str, Any], key: str) -> float:
-    value = row.get(key) if isinstance(row, dict) else row[key]
+    value = row.get(key) if hasattr(row, "get") else row[key]
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return np.nan
     try:
@@ -442,7 +447,132 @@ def _metrics_completeness(row: pd.Series | dict[str, Any]) -> tuple[float, int]:
     return float(present) / float(len(CORE_FULL_METRICS)), int(missing)
 
 
-def _candidate_decision(row: pd.Series, parent: pd.Series | None) -> tuple[str, str]:
+def _prefixed_summary(summary: dict[str, Any], *, prefix: str) -> dict[str, Any]:
+    skip = {"factor_name", "candidate_rank", "expr", "direction"}
+    return {f"{prefix}{key}": value for key, value in summary.items() if key not in skip}
+
+
+def _metric_gap(
+    row: pd.Series | dict[str, Any],
+    *,
+    raw_key: str,
+    neutral_key: str,
+) -> float:
+    raw_value = _num(row, raw_key)
+    neutral_value = _num(row, neutral_key)
+    if np.isnan(raw_value) or np.isnan(neutral_value):
+        return np.nan
+    return raw_value - neutral_value
+
+
+def _metric_retention(
+    row: pd.Series | dict[str, Any],
+    *,
+    raw_key: str,
+    neutral_key: str,
+) -> float:
+    raw_value = _num(row, raw_key)
+    neutral_value = _num(row, neutral_key)
+    if np.isnan(raw_value) or np.isnan(neutral_value) or abs(raw_value) <= 1e-12:
+        return np.nan
+    return neutral_value / raw_value
+
+
+def _neutral_winner_guard_passed(row: pd.Series | dict[str, Any]) -> bool:
+    if str(row.get("role", "")) != "candidate":
+        return True
+    raw_icir = _num(row, "quick_rank_icir")
+    neutral_icir = _num(row, "neutral_quick_rank_icir")
+    raw_sharpe = _num(row, "net_sharpe")
+    neutral_sharpe = _num(row, "neutral_net_sharpe")
+    avg_style_corr = _num(row, "avg_abs_style_corr")
+
+    if np.isnan(neutral_icir) and np.isnan(neutral_sharpe):
+        return True
+
+    icir_retention = _metric_retention(row, raw_key="quick_rank_icir", neutral_key="neutral_quick_rank_icir")
+    sharpe_retention = _metric_retention(row, raw_key="net_sharpe", neutral_key="neutral_net_sharpe")
+    high_style_loading = (not np.isnan(avg_style_corr)) and avg_style_corr >= 0.20
+    icir_collapse = (
+        not np.isnan(raw_icir)
+        and raw_icir > 0.0
+        and not np.isnan(neutral_icir)
+        and neutral_icir <= 0.0
+        and (np.isnan(icir_retention) or icir_retention < 0.25)
+    )
+    sharpe_collapse = (
+        not np.isnan(raw_sharpe)
+        and raw_sharpe > 0.0
+        and not np.isnan(neutral_sharpe)
+        and neutral_sharpe <= 0.0
+        and (np.isnan(sharpe_retention) or sharpe_retention < 0.25)
+    )
+    if high_style_loading and icir_collapse and sharpe_collapse:
+        return False
+    return True
+
+
+def _metric_delta(
+    row: pd.Series | dict[str, Any],
+    parent: pd.Series | dict[str, Any] | None,
+    *,
+    key: str,
+) -> float:
+    if parent is None:
+        return np.nan
+    value = _num(row, key)
+    parent_value = _num(parent, key)
+    if np.isnan(value) or np.isnan(parent_value):
+        return np.nan
+    return value - parent_value
+
+
+def _is_material_gain(
+    row: pd.Series | dict[str, Any],
+    parent: pd.Series | dict[str, Any] | None,
+    *,
+    key: str,
+) -> bool:
+    threshold = float(NEW_FAMILY_BROAD_MATERIAL_THRESHOLDS.get(key, 0.0))
+    delta = _metric_delta(row, parent, key=key)
+    return not np.isnan(delta) and delta >= threshold
+
+
+def _new_family_broad_winner_guard(
+    row: pd.Series | dict[str, Any],
+    parent: pd.Series | dict[str, Any] | None,
+) -> tuple[bool, str]:
+    if str(row.get("role", "")) != "candidate":
+        return True, "baseline row"
+    if parent is None or not _has_reference_metrics(parent):
+        return False, "missing parent baseline"
+
+    net_sharpe_delta = _metric_delta(row, parent, key="net_sharpe")
+    if np.isnan(net_sharpe_delta) or net_sharpe_delta <= 0.0:
+        return False, "new_family_broad winner requires NetSharpe improvement"
+
+    material_labels: list[str] = []
+    if _is_material_gain(row, parent, key="quick_rank_icir"):
+        material_labels.append("RankICIR")
+    if _is_material_gain(row, parent, key="net_ann_return"):
+        material_labels.append("NetAnn")
+    if _is_material_gain(row, parent, key="net_excess_ann_return"):
+        material_labels.append("NetExcess")
+    if not material_labels:
+        return False, "new_family_broad winner requires material gain on RankICIR / NetAnn / NetExcess"
+    return (
+        True,
+        "new_family_broad winner guard passed: "
+        f"NetSharpe improved and material gain on {', '.join(material_labels)}",
+    )
+
+
+def _candidate_decision(
+    row: pd.Series,
+    parent: pd.Series | None,
+    *,
+    stage_mode: str = "auto",
+) -> tuple[str, str]:
     existing_decision = str(row.get("decision", "")).strip()
     existing_reason = str(row.get("decision_reason", "")).strip()
     if existing_decision.startswith("drop_redundant"):
@@ -457,6 +587,7 @@ def _candidate_decision(row: pd.Series, parent: pd.Series | None) -> tuple[str, 
         return "research_drop", "same expression as parent"
 
     improved: list[str] = []
+    material_gain_labels: list[str] = []
     for key, label in (
         ("quick_rank_ic_mean", "RankIC"),
         ("quick_rank_icir", "RankICIR"),
@@ -466,6 +597,9 @@ def _candidate_decision(row: pd.Series, parent: pd.Series | None) -> tuple[str, 
     ):
         if _num(row, key) > _num(parent, key):
             improved.append(label)
+        if stage_mode == "new_family_broad" and key in NEW_FAMILY_BROAD_MATERIAL_THRESHOLDS:
+            if _is_material_gain(row, parent, key=key):
+                material_gain_labels.append(label)
 
     completeness, missing_count = _metrics_completeness(row)
     presence = _core_metric_presence(row)
@@ -491,10 +625,10 @@ def _candidate_decision(row: pd.Series, parent: pd.Series | None) -> tuple[str, 
         keep = True
 
     if keep:
-        reason = (
-            f"broad gate: beats parent on {', '.join(improved)}; "
-            f"full_metrics={len(CORE_FULL_METRICS) - missing_count}/{len(CORE_FULL_METRICS)}"
-        )
+        reason = f"broad gate: beats parent on {', '.join(improved)}"
+        if stage_mode == "new_family_broad" and material_gain_labels:
+            reason += f"; material_gain={', '.join(material_gain_labels)}"
+        reason += f"; full_metrics={len(CORE_FULL_METRICS) - missing_count}/{len(CORE_FULL_METRICS)}"
         return "research_keep", reason
     if improved:
         return "research_drop", f"partially improves {', '.join(improved)} but trade-off is too large"
@@ -573,7 +707,62 @@ def _attach_winner_scores(summary_df: pd.DataFrame) -> pd.DataFrame:
     return work
 
 
-def _assign_winners(summary_df: pd.DataFrame) -> pd.DataFrame:
+def _ensure_keep_floor(
+    summary_df: pd.DataFrame,
+    *,
+    stage_mode: str = "auto",
+) -> pd.DataFrame:
+    if summary_df.empty or stage_mode != "new_family_broad":
+        return summary_df
+
+    work = summary_df.copy()
+    candidate_mask = work["role"] == "candidate"
+    if not candidate_mask.any():
+        return work
+    if work.loc[candidate_mask, "decision"].isin(["research_keep", "research_winner"]).any():
+        return work
+
+    error_text = work.get("error", pd.Series(index=work.index, dtype=object)).fillna("").astype(str).str.strip()
+    decision_text = work.get("decision", pd.Series(index=work.index, dtype=object)).fillna("").astype(str)
+    fallback_mask = candidate_mask & error_text.eq("") & ~decision_text.str.startswith("drop_redundant")
+    fallback_df = work.loc[fallback_mask].copy()
+    if fallback_df.empty:
+        return work
+
+    sort_cols = [
+        col
+        for col in (
+            "metrics_completeness",
+            "net_sharpe",
+            "net_ann_return",
+            "net_excess_ann_return",
+            "quick_rank_icir",
+            "quick_rank_ic_mean",
+            "mean_turnover",
+            "candidate_rank",
+        )
+        if col in fallback_df.columns
+    ]
+    if not sort_cols:
+        return work
+    ascending = [False, False, False, False, False, False, True, True][: len(sort_cols)]
+    fallback_df = fallback_df.sort_values(sort_cols, ascending=ascending, na_position="last")
+    fallback_idx = fallback_df.index[0]
+    base_reason = str(work.at[fallback_idx, "decision_reason"] or "").strip()
+    work.at[fallback_idx, "decision"] = "research_keep"
+    work.at[fallback_idx, "decision_reason"] = (
+        "new_family_broad fallback keep to preserve at least one branch for global rerank"
+        + (f"; {base_reason}" if base_reason else "")
+    )
+    return work
+
+
+def _assign_winners(
+    summary_df: pd.DataFrame,
+    *,
+    stage_mode: str = "auto",
+    parent: pd.Series | None = None,
+) -> pd.DataFrame:
     work = _attach_winner_scores(summary_df)
     candidate_mask = work["role"] == "candidate"
     existing_winner_mask = candidate_mask & (work["decision"] == "research_winner")
@@ -581,14 +770,45 @@ def _assign_winners(summary_df: pd.DataFrame) -> pd.DataFrame:
     keep_mask = candidate_mask & (work["decision"] == "research_keep")
     if not keep_mask.any():
         return work
+    if stage_mode == "new_family_broad":
+        stage_guard = work.apply(
+            lambda row: _new_family_broad_winner_guard(row, parent),
+            axis=1,
+            result_type="expand",
+        )
+        work["stage_winner_guard_passed"] = stage_guard[0]
+        work["stage_winner_guard_reason"] = stage_guard[1]
+    else:
+        work["stage_winner_guard_passed"] = True
+        work["stage_winner_guard_reason"] = ""
     winner_eligible_mask = keep_mask & (
         pd.to_numeric(work.get("missing_core_metrics_count"), errors="coerce").fillna(99).astype(int) <= 0
     )
+    if "neutral_winner_guard_passed" in work.columns:
+        winner_eligible_mask = winner_eligible_mask & work["neutral_winner_guard_passed"].fillna(True).astype(bool)
+    if stage_mode == "new_family_broad":
+        winner_eligible_mask = winner_eligible_mask & work["stage_winner_guard_passed"].fillna(False).astype(bool)
     keep_df = work.loc[winner_eligible_mask].copy()
     if keep_df.empty:
         return work
-    keep_df = keep_df.sort_values(
-        by=[
+    if stage_mode == "new_family_broad":
+        sort_by = [
+            col
+            for col in (
+                "net_sharpe",
+                "net_ann_return",
+                "net_excess_ann_return",
+                "quick_rank_icir",
+                "neutral_net_sharpe",
+                "neutral_quick_rank_icir",
+                "winner_score",
+                "mean_turnover",
+                "candidate_rank",
+            )
+            if col in keep_df.columns
+        ]
+    else:
+        sort_by = [
             col
             for col in (
                 "winner_score",
@@ -601,25 +821,9 @@ def _assign_winners(summary_df: pd.DataFrame) -> pd.DataFrame:
                 "candidate_rank",
             )
             if col in keep_df.columns
-        ],
-        ascending=[False, False, False, False, False, False, True, True][: len(
-            [
-                col
-                for col in (
-                    "winner_score",
-                    "net_sharpe",
-                    "net_excess_ann_return",
-                    "net_ann_return",
-                    "quick_rank_icir",
-                    "quick_rank_ic_mean",
-                    "mean_turnover",
-                    "candidate_rank",
-                )
-                if col in keep_df.columns
-            ]
-        )],
-        na_position="last",
-    )
+        ]
+    ascending = [False, False, False, False, False, False, False, True, True][: len(sort_by)]
+    keep_df = keep_df.sort_values(by=sort_by, ascending=ascending, na_position="last")
     winner_idx = keep_df.index[0]
     base_reason = str(work.at[winner_idx, "decision_reason"] or "").strip()
     winner_score = _num(work.loc[winner_idx], "winner_score")
@@ -636,11 +840,21 @@ def _assign_winners(summary_df: pd.DataFrame) -> pd.DataFrame:
         if not np.isnan(value):
             component_bits.append(f"{label}={value:.2f}")
     work.at[winner_idx, "decision"] = "research_winner"
-    work.at[winner_idx, "decision_reason"] = (
-        f"best research keep candidate by composite winner_score={winner_score:.4f}"
-        + (f" ({', '.join(component_bits)})" if component_bits else "")
-        + (f"; {base_reason}" if base_reason else "")
-    )
+    if stage_mode == "new_family_broad":
+        stage_reason = str(work.at[winner_idx, "stage_winner_guard_reason"] or "").strip()
+        work.at[winner_idx, "decision_reason"] = (
+            f"best new_family_broad candidate by stage-aware multi-metric ranking"
+            + (f"; winner_score={winner_score:.4f}" if not np.isnan(winner_score) else "")
+            + (f" ({', '.join(component_bits)})" if component_bits else "")
+            + (f"; {stage_reason}" if stage_reason else "")
+            + (f"; {base_reason}" if base_reason else "")
+        )
+    else:
+        work.at[winner_idx, "decision_reason"] = (
+            f"best research keep candidate by composite winner_score={winner_score:.4f}"
+            + (f" ({', '.join(component_bits)})" if component_bits else "")
+            + (f"; {base_reason}" if base_reason else "")
+        )
     return work
 
 
@@ -659,12 +873,28 @@ def _slim_summary(summary_df: pd.DataFrame) -> pd.DataFrame:
         "winner_score",
         "quick_rank_ic",
         "quick_rank_icir",
+        "neutral_quick_rank_icir",
         "quick_ic",
         "quick_icir",
         "net_ann_return",
+        "neutral_net_ann_return",
+        "net_excess_ann_return",
+        "neutral_net_excess_ann_return",
         "long_only_net_ann_return",
         "net_sharpe",
+        "neutral_net_sharpe",
         "mean_turnover",
+        "neutral_mean_turnover",
+        "avg_abs_style_corr",
+        "max_abs_style_corr",
+        "top_style_exposure",
+        "top_style_corr",
+        "raw_neutral_rank_icir_gap",
+        "raw_neutral_net_sharpe_gap",
+        "neutral_winner_guard_passed",
+        "neutralization_status",
+        "stage_winner_guard_passed",
+        "stage_winner_guard_reason",
         "metrics_completeness",
         "missing_core_metrics_count",
         "eligible_for_best_node",
@@ -700,8 +930,8 @@ def _markdown_report(
         "",
         "## Results",
         "",
-        "| Factor | Role | Model | WinnerScore | RankIC | RankICIR | Net Excess | Net Ann | Net Sharpe | Turnover | Decision |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| Factor | Role | Model | WinnerScore | RankICIR | NRankICIR | Net Sharpe | NSharpe | StyleCorr | Decision |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     for _, row in summary_df.iterrows():
         lines.append(
@@ -712,12 +942,11 @@ def _markdown_report(
                     str(row.get("role", "")),
                     str(row.get("model", "")),
                     _fmt_md_num(row.get("winner_score")),
-                    _fmt_md_num(row.get("quick_rank_ic_mean")),
                     _fmt_md_num(row.get("quick_rank_icir")),
-                    _fmt_md_num(row.get("net_excess_ann_return")),
-                    _fmt_md_num(row.get("net_ann_return")),
+                    _fmt_md_num(row.get("neutral_quick_rank_icir")),
                     _fmt_md_num(row.get("net_sharpe")),
-                    _fmt_md_num(row.get("mean_turnover")),
+                    _fmt_md_num(row.get("neutral_net_sharpe")),
+                    _fmt_md_num(row.get("avg_abs_style_corr")),
                     str(row.get("decision", "")),
                 ]
             )
@@ -728,8 +957,10 @@ def _markdown_report(
         lines.append(f"- expression: `{parent.get('expression', '')}`")
         lines.append(f"- RankIC: `{_fmt_md_num(parent.get('quick_rank_ic_mean'))}`")
         lines.append(f"- RankICIR: `{_fmt_md_num(parent.get('quick_rank_icir'))}`")
+        lines.append(f"- Neutral RankICIR: `{_fmt_md_num(parent.get('neutral_quick_rank_icir'))}`")
         lines.append(f"- Net Ann Return: `{_fmt_md_num(parent.get('net_ann_return'))}`")
         lines.append(f"- Net Excess Ann Return: `{_fmt_md_num(parent.get('net_excess_ann_return'))}`")
+        lines.append(f"- Neutral Net Sharpe: `{_fmt_md_num(parent.get('neutral_net_sharpe'))}`")
         lines.append(f"- Mean Turnover: `{_fmt_md_num(parent.get('mean_turnover'))}`")
     lines.extend(["", "## Research Gate Notes", ""])
     for _, row in summary_df[summary_df["role"] == "candidate"].iterrows():
@@ -738,6 +969,19 @@ def _markdown_report(
         lines.append(f"- expression: `{row.get('expression', '')}`")
         lines.append(f"- research_decision: {row.get('decision', '')}")
         lines.append(f"- reason: {row.get('decision_reason', '')}")
+        lines.append(f"- neutral RankICIR: {_fmt_md_num(row.get('neutral_quick_rank_icir'))}")
+        lines.append(f"- neutral NetSharpe: {_fmt_md_num(row.get('neutral_net_sharpe'))}")
+        lines.append(f"- avg_abs_style_corr: {_fmt_md_num(row.get('avg_abs_style_corr'))}")
+        if str(row.get("top_style_exposure", "")).strip():
+            lines.append(
+                f"- top_style_exposure: {row.get('top_style_exposure')} "
+                f"({_fmt_md_num(row.get('top_style_corr'))})"
+            )
+        lines.append(f"- raw_neutral_icir_gap: {_fmt_md_num(row.get('raw_neutral_rank_icir_gap'))}")
+        lines.append(f"- raw_neutral_sharpe_gap: {_fmt_md_num(row.get('raw_neutral_net_sharpe_gap'))}")
+        lines.append(f"- neutral_winner_guard_passed: {row.get('neutral_winner_guard_passed')}")
+        if str(row.get("stage_winner_guard_reason", "")).strip():
+            lines.append(f"- stage_winner_guard: {row.get('stage_winner_guard_reason')}")
         if row.get("validation_warnings"):
             lines.append(f"- validation_warnings: {row.get('validation_warnings')}")
         if row.get("error"):
@@ -768,6 +1012,7 @@ def _evaluate_one_window(
     end: str | None,
     run_id: str,
     archive_db: str | Path,
+    stage_mode: str = "auto",
 ) -> tuple[pd.DataFrame, dict[str, Any], dict[str, Any]]:
     registry = create_default_registry()
     register_proposal_candidates(registry, proposal=proposal, name_prefix=name_prefix)
@@ -875,7 +1120,7 @@ def _evaluate_one_window(
                     )
                     continue
 
-            result = run_factor_backtest(
+            dual_result = run_factor_backtest_dual(
                 factor,
                 prepared=prepared,
                 factor_name=item["factor_name"],
@@ -886,10 +1131,19 @@ def _evaluate_one_window(
                 cost_bps=float(settings["cost_bps"]),
                 enable_alphalens=False,
             )
+            result = dual_result["raw_result"]
             result["metrics"]["candidate_rank"] = item["candidate_rank"]
             result["metrics"]["expr"] = item["expression"]
             result["metrics"]["direction"] = family.direction
             summary = summarize_backtest_result(result)
+            neutralized_result = dual_result.get("neutralized_result")
+            if isinstance(neutralized_result, dict):
+                neutral_summary = summarize_backtest_result(neutralized_result)
+                summary.update(_prefixed_summary(neutral_summary, prefix="neutral_"))
+            summary.update(dict(dual_result.get("style_diagnostics") or {}))
+            summary["neutralization_status"] = dual_result.get("neutralization_status", "")
+            summary["neutralized_factor_nonnull"] = dual_result.get("neutralized_factor_nonnull", 0)
+            summary["neutralized_factor_std"] = dual_result.get("neutralized_factor_std", np.nan)
             rows.append(_augment_summary(summary, item=item, family=family))
             if item["role"] == "candidate":
                 accepted_candidate_refs.append(
@@ -906,6 +1160,23 @@ def _evaluate_one_window(
     if not summary_df.empty:
         summary_df["metrics_completeness"] = summary_df.apply(lambda row: _metrics_completeness(row)[0], axis=1)
         summary_df["missing_core_metrics_count"] = summary_df.apply(lambda row: _metrics_completeness(row)[1], axis=1)
+        summary_df["raw_neutral_rank_icir_gap"] = summary_df.apply(
+            lambda row: _metric_gap(row, raw_key="quick_rank_icir", neutral_key="neutral_quick_rank_icir"),
+            axis=1,
+        )
+        summary_df["raw_neutral_net_sharpe_gap"] = summary_df.apply(
+            lambda row: _metric_gap(row, raw_key="net_sharpe", neutral_key="neutral_net_sharpe"),
+            axis=1,
+        )
+        summary_df["neutral_icir_retention"] = summary_df.apply(
+            lambda row: _metric_retention(row, raw_key="quick_rank_icir", neutral_key="neutral_quick_rank_icir"),
+            axis=1,
+        )
+        summary_df["neutral_sharpe_retention"] = summary_df.apply(
+            lambda row: _metric_retention(row, raw_key="net_sharpe", neutral_key="neutral_net_sharpe"),
+            axis=1,
+        )
+        summary_df["neutral_winner_guard_passed"] = summary_df.apply(_neutral_winner_guard_passed, axis=1)
         summary_df["eligible_for_best_node"] = summary_df.apply(
             lambda row: bool(
                 str(row.get("role", "")) != "candidate"
@@ -914,10 +1185,15 @@ def _evaluate_one_window(
             axis=1,
         )
     parent = _parent_reference(summary_df, family, parent_factor_name=parent_factor_name)
-    decisions = summary_df.apply(lambda row: _candidate_decision(row, parent), axis=1, result_type="expand")
+    decisions = summary_df.apply(
+        lambda row: _candidate_decision(row, parent, stage_mode=stage_mode),
+        axis=1,
+        result_type="expand",
+    )
     summary_df["decision"] = decisions[0]
     summary_df["decision_reason"] = decisions[1]
-    summary_df = _assign_winners(summary_df)
+    summary_df = _ensure_keep_floor(summary_df, stage_mode=stage_mode)
+    summary_df = _assign_winners(summary_df, stage_mode=stage_mode, parent=parent)
     summary_df["run_id"] = run_id
     summary_df["evaluated_at"] = utc_now_iso()
     return summary_df, settings, data_meta
@@ -1008,6 +1284,7 @@ def evaluate_refinement_run(
     parent_candidate_id: str = "",
     archive_db: str | Path = DEFAULT_ARCHIVE_DB,
     auto_apply_promotion: bool = False,
+    stage_mode: str = "auto",
 ) -> dict[str, Path]:
     run_path = Path(run_dir)
     use_protocol = seed_pool.evaluation_protocol is not None and not (start or end)
@@ -1043,6 +1320,7 @@ def evaluate_refinement_run(
                 end=window.end or None,
                 run_id=run_id,
                 archive_db=archive_db,
+                stage_mode=stage_mode,
             )
             stage_outputs = _write_window_outputs(
                 run_path=run_path,
@@ -1073,6 +1351,7 @@ def evaluate_refinement_run(
             "evaluation_mode": "protocol",
             "protocol": protocol.to_dict(),
             "decision_stage": decision_stage,
+            "stage_mode": str(stage_mode or "auto"),
             "decision_policy": (
                 "system-internal research decisions are based on selection. "
                 "If final_oos is configured, it is review-only and excluded from optimization and auto-parenting."
@@ -1093,6 +1372,7 @@ def evaluate_refinement_run(
             end=end,
             run_id=run_id,
             archive_db=archive_db,
+            stage_mode=stage_mode,
         )
         outputs.update(
             _write_window_outputs(
@@ -1110,6 +1390,7 @@ def evaluate_refinement_run(
             "canonical_seed": family.canonical_seed,
             "name_prefix": name_prefix,
             "evaluation_mode": "single_window",
+            "stage_mode": str(stage_mode or "auto"),
             "settings": settings,
             "data_meta": data_meta,
             "stage_files": {key: str(value) for key, value in outputs.items()},

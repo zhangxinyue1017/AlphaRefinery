@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from ..config import (
+    DEFAULT_AUTO_APPLY_PROMOTION,
     DEFAULT_FAMILY_LOOP_ANCHOR_MAX_PARENT_SIMILARITY,
     DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TURNOVER,
     DEFAULT_FAMILY_LOOP_ANCHOR_MIN_ICIR,
@@ -183,7 +184,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--skip-eval", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--auto-apply-promotion", action="store_true")
+    parser.add_argument("--auto-apply-promotion", action=argparse.BooleanOptionalAction, default=DEFAULT_AUTO_APPLY_PROMOTION)
     parser.add_argument("--disable-mmr-rerank", action="store_true")
     return parser
 

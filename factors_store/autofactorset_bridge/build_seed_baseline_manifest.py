@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from ..data_paths import DEFAULT_PANEL_PATH
 from ..factors.seed_baselines import seed_baseline_catalog
 from ..llm_refine.config import DEFAULT_AUTOFACTORSET_MANIFESTS_DIR, DEFAULT_SEED_POOL_PATH
 from ..llm_refine.core.seed_loader import load_seed_pool
@@ -22,7 +23,7 @@ def _default_eval_defaults(seed_pool_path: str | Path = DEFAULT_SEED_POOL_PATH) 
         selection_start = str(protocol.selection.start or "")
         selection_end = str(protocol.selection.end or "")
     defaults = dict(pool.evaluation_defaults or {})
-    data_dir = str(defaults.get("panel_path", "/root/dmd/BaoStock/panel.parquet"))
+    data_dir = str(defaults.get("panel_path") or DEFAULT_PANEL_PATH)
     return {
         "data_source": "baostock_parquet",
         "data_dir": data_dir,

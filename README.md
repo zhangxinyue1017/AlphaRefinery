@@ -39,7 +39,7 @@ AlphaRefinery brings the full research loop into one workspace:
 - Family-level LLM-guided search, refinement
 - Evaluation, archives, reports
 - Formal factor promotion
-- Downstream admission-oriented validation
+- Optional admission-oriented validation
 
 In short, AlphaRefinery is built to support the full lifecycle of factor research, from idea exploration to promotion-ready integration.
 
@@ -132,11 +132,13 @@ AlphaRefinery currently serves as the unified root workspace for three major lin
 
 - **Formal factors, registry**
 - **Family-level research loops via `llm_refine`**
-- **Artifacts, reports, admission-oriented evaluation**
+- **Artifacts, reports, optional admission-oriented evaluation**
 
 In practice:
 
+- Shared tracked config in `config/`
 - Formal code in `factors_store/`
+- Vendored factor runtime in `factors_store/_vendor/gpqlib_runtime/`
 - Formal factors in `factors_store/factors/`
 - Research artifacts, reports in `artifacts/`
 
@@ -254,9 +256,11 @@ A major design principle of AlphaRefinery is the separation between:
 
 This allows the system to retain full research history while keeping the official factor layer clean and maintainable.
 
-### Admission-oriented downstream evaluation
+### Optional admission adapter
 
-Promoted factors can be further evaluated through the `autofactorset_bridge` workflow, adding another layer of admission screening before broader inclusion or deployment-oriented consideration.
+Promoted factors can be further evaluated through the `autofactorset_bridge` workflow, adding an optional adapter layer for downstream library admission or company-specific promotion checks.
+
+The core research loop does not depend on this layer. If you do not need downstream admission, you can skip it entirely.
 
 ---
 
@@ -431,13 +435,31 @@ Current support includes:
 cd /root/workspace/zxy_workspace/AlphaRefinery
 ```
 
+Install the core Python dependencies once:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+If your data paths differ from the local defaults, set them before running:
+
+```bash
+export ALPHAREFINERY_PANEL_PATH=/path/to/panel.parquet
+export ALPHAREFINERY_BENCHMARK_PATH=/path/to/benchmark.csv
+export ALPHAREFINERY_INDUSTRY_CSV_PATH=/path/to/stock_industry.csv
+```
+
 ### 0. Load the `llm_refine` provider environment
 
 Before running any `llm_refine` workflow, first execute:
 
 ```bash
+cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
+
+The tracked template is `llm_refine_provider_env.example.sh`.
+The copied `llm_refine_provider_env.sh` stays local and is ignored by git.
 
 This is recommended because the `run_refine_*` CLI tools contain fallback defaults.
 If the environment is not loaded explicitly, they may fall back to built-in provider or base URL settings, which is usually not the intended configuration.
@@ -643,12 +665,12 @@ python -m py_compile \
 
 After this step, a candidate factor is no longer just a research artifact — it becomes a formal, registrable factor.
 
-### 6. Run `autofactorset` admission
+### 6. Optional: run `autofactorset` admission
 
 Suitable for:
 
 * Factors already registered in the formal library
-* Downstream admission evaluation before broader use or deployment-oriented consideration.
+* Optional downstream admission evaluation before broader use or deployment-oriented consideration.
 
 Recommended entry:
 
@@ -676,6 +698,8 @@ Typical downstream concerns:
 * Similarity, redundancy against the existing library
 * Realistic deployment candidacy.
 
+This step is optional. The main AlphaRefinery workflow remains usable without `autofactorset_bridge`.
+
 ---
 
 ## 🗂 Repository Structure
@@ -684,9 +708,17 @@ Typical downstream concerns:
 AlphaRefinery/
 ├── README.md
 ├── PROJECT_MAP.md
-├── llm_refine_provider_env.sh
+├── requirements.txt
+├── llm_refine_provider_env.example.sh
 ├── run_refine.sh
+├── config/
+│   ├── factor_manifests/
+│   │   ├── alpha158.yaml
+│   │   └── alpha360.yaml
+│   └── refinement_seed_pool.yaml
 ├── factors_store/
+│   ├── _vendor/
+│   │   └── gpqlib_runtime/
 │   ├── factors/
 │   ├── llm_refine/
 │   └── autofactorset_bridge/
@@ -743,4 +775,4 @@ The project is continuing to evolve. Near-term directions may include:
 
 ## 🪪 One-Sentence Summary
 
-**AlphaRefinery is a unified research workspace for A-share alpha factors, integrating formal factor implementation, LLM-guided family refinement, research artifact management, and downstream admission evaluation into a single evolving pipeline.**
+**AlphaRefinery is a unified research workspace for A-share alpha factors, integrating formal factor implementation, LLM-guided family refinement, research artifact management, and an optional downstream admission adapter into a single evolving pipeline.**

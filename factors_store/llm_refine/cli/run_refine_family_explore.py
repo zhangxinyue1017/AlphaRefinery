@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import (
+    DEFAULT_AUTO_APPLY_PROMOTION,
     DEFAULT_FAMILY_EXPLORE_ALIAS_LIMIT,
     DEFAULT_FAMILY_EXPLORE_MAX_SEEDS,
     DEFAULT_FAMILY_EXPLORE_RECENT_REFERENCE_LIMIT,
@@ -233,7 +234,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="dry-run each seed dispatch without provider calls")
     parser.add_argument(
         "--auto-apply-promotion",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_AUTO_APPLY_PROMOTION,
         help="automatically apply pending curated promotion patches in each child run after evaluation",
     )
     parser.add_argument(
@@ -306,8 +308,7 @@ def _build_seed_cmd(args: argparse.Namespace, *, seed: dict[str, Any], seed_mult
         cmd.extend(["--target-profile", str(args.target_profile)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
-    if args.auto_apply_promotion:
-        cmd.append("--auto-apply-promotion")
+    cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
     return cmd
 
 

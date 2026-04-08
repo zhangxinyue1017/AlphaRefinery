@@ -10,7 +10,7 @@ from ..data import to_worldquant_frame, wide_frame_to_series
 from ..operators import wide_delay as Ref
 from ..registry import FactorRegistry
 
-SOURCE_PATH = Path("/root/dmd_factor_arena/alpha360.yaml")
+SOURCE_PATH = Path(__file__).resolve().parents[2] / "config" / "factor_manifests" / "alpha360.yaml"
 EPS = 1e-12
 
 

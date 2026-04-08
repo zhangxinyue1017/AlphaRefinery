@@ -17,6 +17,7 @@ from . import (
     run_factor_backtest_report,
     summarize_backtest_result,
 )
+from .data_paths import DEFAULT_PANEL_PATH
 
 
 _PARALLEL_DATA: dict[str, pd.Series] | None = None
@@ -100,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     selector.add_argument("--source-prefix", help="batch select by source prefix, e.g. quants_playbook_")
     parser.add_argument(
         "--panel-path",
-        default="/root/dmd/BaoStock/panel.parquet",
+        default=str(DEFAULT_PANEL_PATH),
         help="path to panel parquet",
     )
     parser.add_argument(

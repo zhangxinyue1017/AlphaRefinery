@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from ...data import build_data_bundle
+from ...data_paths import DEFAULT_BENCHMARK_PATH
 from ...registry import create_default_registry
 from ..config import (
     DEFAULT_FAMILY_LOOP_ANCHOR_MAX_TRUE_PARENT_CORR,
@@ -25,9 +26,6 @@ from ..search import SearchPolicy
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
 from ..search.scoring import pairwise_similarity, safe_float, winner_improved
 from ..search.state import SearchNode
-
-_DEFAULT_BENCHMARK_PATH = Path("/root/dmd/BaoStock/Index/sh.000001.csv")
-
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
@@ -252,8 +250,8 @@ def _build_corr_data(
     if not effective_panel_path:
         raise ValueError("panel_path is required to compute true correlations for family loop graduation")
     effective_benchmark = str(benchmark_path or defaults.get("benchmark_path") or "").strip()
-    if not effective_benchmark and _DEFAULT_BENCHMARK_PATH.exists():
-        effective_benchmark = str(_DEFAULT_BENCHMARK_PATH)
+    if not effective_benchmark and DEFAULT_BENCHMARK_PATH.exists():
+        effective_benchmark = str(DEFAULT_BENCHMARK_PATH)
     data, _meta = build_data_bundle(
         effective_panel_path,
         benchmark_path=effective_benchmark or None,
@@ -776,18 +774,33 @@ def build_family_loop_summary(
     focused_returncode: int = 0,
 ) -> dict[str, Any]:
     broad_best = dict(broad_summary.get("best_node") or {})
+    broad_best_candidate = dict(
+        broad_summary.get("last_round_best_candidate")
+        or broad_summary.get("last_round_best_keep")
+        or broad_summary.get("last_round_winner")
+        or {}
+    )
     broad_snapshot = _snapshot_broad_results(broad_run_dir) if broad_run_dir is not None else {}
     focused_best = dict(focused_summary.get("best_node") or {})
+    focused_best_candidate = dict(
+        focused_summary.get("last_round_best_candidate")
+        or focused_summary.get("last_round_best_keep")
+        or focused_summary.get("last_round_winner")
+        or {}
+    )
+    broad_best_keep = dict(broad_summary.get("last_round_best_keep") or {})
+    focused_best_keep = dict(focused_summary.get("last_round_best_keep") or {})
     best_anchor = dict(anchor_selection.get("best_anchor") or {})
     broad_stop_reason = str(broad_summary.get("stop_reason", "") or "")
     focused_stop_reason = str(focused_summary.get("stop_reason", "") or "")
     passed_candidates = list(anchor_selection.get("passed_candidates") or [])
 
-    broad_display = dict(broad_best)
+    broad_display = dict(broad_best_candidate or broad_best)
     if not _has_any_eval_metric(broad_display):
         strongest_evaluated = dict(broad_snapshot.get("strongest_evaluated") or {})
         if strongest_evaluated:
             broad_display = strongest_evaluated
+    focused_display = dict(focused_best_candidate or focused_best)
 
     def _strong_anchor(payload: dict[str, Any]) -> bool:
         return (
@@ -801,23 +814,23 @@ def build_family_loop_summary(
         recommendation = "return_to_broad"
         reason = "broad 阶段没有候选通过 anchor graduation gate"
         recommended_stage_preset = "new_family_broad"
-    elif focused_returncode != 0 or not focused_best:
+    elif focused_returncode != 0 or not focused_display:
         if _strong_anchor(best_anchor):
             recommendation = "donor_mode"
             reason = "focused 阶段没有形成新的 best_node，但当前 anchor 已足够强，适合转 donor/confirmation"
             recommended_stage_preset = "donor_validation"
         else:
             recommendation = "freeze_anchor"
-            reason = "anchor 已选出，但 focused 阶段没有形成可比 best_node"
+            reason = "anchor 已选出，但 focused 阶段没有形成可比 best candidate"
     else:
-        improved = winner_improved(focused_best, best_anchor)
-        delta_excess = safe_float(focused_best.get("net_excess_ann_return"), default=0.0) - safe_float(
+        improved = winner_improved(focused_display, best_anchor)
+        delta_excess = safe_float(focused_display.get("net_excess_ann_return"), default=0.0) - safe_float(
             best_anchor.get("net_excess_ann_return"), default=0.0
         )
-        delta_icir = safe_float(focused_best.get("quick_rank_icir"), default=0.0) - safe_float(
+        delta_icir = safe_float(focused_display.get("quick_rank_icir"), default=0.0) - safe_float(
             best_anchor.get("quick_rank_icir"), default=0.0
         )
-        delta_sharpe = safe_float(focused_best.get("net_sharpe"), default=0.0) - safe_float(
+        delta_sharpe = safe_float(focused_display.get("net_sharpe"), default=0.0) - safe_float(
             best_anchor.get("net_sharpe"), default=0.0
         )
         material_improvement = delta_excess >= 0.02 or delta_icir >= 0.05 or delta_sharpe >= 0.25
@@ -843,7 +856,7 @@ def build_family_loop_summary(
                 reason = "focused 阶段没有继续抬高 anchor 的综合质量"
 
     delta = {}
-    if best_anchor and focused_best:
+    if best_anchor and focused_display:
         for metric in (
             "quick_rank_ic_mean",
             "quick_rank_icir",
@@ -853,7 +866,7 @@ def build_family_loop_summary(
             "mean_turnover",
         ):
             delta[f"delta_anchor_to_focused_{metric}"] = safe_float(
-                focused_best.get(metric), default=0.0
+                focused_display.get(metric), default=0.0
             ) - safe_float(best_anchor.get(metric), default=0.0)
 
     return {
@@ -870,10 +883,15 @@ def build_family_loop_summary(
         "broad_stop_reason": broad_stop_reason,
         "focused_stop_reason": focused_stop_reason,
         "broad_best_node": broad_best,
+        "broad_best_candidate": broad_best_candidate,
+        "broad_best_keep": broad_best_keep,
         "broad_display_node": broad_display,
         "broad_candidate_snapshot": broad_snapshot,
         "anchor_selection": anchor_selection,
         "focused_best_node": focused_best,
+        "focused_best_candidate": focused_best_candidate,
+        "focused_best_keep": focused_best_keep,
+        "focused_display_node": focused_display,
         "comparison": delta,
         "recommended_next_step": recommendation,
         "recommended_next_stage_preset": recommended_stage_preset,
@@ -885,10 +903,14 @@ def build_family_loop_summary(
 
 def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     broad = dict(summary.get("broad_display_node") or summary.get("broad_best_node") or {})
+    broad_best_candidate = dict(summary.get("broad_best_candidate") or {})
+    broad_best_keep = dict(summary.get("broad_best_keep") or {})
     broad_snapshot = dict(summary.get("broad_candidate_snapshot") or {})
     anchor_selection = dict(summary.get("anchor_selection") or {})
     anchor = dict(anchor_selection.get("best_anchor") or {})
-    focused = dict(summary.get("focused_best_node") or {})
+    focused = dict(summary.get("focused_display_node") or summary.get("focused_best_node") or {})
+    focused_best_candidate = dict(summary.get("focused_best_candidate") or {})
+    focused_best_keep = dict(summary.get("focused_best_keep") or {})
     comparison = dict(summary.get("comparison") or {})
     broad_trace = dict(summary.get("broad_prompt_trace") or {})
     focused_trace = dict(summary.get("focused_prompt_trace") or {})
@@ -937,6 +959,19 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- factor: `{broad.get('factor_name', '')}`",
         f"- role: `{broad.get('role', broad.get('status', ''))}`",
         f"- metrics: {_metric_line(broad)}",
+        "",
+        "## Broad Round-Level Best Candidate",
+        f"- factor: `{broad_best_candidate.get('factor_name', '')}`" if broad_best_candidate else "- factor: ``",
+        (
+            f"- status: `{broad_best_candidate.get('status', '')}`"
+            if broad_best_candidate
+            else "- status: ``"
+        ),
+        f"- metrics: {_metric_line(broad_best_candidate)}" if broad_best_candidate else "- metrics: (empty)",
+        "",
+        "## Broad Global Best Keep",
+        f"- factor: `{broad_best_keep.get('factor_name', '')}`" if broad_best_keep else "- factor: ``",
+        f"- metrics: {_metric_line(broad_best_keep)}" if broad_best_keep else "- metrics: (empty)",
         "",
         "## Broad Candidate Snapshot",
         f"- total_candidates: `{int(broad_snapshot.get('total_candidates') or 0)}`",
@@ -992,6 +1027,16 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
             "## Focused Best",
             f"- factor: `{focused.get('factor_name', '')}`" if focused else "- factor: ``",
             f"- metrics: {_metric_line(focused)}" if focused else "- metrics: (empty)",
+            (
+                f"- best_candidate: `{focused_best_candidate.get('factor_name', '')}`"
+                if focused_best_candidate
+                else "- best_candidate: ``"
+            ),
+            (
+                f"- best_keep: `{focused_best_keep.get('factor_name', '')}`"
+                if focused_best_keep
+                else "- best_keep: ``"
+            ),
             "",
             "## Anchor -> Focused Delta",
         ]

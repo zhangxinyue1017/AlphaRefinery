@@ -40,7 +40,7 @@ from ._bootstrap import ensure_project_roots
 
 ensure_project_roots()
 
-from gp_factor_qlib.core.operators_pro import (  # noqa: E402
+from ._vendor.gpqlib_runtime.core.operators_pro import (  # noqa: E402
     add,
     cs_multi_reg_resid as _series_cs_multi_reg_resid,
     cs_reg_resid as _series_cs_reg_resid,

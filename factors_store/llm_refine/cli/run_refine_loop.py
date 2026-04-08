@@ -6,6 +6,7 @@ import json
 import os
 
 from ..config import (
+    DEFAULT_AUTO_APPLY_PROMOTION,
     DEFAULT_API_KEY,
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TOKENS,
@@ -107,8 +108,9 @@ def _warn_if_provider_env_missing(args: argparse.Namespace) -> None:
         f"(provider={DEFAULT_PROVIDER_NAME}, base_url={DEFAULT_BASE_URL})."
     )
     print(
-        "[warn] if this is not intentional, run `source ./llm_refine_provider_env.sh` "
-        "before invoking run_refine_* commands."
+        "[warn] if this is not intentional, create `./llm_refine_provider_env.sh` "
+        "from `./llm_refine_provider_env.example.sh`, then source it before invoking "
+        "run_refine_* commands."
     )
 
 
@@ -317,7 +319,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--auto-apply-promotion",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_AUTO_APPLY_PROMOTION,
         help="automatically apply pending curated promotion patches into formal llm_refined family modules",
     )
     parser.add_argument("--panel-path", default="", help="optional override for evaluation panel path")
@@ -898,6 +901,7 @@ def main() -> int:
                 parent_candidate_id=effective_parent_candidate_id,
                 archive_db=archive_db,
                 auto_apply_promotion=args.auto_apply_promotion,
+                stage_mode=stage_mode,
             )
             print(f"[saved] family_backtest_summary={eval_paths['family_backtest_summary']}")
             print(f"[saved] family_backtest_ranked={eval_paths['family_backtest_ranked']}")

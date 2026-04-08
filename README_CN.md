@@ -17,11 +17,21 @@
 - 基于 LLM 的 family 级搜索与优化
 - 评估、归档、报告与 promotion
 - 正式因子沉淀
-- admission / downstream library 前的进一步验证
+- 可选的 admission / downstream library 前验证
 
 一句话来说，AlphaRefinery 关注的是：
 
 > **如何把因子研究从离散实验，推进为可持续运转的结构化 family research loop。**
+
+在当前仓库结构下：
+
+- 共享静态配置放在 `config/`
+- 核心因子运行时已内置到 `factors_store/_vendor/gpqlib_runtime/`
+
+在当前版本里，`autofactorset_bridge` 更适合作为可选适配层：
+
+- 如果你需要对接公司内部因子库或 admission 流程，可以接入它
+- 如果你只关注 family 级研究闭环，不带这部分也完全可以使用
 
 ---
 
@@ -198,7 +208,7 @@ graph TD
 
 **总计：1019 个已注册因子**
 
-目前，AlphaRefinery 已经可以支持从种子因子出发，到 family 级搜索、研究产物归档、正式 promotion、再到 admission 评估的一整条研究链路。
+目前，AlphaRefinery 已经可以支持从种子因子出发，到 family 级搜索、研究产物归档、正式 promotion，以及可选的 admission 评估适配。
 
 同时，本项目仍在持续迭代中，后续会继续完善：
 
@@ -229,11 +239,29 @@ graph TD
 cd /root/workspace/zxy_workspace/AlphaRefinery
 ```
 
+先安装一次 Python 依赖：
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+如果你的数据路径不是当前机器的默认位置，先设置：
+
+```bash
+export ALPHAREFINERY_PANEL_PATH=/path/to/panel.parquet
+export ALPHAREFINERY_BENCHMARK_PATH=/path/to/benchmark.csv
+export ALPHAREFINERY_INDUSTRY_CSV_PATH=/path/to/stock_industry.csv
+```
+
 ### 2. 加载 `llm_refine` provider 环境
 
 ```bash
+cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
+
+仓库里跟踪的是 `llm_refine_provider_env.example.sh`。
+复制出来的 `llm_refine_provider_env.sh` 保持本地使用，不进 git。
 
 如果不先加载，`run_refine_*` 入口会回退到 CLI 内置默认 provider，这通常不是日常研究想用的实际配置。
 
@@ -356,9 +384,17 @@ AlphaRefinery/
 ├── README.md
 ├── README_CN.md
 ├── PROJECT_MAP.md
-├── llm_refine_provider_env.sh
+├── requirements.txt
+├── llm_refine_provider_env.example.sh
 ├── run_refine.sh
+├── config/
+│   ├── factor_manifests/
+│   │   ├── alpha158.yaml
+│   │   └── alpha360.yaml
+│   └── refinement_seed_pool.yaml
 ├── factors_store/
+│   ├── _vendor/
+│   │   └── gpqlib_runtime/
 │   ├── factors/
 │   ├── llm_refine/
 │   └── autofactorset_bridge/
@@ -394,4 +430,4 @@ AlphaRefinery/
 
 ## 一句话总结
 
-**AlphaRefinery 是一个面向 A 股 Alpha 因子研究的统一框架，将正式因子实现、LLM 驱动的 family 级优化、研究评估与下游 admission 验证整合为一条持续演进的研究生产线。**
+**AlphaRefinery 是一个面向 A 股 Alpha 因子研究的统一框架，将正式因子实现、LLM 驱动的 family 级优化、研究评估，以及可选的下游 admission 适配整合为一条持续演进的研究生产线。**

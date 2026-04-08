@@ -1,0 +1,12 @@
+# Core runtime
+numpy>=1.24
+pandas>=2.0
+PyYAML>=6.0
+pyarrow>=14.0
+openai>=1.0
+matplotlib>=3.7
+scipy>=1.10
+
+# Optional performance / extended evaluation
+# numba>=0.59
+# alphalens-reloaded>=0.4

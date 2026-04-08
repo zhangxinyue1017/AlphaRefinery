@@ -1,0 +1,989 @@
+name: alpha158
+description: Qlib Alpha158 完整因子集 (158个工程因子)
+source: alpha158
+created: '2026-02-09'
+eval_period: ''
+factors:
+- expr: ($close-$open)/$open
+  name: KMID
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: ($high-$low)/$open
+  name: KLEN
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: ($close-$open)/($high-$low+1e-12)
+  name: KMID2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: ($high-Greater($open, $close))/$open
+  name: KUP
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: ($high-Greater($open, $close))/($high-$low+1e-12)
+  name: KUP2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: (Less($open, $close)-$low)/$open
+  name: KLOW
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: (Less($open, $close)-$low)/($high-$low+1e-12)
+  name: KLOW2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: (2*$close-$high-$low)/$open
+  name: KSFT
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: (2*$close-$high-$low)/($high-$low+1e-12)
+  name: KSFT2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: kbar
+- expr: $open/$close
+  name: OPEN0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price
+- expr: $high/$close
+  name: HIGH0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price
+- expr: $low/$close
+  name: LOW0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price
+- expr: $vwap/$close
+  name: VWAP0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price
+- expr: Ref($close, 5)/$close
+  name: ROC5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: momentum
+- expr: Ref($close, 10)/$close
+  name: ROC10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: momentum
+- expr: Ref($close, 20)/$close
+  name: ROC20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: momentum
+- expr: Ref($close, 30)/$close
+  name: ROC30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: momentum
+- expr: Ref($close, 60)/$close
+  name: ROC60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: momentum
+- expr: Mean($close, 5)/$close
+  name: MA5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: ma
+- expr: Mean($close, 10)/$close
+  name: MA10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: ma
+- expr: Mean($close, 20)/$close
+  name: MA20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: ma
+- expr: Mean($close, 30)/$close
+  name: MA30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: ma
+- expr: Mean($close, 60)/$close
+  name: MA60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: ma
+- expr: Std($close, 5)/$close
+  name: STD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volatility
+- expr: Std($close, 10)/$close
+  name: STD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volatility
+- expr: Std($close, 20)/$close
+  name: STD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volatility
+- expr: Std($close, 30)/$close
+  name: STD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volatility
+- expr: Std($close, 60)/$close
+  name: STD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volatility
+- expr: Slope($close, 5)/$close
+  name: BETA5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_slope
+- expr: Slope($close, 10)/$close
+  name: BETA10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_slope
+- expr: Slope($close, 20)/$close
+  name: BETA20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_slope
+- expr: Slope($close, 30)/$close
+  name: BETA30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_slope
+- expr: Slope($close, 60)/$close
+  name: BETA60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_slope
+- expr: Rsquare($close, 5)
+  name: RSQR5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_rsquare
+- expr: Rsquare($close, 10)
+  name: RSQR10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_rsquare
+- expr: Rsquare($close, 20)
+  name: RSQR20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_rsquare
+- expr: Rsquare($close, 30)
+  name: RSQR30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_rsquare
+- expr: Rsquare($close, 60)
+  name: RSQR60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_rsquare
+- expr: Resi($close, 5)/$close
+  name: RESI5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_residual
+- expr: Resi($close, 10)/$close
+  name: RESI10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_residual
+- expr: Resi($close, 20)/$close
+  name: RESI20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_residual
+- expr: Resi($close, 30)/$close
+  name: RESI30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_residual
+- expr: Resi($close, 60)/$close
+  name: RESI60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: trend_residual
+- expr: Max($high, 5)/$close
+  name: MAX5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Max($high, 10)/$close
+  name: MAX10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Max($high, 20)/$close
+  name: MAX20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Max($high, 30)/$close
+  name: MAX30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Max($high, 60)/$close
+  name: MAX60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Min($low, 5)/$close
+  name: MIN5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Min($low, 10)/$close
+  name: MIN10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Min($low, 20)/$close
+  name: MIN20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Min($low, 30)/$close
+  name: MIN30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Min($low, 60)/$close
+  name: MIN60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: price_range
+- expr: Quantile($close, 5, 0.8)/$close
+  name: QTLU5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 10, 0.8)/$close
+  name: QTLU10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 20, 0.8)/$close
+  name: QTLU20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 30, 0.8)/$close
+  name: QTLU30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 60, 0.8)/$close
+  name: QTLU60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 5, 0.2)/$close
+  name: QTLD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 10, 0.2)/$close
+  name: QTLD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 20, 0.2)/$close
+  name: QTLD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 30, 0.2)/$close
+  name: QTLD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Quantile($close, 60, 0.2)/$close
+  name: QTLD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: quantile
+- expr: Rank($close, 5)
+  name: RANK5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rank
+- expr: Rank($close, 10)
+  name: RANK10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rank
+- expr: Rank($close, 20)
+  name: RANK20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rank
+- expr: Rank($close, 30)
+  name: RANK30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rank
+- expr: Rank($close, 60)
+  name: RANK60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rank
+- expr: ($close-Min($low, 5))/(Max($high, 5)-Min($low, 5)+1e-12)
+  name: RSV5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsv
+- expr: ($close-Min($low, 10))/(Max($high, 10)-Min($low, 10)+1e-12)
+  name: RSV10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsv
+- expr: ($close-Min($low, 20))/(Max($high, 20)-Min($low, 20)+1e-12)
+  name: RSV20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsv
+- expr: ($close-Min($low, 30))/(Max($high, 30)-Min($low, 30)+1e-12)
+  name: RSV30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsv
+- expr: ($close-Min($low, 60))/(Max($high, 60)-Min($low, 60)+1e-12)
+  name: RSV60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsv
+- expr: IdxMax($high, 5)/5
+  name: IMAX5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMax($high, 10)/10
+  name: IMAX10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMax($high, 20)/20
+  name: IMAX20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMax($high, 30)/30
+  name: IMAX30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMax($high, 60)/60
+  name: IMAX60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMin($low, 5)/5
+  name: IMIN5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMin($low, 10)/10
+  name: IMIN10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMin($low, 20)/20
+  name: IMIN20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMin($low, 30)/30
+  name: IMIN30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: IdxMin($low, 60)/60
+  name: IMIN60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: (IdxMax($high, 5)-IdxMin($low, 5))/5
+  name: IMXD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: (IdxMax($high, 10)-IdxMin($low, 10))/10
+  name: IMXD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: (IdxMax($high, 20)-IdxMin($low, 20))/20
+  name: IMXD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: (IdxMax($high, 30)-IdxMin($low, 30))/30
+  name: IMXD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: (IdxMax($high, 60)-IdxMin($low, 60))/60
+  name: IMXD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: aroon
+- expr: Corr($close, Log($volume+1), 5)
+  name: CORR5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close, Log($volume+1), 10)
+  name: CORR10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close, Log($volume+1), 20)
+  name: CORR20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close, Log($volume+1), 30)
+  name: CORR30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close, Log($volume+1), 60)
+  name: CORR60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 5)
+  name: CORD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 10)
+  name: CORD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 20)
+  name: CORD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 30)
+  name: CORD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 60)
+  name: CORD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: correlation
+- expr: Mean($close>Ref($close, 1), 5)
+  name: CNTP5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 10)
+  name: CNTP10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 20)
+  name: CNTP20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 30)
+  name: CNTP30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 60)
+  name: CNTP60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close<Ref($close, 1), 5)
+  name: CNTN5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close<Ref($close, 1), 10)
+  name: CNTN10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close<Ref($close, 1), 20)
+  name: CNTN20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close<Ref($close, 1), 30)
+  name: CNTN30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close<Ref($close, 1), 60)
+  name: CNTN60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 5)-Mean($close<Ref($close, 1), 5)
+  name: CNTD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 10)-Mean($close<Ref($close, 1), 10)
+  name: CNTD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 20)-Mean($close<Ref($close, 1), 20)
+  name: CNTD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 30)-Mean($close<Ref($close, 1), 30)
+  name: CNTD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Mean($close>Ref($close, 1), 60)-Mean($close<Ref($close, 1), 60)
+  name: CNTD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: updown_count
+- expr: Sum(Greater($close-Ref($close, 1), 0), 5)/(Sum(Abs($close-Ref($close, 1)),
+    5)+1e-12)
+  name: SUMP5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater($close-Ref($close, 1), 0), 10)/(Sum(Abs($close-Ref($close, 1)),
+    10)+1e-12)
+  name: SUMP10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater($close-Ref($close, 1), 0), 20)/(Sum(Abs($close-Ref($close, 1)),
+    20)+1e-12)
+  name: SUMP20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater($close-Ref($close, 1), 0), 30)/(Sum(Abs($close-Ref($close, 1)),
+    30)+1e-12)
+  name: SUMP30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater($close-Ref($close, 1), 0), 60)/(Sum(Abs($close-Ref($close, 1)),
+    60)+1e-12)
+  name: SUMP60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater(Ref($close, 1)-$close, 0), 5)/(Sum(Abs($close-Ref($close, 1)),
+    5)+1e-12)
+  name: SUMN5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater(Ref($close, 1)-$close, 0), 10)/(Sum(Abs($close-Ref($close, 1)),
+    10)+1e-12)
+  name: SUMN10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater(Ref($close, 1)-$close, 0), 20)/(Sum(Abs($close-Ref($close, 1)),
+    20)+1e-12)
+  name: SUMN20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater(Ref($close, 1)-$close, 0), 30)/(Sum(Abs($close-Ref($close, 1)),
+    30)+1e-12)
+  name: SUMN30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Sum(Greater(Ref($close, 1)-$close, 0), 60)/(Sum(Abs($close-Ref($close, 1)),
+    60)+1e-12)
+  name: SUMN60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: (Sum(Greater($close-Ref($close, 1), 0), 5)-Sum(Greater(Ref($close, 1)-$close,
+    0), 5))/(Sum(Abs($close-Ref($close, 1)), 5)+1e-12)
+  name: SUMD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: (Sum(Greater($close-Ref($close, 1), 0), 10)-Sum(Greater(Ref($close, 1)-$close,
+    0), 10))/(Sum(Abs($close-Ref($close, 1)), 10)+1e-12)
+  name: SUMD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: (Sum(Greater($close-Ref($close, 1), 0), 20)-Sum(Greater(Ref($close, 1)-$close,
+    0), 20))/(Sum(Abs($close-Ref($close, 1)), 20)+1e-12)
+  name: SUMD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: (Sum(Greater($close-Ref($close, 1), 0), 30)-Sum(Greater(Ref($close, 1)-$close,
+    0), 30))/(Sum(Abs($close-Ref($close, 1)), 30)+1e-12)
+  name: SUMD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: (Sum(Greater($close-Ref($close, 1), 0), 60)-Sum(Greater(Ref($close, 1)-$close,
+    0), 60))/(Sum(Abs($close-Ref($close, 1)), 60)+1e-12)
+  name: SUMD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: rsi_like
+- expr: Mean($volume, 5)/($volume+1e-12)
+  name: VMA5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Mean($volume, 10)/($volume+1e-12)
+  name: VMA10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Mean($volume, 20)/($volume+1e-12)
+  name: VMA20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Mean($volume, 30)/($volume+1e-12)
+  name: VMA30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Mean($volume, 60)/($volume+1e-12)
+  name: VMA60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Std($volume, 5)/($volume+1e-12)
+  name: VSTD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Std($volume, 10)/($volume+1e-12)
+  name: VSTD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Std($volume, 20)/($volume+1e-12)
+  name: VSTD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Std($volume, 30)/($volume+1e-12)
+  name: VSTD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Std($volume, 60)/($volume+1e-12)
+  name: VSTD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_ma
+- expr: Std(Abs($close/Ref($close, 1)-1)*$volume, 5)/(Mean(Abs($close/Ref($close,
+    1)-1)*$volume, 5)+1e-12)
+  name: WVMA5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_weighted
+- expr: Std(Abs($close/Ref($close, 1)-1)*$volume, 10)/(Mean(Abs($close/Ref($close,
+    1)-1)*$volume, 10)+1e-12)
+  name: WVMA10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_weighted
+- expr: Std(Abs($close/Ref($close, 1)-1)*$volume, 20)/(Mean(Abs($close/Ref($close,
+    1)-1)*$volume, 20)+1e-12)
+  name: WVMA20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_weighted
+- expr: Std(Abs($close/Ref($close, 1)-1)*$volume, 30)/(Mean(Abs($close/Ref($close,
+    1)-1)*$volume, 30)+1e-12)
+  name: WVMA30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_weighted
+- expr: Std(Abs($close/Ref($close, 1)-1)*$volume, 60)/(Mean(Abs($close/Ref($close,
+    1)-1)*$volume, 60)+1e-12)
+  name: WVMA60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_weighted
+- expr: Sum(Greater($volume-Ref($volume, 1), 0), 5)/(Sum(Abs($volume-Ref($volume,
+    1)), 5)+1e-12)
+  name: VSUMP5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater($volume-Ref($volume, 1), 0), 10)/(Sum(Abs($volume-Ref($volume,
+    1)), 10)+1e-12)
+  name: VSUMP10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater($volume-Ref($volume, 1), 0), 20)/(Sum(Abs($volume-Ref($volume,
+    1)), 20)+1e-12)
+  name: VSUMP20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater($volume-Ref($volume, 1), 0), 30)/(Sum(Abs($volume-Ref($volume,
+    1)), 30)+1e-12)
+  name: VSUMP30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater($volume-Ref($volume, 1), 0), 60)/(Sum(Abs($volume-Ref($volume,
+    1)), 60)+1e-12)
+  name: VSUMP60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater(Ref($volume, 1)-$volume, 0), 5)/(Sum(Abs($volume-Ref($volume,
+    1)), 5)+1e-12)
+  name: VSUMN5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater(Ref($volume, 1)-$volume, 0), 10)/(Sum(Abs($volume-Ref($volume,
+    1)), 10)+1e-12)
+  name: VSUMN10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater(Ref($volume, 1)-$volume, 0), 20)/(Sum(Abs($volume-Ref($volume,
+    1)), 20)+1e-12)
+  name: VSUMN20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater(Ref($volume, 1)-$volume, 0), 30)/(Sum(Abs($volume-Ref($volume,
+    1)), 30)+1e-12)
+  name: VSUMN30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: Sum(Greater(Ref($volume, 1)-$volume, 0), 60)/(Sum(Abs($volume-Ref($volume,
+    1)), 60)+1e-12)
+  name: VSUMN60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: (Sum(Greater($volume-Ref($volume, 1), 0), 5)-Sum(Greater(Ref($volume, 1)-$volume,
+    0), 5))/(Sum(Abs($volume-Ref($volume, 1)), 5)+1e-12)
+  name: VSUMD5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: (Sum(Greater($volume-Ref($volume, 1), 0), 10)-Sum(Greater(Ref($volume, 1)-$volume,
+    0), 10))/(Sum(Abs($volume-Ref($volume, 1)), 10)+1e-12)
+  name: VSUMD10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: (Sum(Greater($volume-Ref($volume, 1), 0), 20)-Sum(Greater(Ref($volume, 1)-$volume,
+    0), 20))/(Sum(Abs($volume-Ref($volume, 1)), 20)+1e-12)
+  name: VSUMD20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: (Sum(Greater($volume-Ref($volume, 1), 0), 30)-Sum(Greater(Ref($volume, 1)-$volume,
+    0), 30))/(Sum(Abs($volume-Ref($volume, 1)), 30)+1e-12)
+  name: VSUMD30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi
+- expr: (Sum(Greater($volume-Ref($volume, 1), 0), 60)-Sum(Greater(Ref($volume, 1)-$volume,
+    0), 60))/(Sum(Abs($volume-Ref($volume, 1)), 60)+1e-12)
+  name: VSUMD60
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume_rsi

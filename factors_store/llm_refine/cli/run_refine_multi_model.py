@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from ..config import (
+    DEFAULT_AUTO_APPLY_PROMOTION,
     DEFAULT_MAX_PARALLEL,
     DEFAULT_MULTI_RUNS_DIR,
     DEFAULT_POLICY_PRESET,
@@ -55,29 +56,109 @@ def _parse_models(values: Iterable[str]) -> list[str]:
     return out
 
 
-def _pick_best_child_record(records: list[dict[str, object]]) -> dict[str, object] | None:
-    if not records:
-        return None
+def _flag_value(item: dict[str, object], name: str, *, default: bool) -> float:
+    value = item.get(name)
+    if value is None:
+        return 1.0 if default else 0.0
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y"}:
+        return 1.0
+    if text in {"0", "false", "no", "n"}:
+        return 0.0
+    return 1.0 if default else 0.0
 
+
+def _default_child_sort_key(item: dict[str, object]) -> tuple[float, float, float, float, float, float]:
     status_rank = {
         "research_winner": 4,
         "winner": 3,
         "research_keep": 2,
         "keep": 1,
     }
+    status = str(item.get("status", "")).strip().lower()
+    return (
+        float(status_rank.get(status, 0)),
+        safe_float(item.get("quick_rank_ic_mean"), default=float("-inf")),
+        safe_float(item.get("quick_rank_icir"), default=float("-inf")),
+        safe_float(item.get("net_sharpe"), default=float("-inf")),
+        safe_float(item.get("net_ann_return"), default=float("-inf")),
+        -safe_float(item.get("mean_turnover"), default=float("inf")),
+    )
 
-    def _score(item: dict[str, object]) -> tuple[float, float, float, float, float, float]:
-        status = str(item.get("status", "")).strip().lower()
-        return (
-            float(status_rank.get(status, 0)),
-            safe_float(item.get("quick_rank_ic_mean"), default=float("-inf")),
-            safe_float(item.get("quick_rank_icir"), default=float("-inf")),
-            safe_float(item.get("net_sharpe"), default=float("-inf")),
-            safe_float(item.get("net_ann_return"), default=float("-inf")),
-            -safe_float(item.get("mean_turnover"), default=float("inf")),
+
+def _global_new_family_broad_sort_key(item: dict[str, object]) -> tuple[float, float, float, float, float, float, float, float, float, float]:
+    status = str(item.get("status", "")).strip().lower()
+    return (
+        _flag_value(item, "stage_winner_guard_passed", default=status == "research_winner"),
+        _flag_value(item, "neutral_winner_guard_passed", default=True),
+        1.0 if status == "research_winner" else 0.0,
+        safe_float(item.get("net_sharpe"), default=float("-inf")),
+        safe_float(item.get("net_ann_return"), default=float("-inf")),
+        safe_float(item.get("net_excess_ann_return"), default=float("-inf")),
+        safe_float(item.get("quick_rank_icir"), default=float("-inf")),
+        safe_float(item.get("neutral_net_sharpe"), default=float("-inf")),
+        safe_float(item.get("neutral_quick_rank_icir"), default=float("-inf")),
+        -safe_float(item.get("mean_turnover"), default=float("inf")),
+    )
+
+
+def _build_global_rerank_preview(
+    records: list[dict[str, object]],
+    *,
+    stage_mode: str,
+    limit: int = 5,
+) -> list[dict[str, object]]:
+    if not records:
+        return []
+    if stage_mode == "new_family_broad":
+        ranked = sorted(records, key=_global_new_family_broad_sort_key, reverse=True)
+    else:
+        ranked = sorted(records, key=_default_child_sort_key, reverse=True)
+    preview: list[dict[str, object]] = []
+    for item in ranked[: max(int(limit), 0)]:
+        preview.append(
+            {
+                "factor_name": str(item.get("factor_name", "") or ""),
+                "status": str(item.get("status", "") or ""),
+                "source_model": str(item.get("source_model", "") or ""),
+                "quick_rank_icir": safe_float(item.get("quick_rank_icir"), default=float("nan")),
+                "net_ann_return": safe_float(item.get("net_ann_return"), default=float("nan")),
+                "net_excess_ann_return": safe_float(item.get("net_excess_ann_return"), default=float("nan")),
+                "net_sharpe": safe_float(item.get("net_sharpe"), default=float("nan")),
+                "mean_turnover": safe_float(item.get("mean_turnover"), default=float("nan")),
+            }
         )
+    return preview
 
-    return max(records, key=_score)
+
+def _pick_best_child_record(
+    records: list[dict[str, object]],
+    *,
+    stage_mode: str = "auto",
+) -> dict[str, object] | None:
+    if not records:
+        return None
+
+    if stage_mode == "new_family_broad":
+        return max(records, key=_global_new_family_broad_sort_key)
+    return max(records, key=_default_child_sort_key)
+
+
+def _pick_best_keep_record(
+    records: list[dict[str, object]],
+    *,
+    stage_mode: str = "auto",
+) -> dict[str, object] | None:
+    keep_records = [
+        item
+        for item in records
+        if str(item.get("status", "")).strip().lower() in {"research_keep", "keep"}
+    ]
+    if not keep_records:
+        return None
+    return _pick_best_child_record(keep_records, stage_mode=stage_mode)
 
 
 def _classify_round_outcome(completed: list[dict[str, object]]) -> tuple[str, list[dict[str, object]], list[dict[str, object]]]:
@@ -188,7 +269,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--auto-apply-promotion",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_AUTO_APPLY_PROMOTION,
         help="automatically apply pending curated promotion patches in each child run after evaluation",
     )
     return parser
@@ -250,8 +332,7 @@ def _build_child_cmd(args: argparse.Namespace, *, model: str, round_id: int, chi
         cmd.extend(["--stage-mode", str(args.stage_mode)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
-    if args.auto_apply_promotion:
-        cmd.append("--auto-apply-promotion")
+    cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
     if args.round1_seed_stage:
         cmd.append("--round1-seed-stage")
     return cmd
@@ -473,6 +554,8 @@ def main() -> int:
         note=f"multi_run_dir={multi_run_dir}",
         count_attempt=False,
     )
+    global_best_candidate = _pick_best_child_record(child_records, stage_mode=stage_mode)
+    global_best_keep = _pick_best_keep_record(child_records, stage_mode=stage_mode)
     summary = {
         "family": args.family,
         "stage_mode": stage_mode,
@@ -484,7 +567,13 @@ def main() -> int:
         "selected_parent": selected_parent.to_dict(),
         "selected_parent_name": selected_parent.factor_name,
         "selected_parent_expression": selected_parent.expression,
-        "winner": _pick_best_child_record(child_records),
+        "winner": global_best_candidate,
+        "global_best_candidate": global_best_candidate,
+        "global_best_keep": global_best_keep,
+        "winner_selection_mode": (
+            "global_new_family_broad_rerank" if stage_mode == "new_family_broad" else "best_child_record"
+        ),
+        "global_rerank_preview": _build_global_rerank_preview(child_records, stage_mode=stage_mode),
         "successful_models": [str(item["model"]) for item in successful],
         "failed_models": [str(item["model"]) for item in failed],
         "successful_model_count": len(successful),
@@ -523,6 +612,15 @@ def main() -> int:
     winner_record = summary.get("winner") or {}
     summary["winner_name"] = str(winner_record.get("factor_name", "") or "")
     summary["winner_expression"] = str(winner_record.get("expression", "") or "")
+    summary["winner_status"] = str(winner_record.get("status", "") or "")
+    summary["winner_is_keep"] = str(winner_record.get("status", "") or "").strip().lower() in {"research_keep", "keep"}
+    best_candidate = summary.get("global_best_candidate") or {}
+    summary["global_best_candidate_name"] = str(best_candidate.get("factor_name", "") or "")
+    summary["global_best_candidate_expression"] = str(best_candidate.get("expression", "") or "")
+    summary["global_best_candidate_status"] = str(best_candidate.get("status", "") or "")
+    best_keep = summary.get("global_best_keep") or {}
+    summary["global_best_keep_name"] = str(best_keep.get("factor_name", "") or "")
+    summary["global_best_keep_expression"] = str(best_keep.get("expression", "") or "")
     summary["children_collected"] = len(child_records)
     summary["children_added_to_search"] = len(expansion.get("children", []))
     summary["search"] = engine.summary()

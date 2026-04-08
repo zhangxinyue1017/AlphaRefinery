@@ -1,0 +1,2166 @@
+name: alpha360
+description: Qlib Alpha360 完整因子集 (6字段×60天=360个原始价量时序特征)
+source: alpha360
+created: '2026-02-15'
+eval_period: ''
+factors:
+- expr: Ref($close, 59)/$close
+  name: CLOSE59
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 58)/$close
+  name: CLOSE58
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 57)/$close
+  name: CLOSE57
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 56)/$close
+  name: CLOSE56
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 55)/$close
+  name: CLOSE55
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 54)/$close
+  name: CLOSE54
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 53)/$close
+  name: CLOSE53
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 52)/$close
+  name: CLOSE52
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 51)/$close
+  name: CLOSE51
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 50)/$close
+  name: CLOSE50
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 49)/$close
+  name: CLOSE49
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 48)/$close
+  name: CLOSE48
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 47)/$close
+  name: CLOSE47
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 46)/$close
+  name: CLOSE46
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 45)/$close
+  name: CLOSE45
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 44)/$close
+  name: CLOSE44
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 43)/$close
+  name: CLOSE43
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 42)/$close
+  name: CLOSE42
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 41)/$close
+  name: CLOSE41
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 40)/$close
+  name: CLOSE40
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 39)/$close
+  name: CLOSE39
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 38)/$close
+  name: CLOSE38
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 37)/$close
+  name: CLOSE37
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 36)/$close
+  name: CLOSE36
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 35)/$close
+  name: CLOSE35
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 34)/$close
+  name: CLOSE34
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 33)/$close
+  name: CLOSE33
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 32)/$close
+  name: CLOSE32
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 31)/$close
+  name: CLOSE31
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 30)/$close
+  name: CLOSE30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 29)/$close
+  name: CLOSE29
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 28)/$close
+  name: CLOSE28
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 27)/$close
+  name: CLOSE27
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 26)/$close
+  name: CLOSE26
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 25)/$close
+  name: CLOSE25
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 24)/$close
+  name: CLOSE24
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 23)/$close
+  name: CLOSE23
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 22)/$close
+  name: CLOSE22
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 21)/$close
+  name: CLOSE21
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 20)/$close
+  name: CLOSE20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 19)/$close
+  name: CLOSE19
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 18)/$close
+  name: CLOSE18
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 17)/$close
+  name: CLOSE17
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 16)/$close
+  name: CLOSE16
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 15)/$close
+  name: CLOSE15
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 14)/$close
+  name: CLOSE14
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 13)/$close
+  name: CLOSE13
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 12)/$close
+  name: CLOSE12
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 11)/$close
+  name: CLOSE11
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 10)/$close
+  name: CLOSE10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 9)/$close
+  name: CLOSE9
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 8)/$close
+  name: CLOSE8
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 7)/$close
+  name: CLOSE7
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 6)/$close
+  name: CLOSE6
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 5)/$close
+  name: CLOSE5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 4)/$close
+  name: CLOSE4
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 3)/$close
+  name: CLOSE3
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 2)/$close
+  name: CLOSE2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($close, 1)/$close
+  name: CLOSE1
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: $close/$close
+  name: CLOSE0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: close
+- expr: Ref($open, 59)/$close
+  name: OPEN59
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 58)/$close
+  name: OPEN58
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 57)/$close
+  name: OPEN57
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 56)/$close
+  name: OPEN56
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 55)/$close
+  name: OPEN55
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 54)/$close
+  name: OPEN54
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 53)/$close
+  name: OPEN53
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 52)/$close
+  name: OPEN52
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 51)/$close
+  name: OPEN51
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 50)/$close
+  name: OPEN50
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 49)/$close
+  name: OPEN49
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 48)/$close
+  name: OPEN48
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 47)/$close
+  name: OPEN47
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 46)/$close
+  name: OPEN46
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 45)/$close
+  name: OPEN45
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 44)/$close
+  name: OPEN44
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 43)/$close
+  name: OPEN43
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 42)/$close
+  name: OPEN42
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 41)/$close
+  name: OPEN41
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 40)/$close
+  name: OPEN40
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 39)/$close
+  name: OPEN39
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 38)/$close
+  name: OPEN38
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 37)/$close
+  name: OPEN37
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 36)/$close
+  name: OPEN36
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 35)/$close
+  name: OPEN35
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 34)/$close
+  name: OPEN34
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 33)/$close
+  name: OPEN33
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 32)/$close
+  name: OPEN32
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 31)/$close
+  name: OPEN31
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 30)/$close
+  name: OPEN30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 29)/$close
+  name: OPEN29
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 28)/$close
+  name: OPEN28
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 27)/$close
+  name: OPEN27
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 26)/$close
+  name: OPEN26
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 25)/$close
+  name: OPEN25
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 24)/$close
+  name: OPEN24
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 23)/$close
+  name: OPEN23
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 22)/$close
+  name: OPEN22
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 21)/$close
+  name: OPEN21
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 20)/$close
+  name: OPEN20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 19)/$close
+  name: OPEN19
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 18)/$close
+  name: OPEN18
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 17)/$close
+  name: OPEN17
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 16)/$close
+  name: OPEN16
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 15)/$close
+  name: OPEN15
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 14)/$close
+  name: OPEN14
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 13)/$close
+  name: OPEN13
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 12)/$close
+  name: OPEN12
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 11)/$close
+  name: OPEN11
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 10)/$close
+  name: OPEN10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 9)/$close
+  name: OPEN9
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 8)/$close
+  name: OPEN8
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 7)/$close
+  name: OPEN7
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 6)/$close
+  name: OPEN6
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 5)/$close
+  name: OPEN5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 4)/$close
+  name: OPEN4
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 3)/$close
+  name: OPEN3
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 2)/$close
+  name: OPEN2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($open, 1)/$close
+  name: OPEN1
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: $open/$close
+  name: OPEN0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: open
+- expr: Ref($high, 59)/$close
+  name: HIGH59
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 58)/$close
+  name: HIGH58
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 57)/$close
+  name: HIGH57
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 56)/$close
+  name: HIGH56
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 55)/$close
+  name: HIGH55
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 54)/$close
+  name: HIGH54
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 53)/$close
+  name: HIGH53
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 52)/$close
+  name: HIGH52
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 51)/$close
+  name: HIGH51
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 50)/$close
+  name: HIGH50
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 49)/$close
+  name: HIGH49
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 48)/$close
+  name: HIGH48
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 47)/$close
+  name: HIGH47
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 46)/$close
+  name: HIGH46
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 45)/$close
+  name: HIGH45
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 44)/$close
+  name: HIGH44
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 43)/$close
+  name: HIGH43
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 42)/$close
+  name: HIGH42
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 41)/$close
+  name: HIGH41
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 40)/$close
+  name: HIGH40
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 39)/$close
+  name: HIGH39
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 38)/$close
+  name: HIGH38
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 37)/$close
+  name: HIGH37
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 36)/$close
+  name: HIGH36
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 35)/$close
+  name: HIGH35
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 34)/$close
+  name: HIGH34
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 33)/$close
+  name: HIGH33
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 32)/$close
+  name: HIGH32
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 31)/$close
+  name: HIGH31
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 30)/$close
+  name: HIGH30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 29)/$close
+  name: HIGH29
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 28)/$close
+  name: HIGH28
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 27)/$close
+  name: HIGH27
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 26)/$close
+  name: HIGH26
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 25)/$close
+  name: HIGH25
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 24)/$close
+  name: HIGH24
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 23)/$close
+  name: HIGH23
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 22)/$close
+  name: HIGH22
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 21)/$close
+  name: HIGH21
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 20)/$close
+  name: HIGH20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 19)/$close
+  name: HIGH19
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 18)/$close
+  name: HIGH18
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 17)/$close
+  name: HIGH17
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 16)/$close
+  name: HIGH16
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 15)/$close
+  name: HIGH15
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 14)/$close
+  name: HIGH14
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 13)/$close
+  name: HIGH13
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 12)/$close
+  name: HIGH12
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 11)/$close
+  name: HIGH11
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 10)/$close
+  name: HIGH10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 9)/$close
+  name: HIGH9
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 8)/$close
+  name: HIGH8
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 7)/$close
+  name: HIGH7
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 6)/$close
+  name: HIGH6
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 5)/$close
+  name: HIGH5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 4)/$close
+  name: HIGH4
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 3)/$close
+  name: HIGH3
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 2)/$close
+  name: HIGH2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($high, 1)/$close
+  name: HIGH1
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: $high/$close
+  name: HIGH0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: high
+- expr: Ref($low, 59)/$close
+  name: LOW59
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 58)/$close
+  name: LOW58
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 57)/$close
+  name: LOW57
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 56)/$close
+  name: LOW56
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 55)/$close
+  name: LOW55
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 54)/$close
+  name: LOW54
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 53)/$close
+  name: LOW53
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 52)/$close
+  name: LOW52
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 51)/$close
+  name: LOW51
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 50)/$close
+  name: LOW50
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 49)/$close
+  name: LOW49
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 48)/$close
+  name: LOW48
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 47)/$close
+  name: LOW47
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 46)/$close
+  name: LOW46
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 45)/$close
+  name: LOW45
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 44)/$close
+  name: LOW44
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 43)/$close
+  name: LOW43
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 42)/$close
+  name: LOW42
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 41)/$close
+  name: LOW41
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 40)/$close
+  name: LOW40
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 39)/$close
+  name: LOW39
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 38)/$close
+  name: LOW38
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 37)/$close
+  name: LOW37
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 36)/$close
+  name: LOW36
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 35)/$close
+  name: LOW35
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 34)/$close
+  name: LOW34
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 33)/$close
+  name: LOW33
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 32)/$close
+  name: LOW32
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 31)/$close
+  name: LOW31
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 30)/$close
+  name: LOW30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 29)/$close
+  name: LOW29
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 28)/$close
+  name: LOW28
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 27)/$close
+  name: LOW27
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 26)/$close
+  name: LOW26
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 25)/$close
+  name: LOW25
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 24)/$close
+  name: LOW24
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 23)/$close
+  name: LOW23
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 22)/$close
+  name: LOW22
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 21)/$close
+  name: LOW21
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 20)/$close
+  name: LOW20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 19)/$close
+  name: LOW19
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 18)/$close
+  name: LOW18
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 17)/$close
+  name: LOW17
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 16)/$close
+  name: LOW16
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 15)/$close
+  name: LOW15
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 14)/$close
+  name: LOW14
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 13)/$close
+  name: LOW13
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 12)/$close
+  name: LOW12
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 11)/$close
+  name: LOW11
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 10)/$close
+  name: LOW10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 9)/$close
+  name: LOW9
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 8)/$close
+  name: LOW8
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 7)/$close
+  name: LOW7
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 6)/$close
+  name: LOW6
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 5)/$close
+  name: LOW5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 4)/$close
+  name: LOW4
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 3)/$close
+  name: LOW3
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 2)/$close
+  name: LOW2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($low, 1)/$close
+  name: LOW1
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: $low/$close
+  name: LOW0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: low
+- expr: Ref($vwap, 59)/$close
+  name: VWAP59
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 58)/$close
+  name: VWAP58
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 57)/$close
+  name: VWAP57
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 56)/$close
+  name: VWAP56
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 55)/$close
+  name: VWAP55
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 54)/$close
+  name: VWAP54
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 53)/$close
+  name: VWAP53
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 52)/$close
+  name: VWAP52
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 51)/$close
+  name: VWAP51
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 50)/$close
+  name: VWAP50
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 49)/$close
+  name: VWAP49
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 48)/$close
+  name: VWAP48
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 47)/$close
+  name: VWAP47
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 46)/$close
+  name: VWAP46
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 45)/$close
+  name: VWAP45
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 44)/$close
+  name: VWAP44
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 43)/$close
+  name: VWAP43
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 42)/$close
+  name: VWAP42
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 41)/$close
+  name: VWAP41
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 40)/$close
+  name: VWAP40
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 39)/$close
+  name: VWAP39
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 38)/$close
+  name: VWAP38
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 37)/$close
+  name: VWAP37
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 36)/$close
+  name: VWAP36
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 35)/$close
+  name: VWAP35
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 34)/$close
+  name: VWAP34
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 33)/$close
+  name: VWAP33
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 32)/$close
+  name: VWAP32
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 31)/$close
+  name: VWAP31
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 30)/$close
+  name: VWAP30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 29)/$close
+  name: VWAP29
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 28)/$close
+  name: VWAP28
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 27)/$close
+  name: VWAP27
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 26)/$close
+  name: VWAP26
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 25)/$close
+  name: VWAP25
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 24)/$close
+  name: VWAP24
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 23)/$close
+  name: VWAP23
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 22)/$close
+  name: VWAP22
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 21)/$close
+  name: VWAP21
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 20)/$close
+  name: VWAP20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 19)/$close
+  name: VWAP19
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 18)/$close
+  name: VWAP18
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 17)/$close
+  name: VWAP17
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 16)/$close
+  name: VWAP16
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 15)/$close
+  name: VWAP15
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 14)/$close
+  name: VWAP14
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 13)/$close
+  name: VWAP13
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 12)/$close
+  name: VWAP12
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 11)/$close
+  name: VWAP11
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 10)/$close
+  name: VWAP10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 9)/$close
+  name: VWAP9
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 8)/$close
+  name: VWAP8
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 7)/$close
+  name: VWAP7
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 6)/$close
+  name: VWAP6
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 5)/$close
+  name: VWAP5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 4)/$close
+  name: VWAP4
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 3)/$close
+  name: VWAP3
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 2)/$close
+  name: VWAP2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($vwap, 1)/$close
+  name: VWAP1
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: $vwap/$close
+  name: VWAP0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: vwap
+- expr: Ref($volume, 59)/($volume+1e-12)
+  name: VOLUME59
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 58)/($volume+1e-12)
+  name: VOLUME58
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 57)/($volume+1e-12)
+  name: VOLUME57
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 56)/($volume+1e-12)
+  name: VOLUME56
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 55)/($volume+1e-12)
+  name: VOLUME55
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 54)/($volume+1e-12)
+  name: VOLUME54
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 53)/($volume+1e-12)
+  name: VOLUME53
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 52)/($volume+1e-12)
+  name: VOLUME52
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 51)/($volume+1e-12)
+  name: VOLUME51
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 50)/($volume+1e-12)
+  name: VOLUME50
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 49)/($volume+1e-12)
+  name: VOLUME49
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 48)/($volume+1e-12)
+  name: VOLUME48
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 47)/($volume+1e-12)
+  name: VOLUME47
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 46)/($volume+1e-12)
+  name: VOLUME46
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 45)/($volume+1e-12)
+  name: VOLUME45
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 44)/($volume+1e-12)
+  name: VOLUME44
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 43)/($volume+1e-12)
+  name: VOLUME43
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 42)/($volume+1e-12)
+  name: VOLUME42
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 41)/($volume+1e-12)
+  name: VOLUME41
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 40)/($volume+1e-12)
+  name: VOLUME40
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 39)/($volume+1e-12)
+  name: VOLUME39
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 38)/($volume+1e-12)
+  name: VOLUME38
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 37)/($volume+1e-12)
+  name: VOLUME37
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 36)/($volume+1e-12)
+  name: VOLUME36
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 35)/($volume+1e-12)
+  name: VOLUME35
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 34)/($volume+1e-12)
+  name: VOLUME34
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 33)/($volume+1e-12)
+  name: VOLUME33
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 32)/($volume+1e-12)
+  name: VOLUME32
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 31)/($volume+1e-12)
+  name: VOLUME31
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 30)/($volume+1e-12)
+  name: VOLUME30
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 29)/($volume+1e-12)
+  name: VOLUME29
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 28)/($volume+1e-12)
+  name: VOLUME28
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 27)/($volume+1e-12)
+  name: VOLUME27
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 26)/($volume+1e-12)
+  name: VOLUME26
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 25)/($volume+1e-12)
+  name: VOLUME25
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 24)/($volume+1e-12)
+  name: VOLUME24
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 23)/($volume+1e-12)
+  name: VOLUME23
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 22)/($volume+1e-12)
+  name: VOLUME22
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 21)/($volume+1e-12)
+  name: VOLUME21
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 20)/($volume+1e-12)
+  name: VOLUME20
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 19)/($volume+1e-12)
+  name: VOLUME19
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 18)/($volume+1e-12)
+  name: VOLUME18
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 17)/($volume+1e-12)
+  name: VOLUME17
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 16)/($volume+1e-12)
+  name: VOLUME16
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 15)/($volume+1e-12)
+  name: VOLUME15
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 14)/($volume+1e-12)
+  name: VOLUME14
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 13)/($volume+1e-12)
+  name: VOLUME13
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 12)/($volume+1e-12)
+  name: VOLUME12
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 11)/($volume+1e-12)
+  name: VOLUME11
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 10)/($volume+1e-12)
+  name: VOLUME10
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 9)/($volume+1e-12)
+  name: VOLUME9
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 8)/($volume+1e-12)
+  name: VOLUME8
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 7)/($volume+1e-12)
+  name: VOLUME7
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 6)/($volume+1e-12)
+  name: VOLUME6
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 5)/($volume+1e-12)
+  name: VOLUME5
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 4)/($volume+1e-12)
+  name: VOLUME4
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 3)/($volume+1e-12)
+  name: VOLUME3
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 2)/($volume+1e-12)
+  name: VOLUME2
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: Ref($volume, 1)/($volume+1e-12)
+  name: VOLUME1
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume
+- expr: $volume/($volume+1e-12)
+  name: VOLUME0
+  ic_mean: 0.0
+  icir: 0.0
+  rank_ic: 0.0
+  category: volume

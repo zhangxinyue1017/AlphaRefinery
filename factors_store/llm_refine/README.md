@@ -40,6 +40,7 @@
 
 ```bash
 cd /root/workspace/zxy_workspace/AlphaRefinery
+cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
 
@@ -51,7 +52,8 @@ source ./llm_refine_provider_env.sh
 
 所以现在的约定是：
 
-- **先 `source ./llm_refine_provider_env.sh`**
+- **先从 `llm_refine_provider_env.example.sh` 复制出本地 `llm_refine_provider_env.sh`**
+- **再 `source ./llm_refine_provider_env.sh`**
 - **再运行任意 `run_refine_*` / scheduler / family explore 命令**
 
 ## 当前关键能力
@@ -179,6 +181,7 @@ factors_store/llm_refine/
 
 ```bash
 cd /root/workspace/zxy_workspace/AlphaRefinery
+cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
 

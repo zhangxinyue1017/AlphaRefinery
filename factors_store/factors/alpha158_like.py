@@ -29,7 +29,7 @@ from ..operators import (
 )
 from ..registry import FactorRegistry
 
-SOURCE_PATH = Path("/root/dmd_factor_arena/alpha158.yaml")
+SOURCE_PATH = Path(__file__).resolve().parents[2] / "config" / "factor_manifests" / "alpha158.yaml"
 EPS = 1e-12
 
 

@@ -24,8 +24,10 @@
 AlphaRefinery/
 ├── README.md
 ├── PROJECT_MAP.md
-├── llm_refine_provider_env.sh
+├── requirements.txt
+├── llm_refine_provider_env.example.sh
 ├── run_refine.sh
+├── config/
 ├── factors_store/
 ├── artifacts/
 └── factor_eval_output/
@@ -33,14 +35,18 @@ AlphaRefinery/
 
 ### 顶层文件说明
 
+- [requirements.txt](/root/workspace/zxy_workspace/AlphaRefinery/requirements.txt)
+  - 主流程依赖清单，方便一次安装运行环境
+- [llm_refine_provider_env.example.sh](/root/workspace/zxy_workspace/AlphaRefinery/llm_refine_provider_env.example.sh)
+  - provider env 模板；本地复制为 `llm_refine_provider_env.sh` 后再填写真实密钥
 - [README.md](/root/workspace/zxy_workspace/AlphaRefinery/README.md)
   - 整个仓库的总入口说明
 - [PROJECT_MAP.md](/root/workspace/zxy_workspace/AlphaRefinery/PROJECT_MAP.md)
   - 当前这份项目地图
-- [llm_refine_provider_env.sh](/root/workspace/zxy_workspace/AlphaRefinery/llm_refine_provider_env.sh)
-  - LLM provider / model / timeout 环境变量
 - [run_refine.sh](/root/workspace/zxy_workspace/AlphaRefinery/run_refine.sh)
   - 历史上的 refine 启动脚本，偏快捷入口
+- `llm_refine_provider_env.sh`
+  - 本地 secret 文件，不入库；通常由 `llm_refine_provider_env.example.sh` 复制得到
 
 ## 2. 真正的代码目录：`factors_store/`
 
@@ -251,7 +257,7 @@ factors_store/autofactorset_bridge/
 这层的定位不是 refine 本身，而是：
 - 把 registry 中的因子，再走一层 admission 流程
 
-## 5. 产物目录：`artifacts/`
+## 5. 共享配置与产物目录
 
 这是整个项目第二个容易混乱的地方，因为它既有：
 - 回测结果
@@ -266,9 +272,11 @@ factors_store/autofactorset_bridge/
 - [reports/README.md](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/reports/README.md)
 - [logs/README.md](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/logs/README.md)
 
-### `artifacts/config/`
+运行所需的共享静态配置已经从 `artifacts/` 抽出来，避免和生成产物混在一起。
 
-- [refinement_seed_pool.yaml](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/config/refinement_seed_pool.yaml)
+### `config/`
+
+- [refinement_seed_pool.yaml](/root/workspace/zxy_workspace/AlphaRefinery/config/refinement_seed_pool.yaml)
   - 当前 `llm_refine` 最核心的 seed family 配置
 
 ### `artifacts/runs/`

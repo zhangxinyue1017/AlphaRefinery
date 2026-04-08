@@ -11,7 +11,7 @@ from .contract import EXPECTED_INDEX_NAMES, validate_data
 
 ensure_project_roots()
 
-from gp_factor_qlib.data.data_process import (  # noqa: E402
+from ._vendor.gpqlib_runtime.data.data_process import (  # noqa: E402
     extract_baostock_filter_flags,
     filter_panel,
 )

@@ -115,6 +115,12 @@ class OpenAICompatProvider:
     def _is_retryable_error(exc: Exception) -> bool:
         text = str(exc).lower()
         retryable_markers = (
+            "429",
+            "ratelimiterror",
+            "rate limit",
+            "too many requests",
+            "负载已饱和",
+            "稍后再试",
             "502",
             "503",
             "504",

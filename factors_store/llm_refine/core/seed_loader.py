@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from ...data_paths import DEFAULT_PANEL_PATH
 from ..config import DEFAULT_SEED_POOL_PATH
 from .models import EvaluationProtocol, EvaluationWindow, SeedFamily, SeedPool
 
@@ -200,6 +201,9 @@ def _load_protocol(payload: Any) -> EvaluationProtocol | None:
 
 def load_seed_pool(path: str | Path = DEFAULT_SEED_POOL) -> SeedPool:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    evaluation_defaults = dict(payload.get("evaluation_defaults", {}))
+    if not str(evaluation_defaults.get("panel_path", "") or "").strip():
+        evaluation_defaults["panel_path"] = str(DEFAULT_PANEL_PATH)
     families = tuple(
         SeedFamily(
             family=str(item["family"]),
@@ -229,7 +233,7 @@ def load_seed_pool(path: str | Path = DEFAULT_SEED_POOL) -> SeedPool:
         created_at=str(payload.get("created_at", "")),
         project=str(payload.get("project", "")),
         purpose=str(payload.get("purpose", "")),
-        evaluation_defaults=dict(payload.get("evaluation_defaults", {})),
+        evaluation_defaults=evaluation_defaults,
         evaluation_protocol=_load_protocol(payload.get("evaluation_protocol")),
         refinement_principles=_ensure_tuple(payload.get("refinement_principles")),
         families=families,

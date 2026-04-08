@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import re
 
-from . import alpha003_family, alpha013_family, alpha016_family, alpha040_family, alpha044_family, alpha069_family, alpha095_family, alpha132_family, amplitude_structure_family, salience_panic_family, gp_relative_volume_pressure_family, gp_downside_price_position_family, weighted_upper_shadow_distribution_family, qp_high_price_distribution_pressure_family, ideal_amplitude_structure_family, qp_low_price_accumulation_pressure_family
+from . import alpha003_family, alpha013_family, alpha016_family, alpha040_family, alpha044_family, alpha069_family, alpha095_family, alpha132_family, amplitude_structure_family, salience_panic_family, gp_relative_volume_pressure_family, gp_downside_price_position_family, weighted_upper_shadow_distribution_family, qp_high_price_distribution_pressure_family, ideal_amplitude_structure_family, qp_low_price_accumulation_pressure_family, gp_historical_anchor_ratio_family
 from .alpha003_family import *  # noqa: F401,F403
 from .alpha013_family import *  # noqa: F401,F403
 from .alpha016_family import *  # noqa: F401,F403
@@ -22,6 +22,7 @@ from .weighted_upper_shadow_distribution_family import *  # noqa: F401,F403
 from .qp_high_price_distribution_pressure_family import *  # noqa: F401,F403
 from .ideal_amplitude_structure_family import *  # noqa: F401,F403
 from .qp_low_price_accumulation_pressure_family import *  # noqa: F401,F403
+from .gp_historical_anchor_ratio_family import *  # noqa: F401,F403
 from .common import LLM_REFINED_SOURCE
 
 FAMILY_MODULES = (
@@ -41,6 +42,7 @@ FAMILY_MODULES = (
     qp_high_price_distribution_pressure_family,
     ideal_amplitude_structure_family,
     qp_low_price_accumulation_pressure_family,
+    gp_historical_anchor_ratio_family,
 )
 
 FACTOR_SPECS = tuple(spec for module in FAMILY_MODULES for spec in module.FACTOR_SPECS)
