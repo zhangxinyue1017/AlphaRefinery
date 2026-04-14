@@ -104,6 +104,47 @@ def factor_series_correlation(left: pd.Series, right: pd.Series, *, max_points: 
         return float("nan")
 
 
+def factor_series_correlations(
+    left: pd.Series,
+    rights: Sequence[tuple[str, pd.Series]],
+    *,
+    max_points: int = 200_000,
+) -> dict[str, float]:
+    valid: list[tuple[str, pd.Series]] = []
+    seen: set[str] = set()
+    for name, series in rights:
+        ref_name = str(name or "").strip()
+        if not ref_name or ref_name in seen or not isinstance(series, pd.Series):
+            continue
+        seen.add(ref_name)
+        valid.append((ref_name, series))
+
+    if not valid:
+        return {}
+
+    aligned = pd.concat(
+        [left.rename("__left__")] + [series.rename(name) for name, series in valid],
+        axis=1,
+    )
+    if aligned.empty:
+        return {name: float("nan") for name, _ in valid}
+
+    out: dict[str, float] = {}
+    for name, _series in valid:
+        joined = aligned[["__left__", name]].dropna()
+        if joined.empty or len(joined) < 50:
+            out[name] = float("nan")
+            continue
+        if len(joined) > max_points:
+            joined = joined.sample(max_points, random_state=42)
+        corr = joined["__left__"].corr(joined[name])
+        try:
+            out[name] = float(corr)
+        except Exception:
+            out[name] = float("nan")
+    return out
+
+
 def structure_filter_markdown(
     *,
     family: SeedFamily,

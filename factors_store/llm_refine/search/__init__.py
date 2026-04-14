@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+from .decision_context import DecisionContext, FamilyDecisionState
+from .decision_engine import DecisionEngine
+from .decision_features import CandidateDecisionFeatures
+from .context_resolver import (
+    ContextEvidence,
+    ContextProfile,
+    OrchestrationProfile,
+    resolve_context_profile,
+    resolve_orchestration_profile,
+)
 from .engine import SearchEngine
 from .frontier import SearchFrontier
 from .normalization import SearchNormalizer, build_search_normalizer
@@ -17,6 +27,13 @@ from .state import SearchBudget, SearchEdge, SearchNode
 
 __all__ = [
     "SearchBudget",
+    "CandidateDecisionFeatures",
+    "ContextEvidence",
+    "ContextProfile",
+    "OrchestrationProfile",
+    "DecisionContext",
+    "DecisionEngine",
+    "FamilyDecisionState",
     "SearchEdge",
     "SearchEngine",
     "SearchFrontier",
@@ -32,5 +49,7 @@ __all__ = [
     "resolve_materialized_child_run_dir",
     "resolve_materialized_multi_run_dir",
     "resolve_materialized_single_run_dir",
+    "resolve_context_profile",
+    "resolve_orchestration_profile",
     "winner_improved",
 ]

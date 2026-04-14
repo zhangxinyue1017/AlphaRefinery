@@ -20,6 +20,32 @@ def _fmt_metric(value: Any) -> str:
         return str(value)
 
 
+def _safe_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _winner_is_prompt_worthy(item: dict[str, Any]) -> bool:
+    excess = _safe_float(item.get("net_excess_ann_return"))
+    sharpe = _safe_float(item.get("net_sharpe"))
+    if excess is not None:
+        return excess >= 0.0
+    if sharpe is not None:
+        return sharpe >= 2.0
+    return True
+
+
+def _truncate_failure_reason(reason: str, *, max_chars: int = 72) -> str:
+    text = str(reason or "").strip() or "(none)"
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
 def _load_latest_reflection_card(
     *,
     db_path: str | Path = DEFAULT_ARCHIVE_DB,
@@ -121,93 +147,79 @@ def _lineage_delta_label(prev: dict[str, Any], current: dict[str, Any]) -> str:
     return "mixed"
 
 
-def render_family_memory_block(payload: dict[str, Any]) -> str:
+def render_family_memory_block(
+    payload: dict[str, Any],
+    *,
+    max_winners: int = 2,
+    max_keeps: int = 2,
+    max_failures: int = 3,
+    include_lineage: bool = True,
+    include_reflection: bool = True,
+) -> str:
     lines = [
         "最近有效经验（来自 archive 检索，用于启发，不要求机械模仿）：",
         "- 原则：优先吸收“有效改法”和“失败模式”，不要直接复制旧表达式。",
-        "",
-        "Recent winners:",
     ]
-    winners = payload.get("recent_winners") or []
+    raw_winners = payload.get("recent_winners") or []
+    winners = [item for item in raw_winners if _winner_is_prompt_worthy(item)][: max(int(max_winners), 0)]
     if winners:
+        lines.extend(["", "优先延续的有效模式："])
         for item in winners:
             lines.append(
                 "- "
                 f"{item.get('factor_name', '')} "
-                f"(model={item.get('source_model', '')}, "
-                f"Sharpe={_fmt_metric(item.get('net_sharpe'))}, "
+                f"(Sharpe={_fmt_metric(item.get('net_sharpe'))}, "
                 f"Excess={_fmt_metric(item.get('net_excess_ann_return'))}, "
-                f"Turn={_fmt_metric(item.get('mean_turnover'))}, "
                 f"tags={','.join(item.get('expression_tags', ())) or 'none'})"
             )
+    elif raw_winners:
+        lines.extend(["", "优先延续的有效模式：", "- (none after quality filter)"])
     else:
-        lines.append("- (none)")
+        lines.extend(["", "优先延续的有效模式：", "- (none)"])
 
-    lines.extend(["", "Recent keeps:"])
-    keeps = payload.get("recent_keeps") or []
+    keeps = (payload.get("recent_keeps") or [])[: max(int(max_keeps), 0)]
     if keeps:
+        lines.extend(["", "可借鉴但未完全确认的改法："])
         for item in keeps:
             lines.append(
                 "- "
                 f"{item.get('factor_name', '')} "
-                f"(model={item.get('source_model', '')}, "
-                f"reason={item.get('reason', '') or '(none)'}, "
+                f"(reason={item.get('reason', '') or '(none)'}, "
                 f"tags={','.join(item.get('expression_tags', ())) or 'none'})"
             )
-    else:
-        lines.append("- (none)")
 
-    lines.extend(["", "Recent failures:"])
-    failures = payload.get("recent_failures") or []
+    failures = (payload.get("recent_failures") or [])[: max(int(max_failures), 0)]
     if failures:
+        lines.extend(["", "近期要避免的失败模式："])
         for item in failures:
             lines.append(
                 "- "
                 f"{item.get('factor_name', '')} "
                 f"[{item.get('status', '')}] "
-                f"reason={item.get('reason', '') or '(none)'}"
+                f"reason={_truncate_failure_reason(item.get('reason', ''))}"
             )
-    else:
-        lines.append("- (none)")
 
     lineage = payload.get("lineage_trace") or []
-    if lineage:
-        lines.extend(["", "Current parent lineage trace:"])
-        for idx, item in enumerate(lineage):
+    if include_lineage and lineage:
+        lines.extend(["", "当前 parent 最近 lineage："])
+        for idx, item in enumerate(lineage[:3]):
             prefix = "seed" if idx == 0 else f"step_{idx}"
             parts = [
                 f"{prefix}: {item.get('factor_name', '')}",
                 f"mutation={item.get('mutation_class', '')}",
-                f"skeleton={item.get('operator_skeleton', '')}",
                 f"Sharpe={_fmt_metric(item.get('net_sharpe'))}",
-                f"Excess={_fmt_metric(item.get('net_excess_ann_return'))}",
             ]
             if idx > 0:
                 parts.append(f"delta={_lineage_delta_label(lineage[idx - 1], item)}")
             lines.append("- " + ", ".join(parts))
 
     reflection = payload.get("latest_reflection") or {}
-    if reflection:
-        lines.extend(["", "最近一次 reflection card 摘要："])
+    if include_reflection and reflection:
+        lines.extend(["", "最近一次总结："])
         if reflection.get("summary"):
             lines.append(f"- summary: {reflection.get('summary')}")
-        top_tags = reflection.get("top_success_tags") or []
-        if top_tags:
-            lines.append(
-                "- top_success_tags: "
-                + ", ".join(f"{item['label']}({item['count']})" for item in top_tags[:3])
-            )
-        top_failures = reflection.get("top_failure_reasons") or []
-        if top_failures:
-            lines.append(
-                "- top_failure_reasons: "
-                + ", ".join(f"{item['label']}({item['count']})" for item in top_failures[:3])
-            )
         next_focus = reflection.get("suggested_next_focus") or []
         if next_focus:
-            lines.append("- suggested_next_focus:")
-            lines.extend(f"  - {item}" for item in next_focus[:3])
-    model_summary = payload.get("model_empirical_summary") or {}
-    if model_summary:
-        lines.extend(["", render_model_empirical_block(model_summary)])
+            lines.append(f"- next_focus: {next_focus[0]}")
+
     return "\n".join(lines).strip()

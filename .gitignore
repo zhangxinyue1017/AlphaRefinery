@@ -30,6 +30,13 @@ venv/
 
 # Local provider secrets
 llm_refine_provider_env.sh
+factors_store/factors/llm_refined/*_family.py
+!factors_store/factors/llm_refined/__init__.py
+!factors_store/factors/llm_refined/common.py
+
+# Local maintenance helpers
+scripts/organize_runs_by_family.py
+scripts/refresh_run_indexes.py
 
 # Generated artifacts and runtime outputs
 artifacts/**

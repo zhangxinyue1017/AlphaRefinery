@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -16,10 +17,19 @@ from ..config import (
     DEFAULT_POLICY_PRESET,
     DEFAULT_TARGET_PROFILE,
 )
-from ..core.archive import DEFAULT_ARCHIVE_DB, get_latest_family_round, get_latest_family_winner, make_seed_candidate_id
+from ..core.archive import (
+    DEFAULT_ARCHIVE_DB,
+    get_candidate_record,
+    get_latest_family_round,
+    get_latest_family_winner,
+    make_seed_candidate_id,
+)
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..knowledge.round1 import build_bootstrap_frontier, is_seed_stage_node_kind, select_bootstrap_parent
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
+from ..search.context_resolver import ContextEvidence, resolve_context_profile
+from ..search.decision_context import DecisionContext
+from ..search.decision_engine import DecisionEngine
 from ..search.run_ingest import load_candidate_records_from_completed_runs
 from ..search.scoring import safe_float
 from .run_refine_loop import build_arg_parser as build_single_round_parser
@@ -88,6 +98,144 @@ def _default_child_sort_key(item: dict[str, object]) -> tuple[float, float, floa
     )
 
 
+def _signed_tanh_metric(value: object, *, scale: float) -> float:
+    numeric = safe_float(value, default=float("nan"))
+    if not math.isfinite(numeric):
+        return 0.0
+    return math.tanh(numeric / max(float(scale), 1e-9))
+
+
+def _positive_tanh_metric(value: object, *, scale: float) -> float:
+    numeric = safe_float(value, default=float("nan"))
+    if not math.isfinite(numeric):
+        return 0.0
+    return math.tanh(max(numeric, 0.0) / max(float(scale), 1e-9))
+
+
+def _decorrelation_rerank_enabled(records: list[dict[str, object]]) -> bool:
+    for item in records:
+        if str(item.get("nearest_decorrelation_target", "") or "").strip():
+            return True
+        nearest_corr = safe_float(item.get("corr_to_nearest_decorrelation_target"), default=float("nan"))
+        avg_corr = safe_float(item.get("avg_abs_decorrelation_target_corr"), default=float("nan"))
+        if math.isfinite(nearest_corr) or math.isfinite(avg_corr):
+            return True
+    return False
+
+
+def _decorrelation_quality_gate_passed(item: dict[str, object]) -> bool:
+    icir = safe_float(item.get("quick_rank_icir"), default=float("nan"))
+    sharpe = safe_float(item.get("net_sharpe"), default=float("nan"))
+    excess = safe_float(item.get("net_excess_ann_return"), default=float("nan"))
+    ann = safe_float(item.get("net_ann_return"), default=float("nan"))
+    neutral_icir = safe_float(item.get("neutral_quick_rank_icir"), default=float("nan"))
+    neutral_sharpe = safe_float(item.get("neutral_net_sharpe"), default=float("nan"))
+    return bool(
+        (math.isfinite(icir) and math.isfinite(sharpe) and icir >= 0.15 and sharpe >= 1.2)
+        or (math.isfinite(excess) and excess >= 0.05)
+        or (math.isfinite(ann) and ann >= 1.5)
+        or (math.isfinite(neutral_icir) and math.isfinite(neutral_sharpe) and neutral_icir >= 0.08 and neutral_sharpe >= 1.0)
+    )
+
+
+def _base_rerank_quality_score(item: dict[str, object]) -> float:
+    status = str(item.get("status", "")).strip().lower()
+    status_bonus = 0.05 if status in {"research_winner", "winner"} else 0.02 if status in {"research_keep", "keep"} else 0.0
+    return (
+        0.34 * _signed_tanh_metric(item.get("quick_rank_icir"), scale=0.35)
+        + 0.26 * _signed_tanh_metric(item.get("net_sharpe"), scale=3.0)
+        + 0.18 * _signed_tanh_metric(item.get("net_excess_ann_return"), scale=0.35)
+        + 0.12 * _signed_tanh_metric(item.get("net_ann_return"), scale=3.0)
+        + 0.06 * _positive_tanh_metric(item.get("neutral_quick_rank_icir"), scale=0.2)
+        + 0.06 * _positive_tanh_metric(item.get("neutral_net_sharpe"), scale=1.8)
+        - 0.08 * _positive_tanh_metric(item.get("mean_turnover"), scale=0.25)
+        + status_bonus
+    )
+
+
+def _decorrelation_adjustment(item: dict[str, object]) -> float:
+    nearest_corr = abs(safe_float(item.get("corr_to_nearest_decorrelation_target"), default=float("nan")))
+    avg_corr = safe_float(item.get("avg_abs_decorrelation_target_corr"), default=float("nan"))
+    if not math.isfinite(nearest_corr) and not math.isfinite(avg_corr):
+        return 0.0
+
+    quality_gate_passed = _decorrelation_quality_gate_passed(item)
+    adjustment = 0.0
+
+    if math.isfinite(nearest_corr):
+        if quality_gate_passed:
+            if nearest_corr <= 0.35:
+                adjustment += 0.12
+            elif nearest_corr <= 0.60:
+                adjustment += 0.06
+            elif nearest_corr <= 0.80:
+                adjustment += 0.02
+            elif nearest_corr >= 0.95:
+                adjustment -= 0.08
+            elif nearest_corr >= 0.85:
+                adjustment -= 0.04
+        elif nearest_corr >= 0.90:
+            adjustment -= 0.03
+
+    if math.isfinite(avg_corr):
+        if quality_gate_passed:
+            if avg_corr <= 0.20:
+                adjustment += 0.05
+            elif avg_corr <= 0.40:
+                adjustment += 0.02
+            elif avg_corr >= 0.75:
+                adjustment -= 0.05
+            elif avg_corr >= 0.60:
+                adjustment -= 0.02
+        elif avg_corr >= 0.80:
+            adjustment -= 0.02
+
+    return adjustment
+
+
+def _decorate_with_decorrelation_rerank(item: dict[str, object]) -> dict[str, object]:
+    out = dict(item)
+    quality_score = _base_rerank_quality_score(out)
+    adjustment = _decorrelation_adjustment(out)
+    out["decorrelation_quality_gate_passed"] = _decorrelation_quality_gate_passed(out)
+    out["decorrelation_quality_score"] = quality_score
+    out["decorrelation_adjustment"] = adjustment
+    out["decorrelation_adjusted_score"] = quality_score + adjustment
+    return out
+
+
+def _decorrelation_rerank_sort_key(
+    item: dict[str, object],
+    *,
+    stage_mode: str,
+) -> tuple[float, float, float, float, float, float, float, float]:
+    adjusted = safe_float(item.get("decorrelation_adjusted_score"), default=float("-inf"))
+    quality = safe_float(item.get("decorrelation_quality_score"), default=float("-inf"))
+    adjustment = safe_float(item.get("decorrelation_adjustment"), default=float("-inf"))
+    if stage_mode == "new_family_broad":
+        status = str(item.get("status", "")).strip().lower()
+        return (
+            _flag_value(item, "stage_winner_guard_passed", default=status == "research_winner"),
+            _flag_value(item, "neutral_winner_guard_passed", default=True),
+            adjusted,
+            quality,
+            adjustment,
+            safe_float(item.get("quick_rank_icir"), default=float("-inf")),
+            safe_float(item.get("net_sharpe"), default=float("-inf")),
+            -safe_float(item.get("mean_turnover"), default=float("inf")),
+        )
+    return (
+        adjusted,
+        quality,
+        adjustment,
+        safe_float(item.get("quick_rank_icir"), default=float("-inf")),
+        safe_float(item.get("net_sharpe"), default=float("-inf")),
+        safe_float(item.get("net_excess_ann_return"), default=float("-inf")),
+        safe_float(item.get("net_ann_return"), default=float("-inf")),
+        -safe_float(item.get("mean_turnover"), default=float("inf")),
+    )
+
+
 def _global_new_family_broad_sort_key(item: dict[str, object]) -> tuple[float, float, float, float, float, float, float, float, float, float]:
     status = str(item.get("status", "")).strip().lower()
     return (
@@ -112,10 +260,17 @@ def _build_global_rerank_preview(
 ) -> list[dict[str, object]]:
     if not records:
         return []
-    if stage_mode == "new_family_broad":
-        ranked = sorted(records, key=_global_new_family_broad_sort_key, reverse=True)
+    decorrelation_enabled = _decorrelation_rerank_enabled(records)
+    working = [
+        _decorate_with_decorrelation_rerank(item) if decorrelation_enabled else dict(item)
+        for item in records
+    ]
+    if decorrelation_enabled:
+        ranked = sorted(working, key=lambda item: _decorrelation_rerank_sort_key(item, stage_mode=stage_mode), reverse=True)
+    elif stage_mode == "new_family_broad":
+        ranked = sorted(working, key=_global_new_family_broad_sort_key, reverse=True)
     else:
-        ranked = sorted(records, key=_default_child_sort_key, reverse=True)
+        ranked = sorted(working, key=_default_child_sort_key, reverse=True)
     preview: list[dict[str, object]] = []
     for item in ranked[: max(int(limit), 0)]:
         preview.append(
@@ -128,6 +283,18 @@ def _build_global_rerank_preview(
                 "net_excess_ann_return": safe_float(item.get("net_excess_ann_return"), default=float("nan")),
                 "net_sharpe": safe_float(item.get("net_sharpe"), default=float("nan")),
                 "mean_turnover": safe_float(item.get("mean_turnover"), default=float("nan")),
+                "nearest_decorrelation_target": str(item.get("nearest_decorrelation_target", "") or ""),
+                "corr_to_nearest_decorrelation_target": safe_float(
+                    item.get("corr_to_nearest_decorrelation_target"), default=float("nan")
+                ),
+                "avg_abs_decorrelation_target_corr": safe_float(
+                    item.get("avg_abs_decorrelation_target_corr"), default=float("nan")
+                ),
+                "decorrelation_quality_score": safe_float(item.get("decorrelation_quality_score"), default=float("nan")),
+                "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
+                "decorrelation_adjusted_score": safe_float(
+                    item.get("decorrelation_adjusted_score"), default=float("nan")
+                ),
             }
         )
     return preview
@@ -141,9 +308,16 @@ def _pick_best_child_record(
     if not records:
         return None
 
+    decorrelation_enabled = _decorrelation_rerank_enabled(records)
+    working = [
+        _decorate_with_decorrelation_rerank(item) if decorrelation_enabled else dict(item)
+        for item in records
+    ]
+    if decorrelation_enabled:
+        return max(working, key=lambda item: _decorrelation_rerank_sort_key(item, stage_mode=stage_mode))
     if stage_mode == "new_family_broad":
-        return max(records, key=_global_new_family_broad_sort_key)
-    return max(records, key=_default_child_sort_key)
+        return max(working, key=_global_new_family_broad_sort_key)
+    return max(working, key=_default_child_sort_key)
 
 
 def _pick_best_keep_record(
@@ -159,6 +333,31 @@ def _pick_best_keep_record(
     if not keep_records:
         return None
     return _pick_best_child_record(keep_records, stage_mode=stage_mode)
+
+
+def _metric_snapshot(item: dict[str, object] | None) -> dict[str, object] | None:
+    if not item:
+        return None
+    return {
+        "factor_name": str(item.get("factor_name", "") or ""),
+        "status": str(item.get("status", "") or ""),
+        "quick_rank_icir": safe_float(item.get("quick_rank_icir"), default=float("nan")),
+        "net_ann_return": safe_float(item.get("net_ann_return"), default=float("nan")),
+        "net_excess_ann_return": safe_float(item.get("net_excess_ann_return"), default=float("nan")),
+        "net_sharpe": safe_float(item.get("net_sharpe"), default=float("nan")),
+        "mean_turnover": safe_float(item.get("mean_turnover"), default=float("nan")),
+        "nearest_decorrelation_target": str(item.get("nearest_decorrelation_target", "") or ""),
+        "corr_to_nearest_decorrelation_target": safe_float(
+            item.get("corr_to_nearest_decorrelation_target"), default=float("nan")
+        ),
+        "avg_abs_decorrelation_target_corr": safe_float(
+            item.get("avg_abs_decorrelation_target_corr"), default=float("nan")
+        ),
+        "decorrelation_quality_gate_passed": bool(item.get("decorrelation_quality_gate_passed", False)),
+        "decorrelation_quality_score": safe_float(item.get("decorrelation_quality_score"), default=float("nan")),
+        "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
+        "decorrelation_adjusted_score": safe_float(item.get("decorrelation_adjusted_score"), default=float("nan")),
+    }
 
 
 def _classify_round_outcome(completed: list[dict[str, object]]) -> tuple[str, list[dict[str, object]], list[dict[str, object]]]:
@@ -231,10 +430,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--benchmark-path": str(single.get_default("benchmark_path")),
         "--start": str(single.get_default("start")),
         "--end": str(single.get_default("end")),
+        "--prompt-template-version": str(single.get_default("prompt_template_version")),
     }
     for arg, default in passthrough_defaults.items():
         name = arg.lstrip("-").replace("-", "_")
         parser.add_argument(arg, default=default)
+    parser.add_argument(
+        "--decorrelation-target",
+        action="append",
+        default=list(single.get_default("decorrelation_target") or []),
+        help="explicit factor(s) to decorrelate from; may be repeated or passed as comma-separated names",
+    )
 
     parser.add_argument("--auto-parent", action="store_true", help="resolve parent from latest family research winner")
     parser.add_argument(
@@ -312,6 +518,9 @@ def _build_child_cmd(args: argparse.Namespace, *, model: str, round_id: int, chi
     ]
     if str(args.additional_notes).strip():
         cmd.extend(["--additional-notes", args.additional_notes])
+    for target in list(args.decorrelation_target or []):
+        if str(target).strip():
+            cmd.extend(["--decorrelation-target", str(target)])
     if str(args.panel_path).strip():
         cmd.extend(["--panel-path", args.panel_path])
     if str(args.benchmark_path).strip():
@@ -330,6 +539,8 @@ def _build_child_cmd(args: argparse.Namespace, *, model: str, round_id: int, chi
         cmd.extend(["--target-profile", str(args.target_profile)])
     if str(args.stage_mode).strip():
         cmd.extend(["--stage-mode", str(args.stage_mode)])
+    if str(args.prompt_template_version).strip():
+        cmd.extend(["--prompt-template-version", str(args.prompt_template_version)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
@@ -346,13 +557,26 @@ def _resolve_initial_parent(args: argparse.Namespace) -> dict[str, str]:
     explicit_candidate_id = str(args.parent_candidate_id or "").strip()
 
     if explicit_name:
-        return {
-            "factor_name": explicit_name,
-            "expression": explicit_expression or resolve_family_formula(family, explicit_name),
-            "candidate_id": explicit_candidate_id or make_seed_candidate_id(explicit_name),
-            "status": "explicit_seed",
-            "node_kind": "explicit_parent",
-        }
+        payload = (
+            get_candidate_record(db_path=args.archive_db, candidate_id=explicit_candidate_id)
+            if explicit_candidate_id
+            else None
+        )
+        resolved = dict(payload or {})
+        resolved.update(
+            {
+                "factor_name": explicit_name,
+                "expression": explicit_expression
+                or str(resolved.get("expression", "") or "")
+                or resolve_family_formula(family, explicit_name),
+                "candidate_id": explicit_candidate_id
+                or str(resolved.get("candidate_id", "") or "")
+                or make_seed_candidate_id(explicit_name),
+                "status": str(resolved.get("status", "") or "explicit_seed"),
+                "node_kind": "explicit_parent",
+            }
+        )
+        return resolved
 
     latest_winner = get_latest_family_winner(db_path=args.archive_db, family=args.family) if args.auto_parent else None
     if latest_winner is not None:
@@ -545,6 +769,30 @@ def main() -> int:
         family=args.family,
         statuses=() if args.skip_eval else ("research_winner", "winner", "research_keep", "keep"),
     )
+    decision_context = DecisionContext.from_runtime(
+        family=args.family,
+        stage_mode=stage_mode,
+        target_profile=str(args.target_profile),
+        policy_preset=str(args.policy_preset),
+        decorrelation_targets=list(args.decorrelation_target or []),
+        neutralized_eval_enabled=not bool(args.skip_eval),
+        context_profile=resolve_context_profile(
+            ContextEvidence.from_runtime(
+                family=args.family,
+                stage_mode=stage_mode,
+                target_profile=str(args.target_profile),
+                policy_preset=str(args.policy_preset),
+                is_seed_stage=bool(stage_mode == "new_family_broad"),
+                has_bootstrap_frontier=False,
+                has_donor_motifs=False,
+                has_decorrelation_targets=bool(args.decorrelation_target),
+                selected_parent_kind=str(getattr(selected_parent, "node_kind", "") or ""),
+                requested_candidate_count=int(getattr(args, "n_candidates", 0) or 0),
+                final_candidate_target=int(getattr(args, "n_candidates", 0) or 0),
+            )
+        ),
+    )
+    decision_engine = DecisionEngine(decision_context)
     round_status, successful, failed = _classify_round_outcome(completed)
     expansion = engine.register_expansion(
         parent_node_id=selected_parent.node_id,
@@ -554,8 +802,9 @@ def main() -> int:
         note=f"multi_run_dir={multi_run_dir}",
         count_attempt=False,
     )
-    global_best_candidate = _pick_best_child_record(child_records, stage_mode=stage_mode)
-    global_best_keep = _pick_best_keep_record(child_records, stage_mode=stage_mode)
+    global_best_candidate = decision_engine.pick_best_candidate(child_records)
+    global_best_keep = decision_engine.pick_best_keep(child_records)
+    decorrelation_rerank_enabled = decision_engine.decorrelation_rerank_enabled(child_records)
     summary = {
         "family": args.family,
         "stage_mode": stage_mode,
@@ -570,10 +819,21 @@ def main() -> int:
         "winner": global_best_candidate,
         "global_best_candidate": global_best_candidate,
         "global_best_keep": global_best_keep,
-        "winner_selection_mode": (
-            "global_new_family_broad_rerank" if stage_mode == "new_family_broad" else "best_child_record"
-        ),
-        "global_rerank_preview": _build_global_rerank_preview(child_records, stage_mode=stage_mode),
+        "decision_context": {
+            "family": decision_context.family,
+            "stage_mode": decision_context.stage_mode,
+            "target_profile": decision_context.target_profile,
+            "policy_preset": decision_context.policy_preset,
+            "context_profile": decision_context.context_profile.to_dict() if decision_context.context_profile else None,
+            "decorrelation_targets": list(decision_context.decorrelation_targets),
+            "decorrelation_enabled": decision_context.decorrelation_enabled,
+            "neutralized_eval_enabled": decision_context.neutralized_eval_enabled,
+            "admission_intent": decision_context.admission_intent,
+        },
+        "decorrelation_rerank_enabled": decorrelation_rerank_enabled,
+        "decorrelation_rerank_mode": "soft_adjustment" if decorrelation_rerank_enabled else "disabled",
+        "winner_selection_mode": decision_engine.winner_selection_mode(child_records),
+        "global_rerank_preview": decision_engine.build_rerank_preview(child_records),
         "successful_models": [str(item["model"]) for item in successful],
         "failed_models": [str(item["model"]) for item in failed],
         "successful_model_count": len(successful),
@@ -618,9 +878,12 @@ def main() -> int:
     summary["global_best_candidate_name"] = str(best_candidate.get("factor_name", "") or "")
     summary["global_best_candidate_expression"] = str(best_candidate.get("expression", "") or "")
     summary["global_best_candidate_status"] = str(best_candidate.get("status", "") or "")
+    summary["global_best_candidate_metrics"] = decision_engine.metric_snapshot(best_candidate)
     best_keep = summary.get("global_best_keep") or {}
     summary["global_best_keep_name"] = str(best_keep.get("factor_name", "") or "")
     summary["global_best_keep_expression"] = str(best_keep.get("expression", "") or "")
+    summary["global_best_keep_status"] = str(best_keep.get("status", "") or "")
+    summary["global_best_keep_metrics"] = decision_engine.metric_snapshot(best_keep)
     summary["children_collected"] = len(child_records)
     summary["children_added_to_search"] = len(expansion.get("children", []))
     summary["search"] = engine.summary()

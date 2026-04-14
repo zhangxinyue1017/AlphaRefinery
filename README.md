@@ -13,6 +13,9 @@
 - 🧭 **Broad -> Anchor -> Focused** control over search progression
 - 🌿 **Dual-parent branch preservation** with **Path Evaluation v2**
 - 🎯 **Target-conditioned search** connected to evaluation, reports, promotion
+- 🧩 **Context-aware decision layer** to unify rerank, anchor selection, and next-step recommendation
+- 🪢 **Shared context + prompt/decision/orchestration alignment** through `ContextProfile`, `PromptPlan`, and `OrchestrationProfile`
+- 🪄 **De-correlation refine support** with target-aware prompt guidance, diagnostics, and rerank hooks
 
 ## 📌 Start Here
 
@@ -23,6 +26,7 @@
 - [Quick Start](#-quick-start)
 - [Common Workflows](#-common-workflows)
 - [Roadmap](#-roadmap)
+- [LLM Refine Mode Layering](./factors_store/llm_refine/README.md#模式分层说明)
 
 ---
 
@@ -89,6 +93,55 @@ Instead, it drives search through a structured family-level progression:
 - Focused continuation for local deepening
 
 This gives AlphaRefinery a more explicit search policy than simple multi-sample generation.
+
+### 2.5. Context-aware decision, not scattered local heuristics
+
+Recent iterations have started to unify several previously separate decision points:
+
+- round-level rerank
+- anchor selection
+- family-level next action recommendation
+- optional de-correlation-aware candidate preference
+
+Instead of treating these as unrelated heuristics, AlphaRefinery is moving toward a shared decision layer that reads:
+
+- `stage_mode`
+- `target_profile`
+- `policy_preset`
+- de-correlation targets
+- neutralized evaluation outputs
+
+This makes the overall research loop more consistent and easier to reason about.
+
+### 2.6. Shared context alignment, not prompt / decision / orchestration drift
+
+Recent work has pushed the framework one step further:
+
+- `PromptPlan` for prompt block inclusion / budget / style
+- `ContextEvidence` + `ContextProfile` for shared runtime interpretation
+- `OrchestrationProfile` for stage recommendation and orchestration trace
+
+The goal is not to over-automate research direction.
+It is to make the three main layers speak the same context language:
+
+- prompt construction
+- decision trace
+- scheduler / family-loop orchestration
+
+In practice, this means AlphaRefinery is moving away from a setup where:
+
+- prompt templates interpret stage and target one way
+- rerank / anchor logic interpret them another way
+- scheduler progression interprets them a third way
+
+Instead, the system now starts to project a shared context view and reuse it across those layers.
+
+This improves:
+
+- traceability
+- consistency across runs
+- easier diagnosis of why a round was broad / focused / branch-opening
+- safer gradual automation of the most repetitive orchestration decisions
 
 ### 3. Branch preservation, not winner-take-all collapse
 
@@ -333,6 +386,8 @@ So while the system is already usable, it should still be viewed as an evolving 
 * Directly callable through `registry.compute(...)`
 * Ready to enter downstream admission workflows.
 
+In the public repository, this bucket may be intentionally empty or only keep package scaffolding. Local/private `*_family.py` results can remain outside version control.
+
 ### 3. Research artifact layer
 
 `artifacts/` stores:
@@ -448,6 +503,19 @@ export ALPHAREFINERY_PANEL_PATH=/path/to/panel.parquet
 export ALPHAREFINERY_BENCHMARK_PATH=/path/to/benchmark.csv
 export ALPHAREFINERY_INDUSTRY_CSV_PATH=/path/to/stock_industry.csv
 ```
+
+If your BaoStock raw `daily.csv` files are updated separately, rebuild the aggregated panel before running experiments:
+
+```bash
+./update_panel_from_baostock.sh
+```
+
+The script defaults to:
+
+* input root: `/root/dmd/BaoStock/daily`
+* output panel: `${ALPHAREFINERY_PANEL_PATH:-/root/dmd/BaoStock/panel.parquet}`
+
+You can override them with flags such as `--input-root`, `--output`, `--start-date`, and `--end-date`.
 
 ### 0. Load the `llm_refine` provider environment
 

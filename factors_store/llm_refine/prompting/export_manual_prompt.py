@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .prompt_builder import export_manual_full_prompt
+from .prompt_builder import PROMPT_TEMPLATE_VERSIONS, export_manual_full_prompt
 from ..core.seed_loader import DEFAULT_SEED_POOL, load_seed_pool
 
 
@@ -16,6 +16,12 @@ def main() -> int:
     parser.add_argument("--parent-name", default="", help="override current parent factor name")
     parser.add_argument("--parent-expression", default="", help="override current parent expression")
     parser.add_argument("--additional-notes", default="", help="extra note block appended into user prompt")
+    parser.add_argument(
+        "--prompt-template-version",
+        default="current_compact",
+        choices=PROMPT_TEMPLATE_VERSIONS,
+        help="prompt template variant to export",
+    )
     args = parser.parse_args()
 
     seed_pool = load_seed_pool(args.seed_pool)
@@ -28,6 +34,7 @@ def main() -> int:
         additional_notes=args.additional_notes,
         current_parent_name=args.parent_name or None,
         current_parent_expression=args.parent_expression or None,
+        prompt_template_version=str(args.prompt_template_version),
     )
     print(Path(args.output))
     return 0

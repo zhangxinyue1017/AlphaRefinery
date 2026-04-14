@@ -18,8 +18,12 @@ from ..core.seed_loader import (
 )
 from ..knowledge.retrieval import build_family_memory_payload, render_family_memory_block
 from ..parsing.operator_contract import PROMPT_OPERATOR_DESCRIPTIONS
+from .prompt_plan import PromptConstraintPlan, PromptExamplesPlan, PromptMemoryPlan, PromptPlan, build_prompt_plan
+from ..search.context_resolver import ContextProfile
+
 DEFAULT_WINDOWS = (3, 5, 10, 14, 15, 20, 28, 40, 60, 100, 120, 180, 250, 375)
 DEFAULT_OPERATORS = PROMPT_OPERATOR_DESCRIPTIONS
+PROMPT_TEMPLATE_VERSIONS = ("current_compact", "legacy_v1")
 
 
 def _prompt_expression_text(expression: str, *, max_chars: int = 240) -> str:
@@ -31,10 +35,13 @@ def _prompt_expression_text(expression: str, *, max_chars: int = 240) -> str:
     return f"{text[:head]} ... {text[-tail:]}"
 
 
-def _family_formula_lines(family: SeedFamily) -> str:
+def _family_formula_lines(family: SeedFamily, *, limit: int | None = None) -> str:
+    items = list(family.formulas.items())
+    if limit is not None:
+        items = items[: max(int(limit), 0)]
     return "\n".join(
         f"- {name}: {_prompt_expression_text(resolve_family_formula(family, name))}"
-        for name in family.formulas
+        for name, _ in items
     )
 
 
@@ -67,8 +74,8 @@ def _family_summary(family: SeedFamily) -> str:
     ).strip()
 
 
-def _family_formulas_block(family: SeedFamily) -> str:
-    return _family_formula_lines(family)
+def _family_formulas_block(family: SeedFamily, *, limit: int | None = None) -> str:
+    return _family_formula_lines(family, limit=limit)
 
 
 def _family_weakness_block(family: SeedFamily) -> str:
@@ -86,6 +93,47 @@ def _family_constraint_block(items: tuple[str, ...]) -> str:
     if not items:
         return "- (none)"
     return "\n".join(f"- {item}" for item in items)
+
+
+def _decorrelation_target_block(
+    targets: tuple[str, ...],
+    *,
+    family: SeedFamily,
+) -> str:
+    if not targets:
+        return "- (none)"
+    lines: list[str] = []
+    for name in targets:
+        expression = ""
+        if name == family.canonical_seed or name in family.aliases or name in family.formulas:
+            expression = resolve_family_formula(family, name)
+        if expression:
+            lines.append(f"- `{name}`: `{_prompt_expression_text(expression)}`")
+        else:
+            lines.append(f"- `{name}`")
+    return "\n".join(lines)
+
+
+def _decorrelation_guidance_block(targets: tuple[str, ...]) -> str:
+    if not targets:
+        return ""
+    return dedent(
+        """
+        去相关试验要求：
+        - 这是一轮显式去相关试验。请优先减少与上面 target set 的同构和高相关，而不是只做常规局部优化。
+        - 更推荐的改法：
+          1. denominator / anchor swap：换分母、换锚点、换 reference price，而不是只改窗口。
+          2. transform swap：把简单 ratio 改成 log-ratio、distance、zscore distance、signed deviation。
+          3. conditional gate：加入 turnover / volatility / range / quantile regime 条件门控。
+          4. orthogonal side signal：加入一个不同来源的辅助轴，但不要破坏当前 family 的核心经济逻辑。
+        - 明确避免以下伪去相关：
+          1. 只做 smooth / decay / ema 近邻替换。
+          2. 只做窗口微调。
+          3. 只做 mean / ema / close 之间的近邻互换。
+          4. 只加一个弱归一化项却保持主 skeleton 不变。
+        - 你的目标不是离 parent 越远越好，而是在保持质量的前提下，优先避开 target set 已经覆盖的结构。
+        """
+    ).strip()
 
 
 def _family_operator_hint_block(family: SeedFamily) -> str:
@@ -156,11 +204,14 @@ def _candidate_role_block(roles: tuple[str, ...], n_candidates: int) -> str:
     return "\n".join(lines)
 
 
-def _bootstrap_frontier_block(frontier: list[dict[str, object]]) -> str:
+def _bootstrap_frontier_block(frontier: list[dict[str, object]], *, limit: int | None = None) -> str:
     if not frontier:
         return "- (none)"
+    entries = list(frontier)
+    if limit is not None:
+        entries = entries[: max(int(limit), 0)]
     lines: list[str] = []
-    for idx, item in enumerate(frontier, start=1):
+    for idx, item in enumerate(entries, start=1):
         factor_name = str(item.get("factor_name", "")).strip() or f"bootstrap_{idx}"
         expression = _prompt_expression_text(str(item.get("expression", "")).strip())
         metric_parts: list[str] = []
@@ -181,8 +232,17 @@ def _bootstrap_frontier_block(frontier: list[dict[str, object]]) -> str:
 def _donor_motif_block(donor_motifs: list[dict[str, object]]) -> str:
     if not donor_motifs:
         return "- (none)"
+    return _donor_motif_block_limited(donor_motifs, limit=None)
+
+
+def _donor_motif_block_limited(donor_motifs: list[dict[str, object]], *, limit: int | None = None) -> str:
+    if not donor_motifs:
+        return "- (none)"
+    entries = list(donor_motifs)
+    if limit is not None:
+        entries = entries[: max(int(limit), 0)]
     lines: list[str] = []
-    for item in donor_motifs:
+    for item in entries:
         source_family = str(item.get("source_family", "")).strip() or "-"
         source_factor = str(item.get("source_factor_name", "")).strip() or "-"
         expression = _prompt_expression_text(str(item.get("source_expression", "")).strip())
@@ -208,6 +268,150 @@ def _donor_motif_block(donor_motifs: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
+def _render_examples_section(
+    *,
+    family: SeedFamily,
+    plan: PromptExamplesPlan,
+    is_seed_stage: bool,
+    bootstrap_frontier: list[dict[str, object]],
+    donor_motifs: list[dict[str, object]],
+) -> str:
+    blocks: list[str] = []
+    if plan.include_family_formulas:
+        blocks.extend(
+            [
+                "相似/同家族因子：",
+                _family_formulas_block(family, limit=plan.family_formula_limit),
+            ]
+        )
+    if plan.include_bootstrap_frontier and is_seed_stage:
+        blocks.extend(
+            [
+                "Round1 bootstrap frontier:",
+                _bootstrap_frontier_block(bootstrap_frontier, limit=plan.bootstrap_frontier_limit),
+            ]
+        )
+    if plan.include_donor_motifs:
+        blocks.extend(
+            [
+                "Cross-family donor motifs:",
+                _donor_motif_block_limited(donor_motifs, limit=plan.donor_motif_limit),
+            ]
+        )
+    return "\n\n".join(blocks).strip()
+
+
+def _render_memory_section(payload: dict[str, object], *, plan: PromptMemoryPlan) -> str:
+    if not plan.include:
+        return ""
+    return render_family_memory_block(
+        payload,
+        max_winners=plan.max_winners,
+        max_keeps=plan.max_keeps,
+        max_failures=plan.max_failures,
+        include_lineage=plan.include_lineage,
+        include_reflection=plan.include_reflection,
+    )
+
+
+def _render_constraints_section(
+    *,
+    family: SeedFamily,
+    plan: PromptConstraintPlan,
+    decorrelation_targets: tuple[str, ...],
+    donor_motifs: list[dict[str, object]],
+    requested_count: int,
+    final_count: int,
+    active_roles: tuple[str, ...],
+) -> str:
+    lines: list[str] = []
+    lines.extend(
+        [
+            "本轮优化优先级：",
+            f"- 主目标：{family.primary_objective or 'improve_rank_icir'}",
+            f"- 次目标：{family.secondary_objective or 'maintain_family_logic_while_lowering_redundancy'}",
+        ]
+    )
+    lines.extend(["", "主线要求："])
+    if plan.include_family_constraints:
+        constraints_text = _family_constraint_block(family.hard_constraints)
+        if constraints_text != "- (none)":
+            lines.append(constraints_text)
+    lines.extend(
+        [
+            "- 不要脱离当前 family 的核心经济逻辑，不要彻底换题。",
+            "- 优先修 parent 当前最明显的弱点，不要同时解决太多问题。",
+            "- 如果 parent 是两段式或 hybrid 结构，先调整方向、权重或平滑方式；不要默认删掉其中一段。",
+        ]
+    )
+
+    if plan.include_axes_guidance:
+        lines.extend(
+            [
+                "",
+                "优先考虑以下改进方向：",
+                _family_axes_block(family),
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "改写幅度：",
+            "- 每个候选优先只改 1 个核心点，最多改 2 个核心点。",
+            "- 可以做方向修正、平滑、归一化、替换一个确认项。",
+            "- 不要把整个主结构重写成另一类因子。",
+            "- 改动要轻，不要无意义增加嵌套、字段和条件分支。",
+            "",
+            "候选分工：",
+            "- 三个候选不要做成同一种改法。",
+            "- 一个偏稳健，一个偏去重，一个偏增强。",
+            "- 不要求每个候选同时兼顾稳健、去重和增强。",
+            "- 不要输出和 parent / peer 只有表面差别的公式。",
+            "",
+            f"你必须生成 {int(requested_count)} 个候选，并优先保证前 {len(active_roles)} 个候选按下面这些 role slots 覆盖：",
+            _candidate_role_block(active_roles, len(active_roles)),
+        ]
+    )
+
+    if plan.include_allowed_edit_types:
+        lines.extend(["", "允许的 edit 类型：", _allowed_edit_block(family)])
+
+    lines.extend(
+        [
+            "",
+            "同时兼顾：",
+            "- 提高稳定性",
+            "- 降低换手",
+            "- 降低家族内冗余",
+            "- 保持经济解释清晰",
+        ]
+    )
+    if donor_motifs:
+        lines.append("- 至少 1 个候选要明确借用 donor motif，但必须翻译到当前 family 语义里")
+    if requested_count > final_count:
+        lines.append(
+            f"- 系统会先收集更宽的 seed-stage 候选，再轻量 rerank 到最终保留的 {int(final_count)} 条；请优先保证 role 覆盖和结构差异"
+        )
+
+    if plan.include_anti_patterns and family.anti_patterns:
+        lines.extend(["", "禁止项：", _family_constraint_block(family.anti_patterns)])
+    else:
+        lines.extend(
+            [
+                "",
+                "禁止项：",
+                "- 不要只改名字或只换窗口。",
+                "- 不要引入未来信息、外部财务字段、或当前 contract 中没有的字段。",
+                "- 不要脱离当前 family 的经济解释。",
+                "- 不要把 parent 或 peer 只做表面重命名后重复输出。",
+            ]
+        )
+    if plan.include_decorrelation_guidance and decorrelation_targets:
+        lines.extend(["", _decorrelation_guidance_block(decorrelation_targets)])
+    return "\n".join(lines).strip()
+
+
 def _allowed_edit_block(family: SeedFamily) -> str:
     items = family.allowed_edit_types or (
         "window_replacement",
@@ -216,6 +420,126 @@ def _allowed_edit_block(family: SeedFamily) -> str:
         "smoothing_insertion",
     )
     return "\n".join(f"- {item}" for item in items)
+
+
+def _legacy_constraints_section(
+    *,
+    family: SeedFamily,
+    requested_count: int,
+    active_roles: tuple[str, ...],
+) -> str:
+    lines: list[str] = [
+        "本轮优化优先级：",
+        f"- 主目标：{family.primary_objective or 'improve_rank_icir'}",
+        f"- 次目标：{family.secondary_objective or 'maintain_family_logic_while_lowering_redundancy'}",
+        "",
+        "优先考虑以下改进方向：",
+        _family_axes_block(family),
+        "",
+        "同时你需要兼顾：",
+        "- 提高稳定性",
+        "- 降低换手",
+        "- 降低家族内冗余",
+        "- 保持经济解释清晰",
+        "- 不要让公式复杂度无意义膨胀",
+        "",
+        f"你必须生成 {int(requested_count)} 个候选，且前 {len(active_roles)} 个候选优先覆盖这些角色：",
+        _candidate_role_block(active_roles, len(active_roles)),
+        "",
+        "允许的 edit 类型：",
+        _allowed_edit_block(family),
+        "",
+        "小步改写限制：",
+        "- 最多只允许改动 parent 中 1~2 个核心子结构。",
+        "- 不允许完全替换主逻辑分支。",
+        "- 不允许新增超过 1 层嵌套。",
+        "- 不允许引入超过 1 个新的原始字段。",
+        "- 不允许只做符号翻转，除非明确说明理由。",
+        "- 不允许窗口跨度跳跃过大，除非有明确经济理由。",
+        "",
+        "候选多样性要求：",
+        "- 不允许所有候选都只做窗口微调。",
+        "- 不允许所有候选共享同一个主 operator skeleton。",
+        "- 至少 1 个候选主要面向降低 turnover。",
+        "- 至少 1 个候选主要面向降低与 parent 的相关性。",
+        "- 至少 1 个候选要改变主刻画方式，但不能脱离 family 逻辑。",
+        "",
+        "不要输出以下坏模式：",
+        _family_constraint_block(family.anti_patterns),
+    ]
+    return "\n".join(lines).strip()
+
+
+def _build_legacy_user_prompt(
+    *,
+    seed_pool: SeedPool,
+    family: SeedFamily,
+    available_fields: list[str],
+    history_stage: str,
+    effective_parent_name: str,
+    effective_parent_expression: str,
+    effective_parent_row: dict[str, object] | None,
+    requested_count: int,
+    active_roles: tuple[str, ...],
+    additional_notes: str,
+) -> str:
+    return dedent(
+        f"""
+        你的目标是：在不明显增加公式复杂度的前提下，尽量提升因子的 RankIC、RankICIR、Sharpe 和 excess return，并尽量改善稳定性、降低冗余、降低不必要的高换手。
+
+        # 1. 现有因子信息
+        当前 parent 因子名称：{effective_parent_name}
+        因子家族：{family.family}
+        当前 parent 因子原始表达式：{_prompt_expression_text(effective_parent_expression)}
+        {_effective_expression_block(effective_parent_expression, family, factor_name=effective_parent_name)}
+
+        家族内已有公式：
+        {_family_formulas_block(family)}
+
+        经济假设：{family.interpretation}
+        已知弱点：
+        {_family_weakness_block(family)}
+
+        相似/同家族因子：
+        {_family_formulas_block(family)}
+
+        历史表现：
+        {_history_scope_block(seed_pool, history_stage)}
+
+        {_history_block(family, history_stage=history_stage, current_parent_name=effective_parent_name, current_parent_row=effective_parent_row)}
+
+        {additional_notes or ""}
+
+        # 2. 可用资源
+        可用字段：
+        {json.dumps(available_fields, ensure_ascii=False)}
+
+        可用算子：
+        {json.dumps(list(DEFAULT_OPERATORS), ensure_ascii=False)}
+
+        可用时间窗：
+        {json.dumps(list(DEFAULT_WINDOWS), ensure_ascii=False)}
+
+        注意：
+        1. 原因子默认应继承当前 family 的有效符号方向：{family.direction}
+        2. 不要只是机械调窗口。
+        3. 必须保留当前 family 的核心经济逻辑，不要彻底换思路。
+        4. 不要引入未来信息、外部财务字段、或当前 contract 中没有的字段。
+        5. 候选之间要尽量 low corr、低冗余，不要给出三个几乎一样的公式。
+        6. 要尽量降低与 parent factor 及同家族 peer 的相关性，至少在结构上做出清晰区分。
+
+        # 3. 优化要求
+        {_legacy_constraints_section(family=family, requested_count=requested_count, active_roles=active_roles)}
+
+        # 4. 分析要求
+        请先在内部完成分析，但不要展示推理过程。必须综合以下三个维度：
+        1. Optimization Strategy
+        2. Alpha Idea
+        3. Factor Interpretation
+
+        你最终输出的 explanation 必须把这三部分信息融合成自然语言，具体、直白、能让研究员快速理解。
+        """
+    ).strip()
 
 
 def _latest_csv(pattern: str) -> Path | None:
@@ -500,6 +824,12 @@ def build_refinement_prompt(
     donor_motifs: list[dict[str, object]] | None = None,
     bootstrap_frontier: list[dict[str, object]] | None = None,
     is_seed_stage: bool = False,
+    decorrelation_targets: tuple[str, ...] = (),
+    stage_mode: str = "auto",
+    target_profile: str = "raw_alpha",
+    policy_preset: str = "balanced",
+    prompt_template_version: str = "current_compact",
+    context_profile: ContextProfile | None = None,
 ) -> PromptBundle:
     available_fields = sorted({*CORE_FIELDS, *DERIVED_FIELDS, *EXTENDED_DAILY_FIELDS, *OPTIONAL_CONTEXT_FIELDS})
     history_stage = prompt_history_stage(seed_pool)
@@ -508,6 +838,9 @@ def build_refinement_prompt(
     requested_count = max(int(requested_candidate_count or n_candidates), 1)
     final_count = max(int(final_candidate_target or n_candidates), 1)
     active_roles = tuple(role_slots or family.candidate_roles or ("conservative", "decorrelating", "enhancing"))
+    template_version = str(prompt_template_version or "current_compact").strip() or "current_compact"
+    if template_version not in PROMPT_TEMPLATE_VERSIONS:
+        raise ValueError(f"unknown prompt template version: {template_version}")
     effective_parent_row = (
         load_prompt_history_row(seed_pool, effective_parent_name, family=family)
         if history_stage
@@ -520,7 +853,33 @@ def build_refinement_prompt(
         current_model_name=current_model_name,
         current_parent_candidate_id=current_parent_candidate_id,
     )
-    memory_block = render_family_memory_block(memory_payload)
+    prompt_plan = build_prompt_plan(
+        stage_mode=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        is_seed_stage=is_seed_stage,
+        has_donor_motifs=bool(donor_motifs),
+        has_bootstrap_frontier=bool(bootstrap_frontier),
+        has_decorrelation_targets=bool(decorrelation_targets),
+        context_profile=context_profile,
+    )
+    memory_block = _render_memory_section(memory_payload, plan=prompt_plan.memory)
+    examples_block = _render_examples_section(
+        family=family,
+        plan=prompt_plan.examples,
+        is_seed_stage=is_seed_stage,
+        bootstrap_frontier=list(bootstrap_frontier or []),
+        donor_motifs=list(donor_motifs or []),
+    )
+    constraints_block = _render_constraints_section(
+        family=family,
+        plan=prompt_plan.constraints,
+        decorrelation_targets=decorrelation_targets,
+        donor_motifs=list(donor_motifs or []),
+        requested_count=requested_count,
+        final_count=final_count,
+        active_roles=active_roles,
+    )
     output_schema = {
         "parent_factor": effective_parent_name,
         "diagnosed_weaknesses": ["..."],
@@ -547,119 +906,88 @@ def build_refinement_prompt(
         你必须输出严格 JSON，不要输出 markdown，不要输出解释性前言，不要暴露推理过程。
         """
     ).strip()
+    if template_version == "legacy_v1":
+        prompt_body = _build_legacy_user_prompt(
+            seed_pool=seed_pool,
+            family=family,
+            available_fields=available_fields,
+            history_stage=history_stage,
+            effective_parent_name=effective_parent_name,
+            effective_parent_expression=effective_parent_expression,
+            effective_parent_row=effective_parent_row,
+            requested_count=requested_count,
+            active_roles=active_roles,
+            additional_notes=additional_notes,
+        )
+    else:
+        prompt_body = dedent(
+            f"""
+            你的目标是：在不明显增加公式复杂度的前提下，尽量提升因子的 RankIC、RankICIR、Sharpe 和 excess return，并尽量改善稳定性、降低冗余、降低不必要的高换手。
+
+            # 1. 现有因子信息
+            当前 parent 因子名称：{effective_parent_name}
+            因子家族：{family.family}
+            当前 parent 因子原始表达式：{_prompt_expression_text(effective_parent_expression)}
+            {_effective_expression_block(effective_parent_expression, family, factor_name=effective_parent_name)}
+
+            经济假设：{family.interpretation}
+            已知弱点：
+            {_family_weakness_block(family)}
+
+            {examples_block}
+
+            历史表现：
+            {_history_scope_block(seed_pool, history_stage)}
+            
+            {_history_block(family, history_stage=history_stage, current_parent_name=effective_parent_name, current_parent_row=effective_parent_row)}
+
+            改进轨迹提示：
+            - 请结合当前 parent 所在的 lineage，不要把每一轮都当成从零开始。
+            - 优先延续最近 2~3 代里被证明有效的 edit axis；如果某类改写在 lineage 中退化，请避免继续沿同一路径机械外推。
+            - canonical seed 到当前 parent 的链路，比单个 winner 更重要。
+            
+            最近经验记忆：
+            {memory_block}
+
+            {additional_notes or ""}
+
+            显式去相关 target set：
+            {_decorrelation_target_block(decorrelation_targets, family=family)}
+
+            # 2. 可用资源
+            可用字段：
+            {json.dumps(available_fields, ensure_ascii=False)}
+
+            可用算子：
+            {json.dumps(list(DEFAULT_OPERATORS), ensure_ascii=False)}
+
+            可用时间窗：
+            {json.dumps(list(DEFAULT_WINDOWS), ensure_ascii=False)}
+
+            {(_family_operator_hint_block(family) + chr(10)) if _family_operator_hint_block(family) else ""}
+            {(_family_expression_safety_block(family) + chr(10)) if _family_expression_safety_block(family) else ""}
+
+            注意：
+            1. 原因子默认应继承当前 family 的有效符号方向：{family.direction}
+            2. 不要只是机械调窗口。
+            3. 必须保留当前 family 的核心经济逻辑，不要彻底换思路。
+            4. 不要引入未来信息、外部财务字段、或当前 contract 中没有的字段。
+
+            # 3. 优化要求
+            {constraints_block}
+
+            # 4. 分析要求
+            请先在内部完成分析，但不要展示推理过程。必须综合以下三个维度：
+            1. Optimization Strategy
+            2. Alpha Idea
+            3. Factor Interpretation
+
+            你最终输出的 explanation 必须把这三部分信息融合成自然语言，但要极短、直白、能让研究员快速理解。
+            """
+        ).strip()
     user_prompt = dedent(
         f"""
-        你的目标是：在不明显增加公式复杂度的前提下，尽量提升因子的 RankIC、RankICIR、Sharpe 和 excess return，并尽量改善稳定性、降低冗余、降低不必要的高换手。
-
-        # 1. 现有因子信息
-        当前 parent 因子名称：{effective_parent_name}
-        因子家族：{family.family}
-        当前 parent 因子原始表达式：{_prompt_expression_text(effective_parent_expression)}
-        {_effective_expression_block(effective_parent_expression, family, factor_name=effective_parent_name)}
-        家族内已有公式：
-        {_family_formulas_block(family)}
-        经济假设：{family.interpretation}
-        已知弱点：
-        {_family_weakness_block(family)}
-
-        相似/同家族因子：
-        {_family_formulas_block(family)}
-
-        历史表现：
-        {_history_scope_block(seed_pool, history_stage)}
-        
-        {_history_block(family, history_stage=history_stage, current_parent_name=effective_parent_name, current_parent_row=effective_parent_row)}
-
-        {('Round1 bootstrap frontier:' + chr(10) + _bootstrap_frontier_block(bootstrap_frontier or []) + chr(10)) if is_seed_stage else ''}
-        {('Cross-family donor motifs:' + chr(10) + _donor_motif_block(donor_motifs or []) + chr(10)) if donor_motifs else ''}
-
-        改进轨迹提示：
-        - 请结合当前 parent 所在的 lineage，不要把每一轮都当成从零开始。
-        - 优先延续最近 2~3 代里被证明有效的 edit axis；如果某类改写在 lineage 中退化，请避免继续沿同一路径机械外推。
-        - canonical seed 到当前 parent 的链路，比单个 winner 更重要。
-        
-        最近经验记忆：
-        {memory_block}
-
-        {additional_notes or ""}
-
-        # 2. 可用资源
-        可用字段：
-        {json.dumps(available_fields, ensure_ascii=False)}
-
-        可用算子：
-        {json.dumps(list(DEFAULT_OPERATORS), ensure_ascii=False)}
-
-        可用时间窗：
-        {json.dumps(list(DEFAULT_WINDOWS), ensure_ascii=False)}
-
-        {(_family_operator_hint_block(family) + chr(10)) if _family_operator_hint_block(family) else ""}
-        {(_family_expression_safety_block(family) + chr(10)) if _family_expression_safety_block(family) else ""}
-
-        注意：
-        1. 原因子默认应继承当前 family 的有效符号方向：{family.direction}
-        2. 不要只是机械调窗口。
-        3. 必须保留当前 family 的核心经济逻辑，不要彻底换思路。
-        4. 不要引入未来信息、外部财务字段、或当前 contract 中没有的字段。
-        5. 候选之间要尽量 low corr、低冗余，不要给出三个几乎一样的公式。
-        6. 要尽量降低与 parent factor 及同家族 peer 的相关性，至少在结构上做出清晰区分。
-
-        # 3. 优化要求
-        本轮优化优先级：
-        - 主目标：{family.primary_objective or 'improve_rank_icir'}
-        - 次目标：{family.secondary_objective or 'maintain_family_logic_while_lowering_redundancy'}
-        - 禁止项：
-        {_family_constraint_block(family.hard_constraints)}
-
-        可参考的探索方向（低优先级弱提示，不要求覆盖）：
-        {_family_axes_block(family)}
-
-        关于上面这些探索方向，请严格遵守：
-        - 它们只是 seed-pool 中预先写下的启发式参考，不是必须完成的任务清单。
-        - 如果这些方向与当前 parent、recent winners / failures、lineage 经验冲突，请优先相信已经被验证的主线。
-        - 不要为了覆盖这些方向而强行跨 family 拼接 theme，或把公式带离当前 parent 的核心经济逻辑。
-        - 如果某个方向明显会增加复杂度、冗余或过度发散，请忽略它，而不是硬做。
-        - 优先做“贴着当前有效主线的小步改写”，把这些方向当作可选灵感，而不是优化目标本身。
-
-        同时你需要兼顾：
-        - 提高稳定性
-        - 降低换手
-        - 降低家族内冗余
-        - 保持经济解释清晰
-        - 不要让公式复杂度无意义膨胀
-
-        你必须生成 {int(requested_count)} 个候选，并优先保证前 {len(active_roles)} 个候选按下面这些 role slots 覆盖：
-        {_candidate_role_block(active_roles, len(active_roles))}
-
-        允许的 edit 类型：
-        {_allowed_edit_block(family)}
-
-        小步改写限制：
-        - 最多只允许改动 parent 中 1~2 个核心子结构
-        - 不允许完全替换主逻辑分支
-        - 不允许新增超过 1 层嵌套
-        - 不允许引入超过 1 个新的原始字段
-        - 不允许只做符号翻转，除非明确说明理由
-        - 不允许窗口跨度跳跃过大，除非有明确经济理由
-
-        候选多样性要求：
-        - 不允许 {int(requested_count)} 个候选只做窗口微调
-        - 不允许 {int(requested_count)} 个候选共享同一个主 operator skeleton
-        - 至少 1 个候选主要面向降低 turnover
-        - 至少 1 个候选主要面向降低与 parent 的相关性
-        - 至少 1 个候选要改变主刻画方式，但不能脱离 family 逻辑
-        {('- 至少 1 个候选要明确借用 donor motif，但必须翻译到当前 family 语义里' + chr(10)) if donor_motifs else ''}{('- 系统会先收集更宽的 seed-stage 候选，再轻量 rerank 到最终保留的 ' + str(int(final_count)) + ' 条；请优先保证 role 覆盖和结构差异' + chr(10)) if requested_count > final_count else ''}
-
-        不要输出以下坏模式：
-        {_family_constraint_block(family.anti_patterns)}
-
-        # 4. 分析要求
-        请先在内部完成分析，但不要展示推理过程。必须综合以下三个维度：
-        1. Optimization Strategy
-        2. Alpha Idea
-        3. Factor Interpretation
-
-        你最终输出的 explanation 必须把这三部分信息融合成自然语言，但要极短、直白、能让研究员快速理解。
+        {prompt_body}
 
         # 5. 输出格式要求（必须严格遵循）
         你必须生成 {int(requested_count)} 个 candidate，并且只能输出一个 JSON object。
@@ -705,6 +1033,7 @@ def export_manual_full_prompt(
     current_parent_expression: str | None = None,
     current_parent_row: dict[str, object] | None = None,
     current_model_name: str = "",
+    prompt_template_version: str = "current_compact",
 ) -> Path:
     bundle = build_refinement_prompt(
         seed_pool=seed_pool,
@@ -715,6 +1044,7 @@ def export_manual_full_prompt(
         current_parent_expression=current_parent_expression,
         current_parent_row=current_parent_row,
         current_model_name=current_model_name,
+        prompt_template_version=prompt_template_version,
     )
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import subprocess
 import sys
@@ -20,12 +21,17 @@ from ..config import (
 )
 from ..core.archive import utc_now_iso
 from ..core.seed_loader import load_seed_pool, resolve_family_formula
-from ..evaluation.redundancy import factor_series_correlation
+from ..evaluation.redundancy import factor_series_correlations
 from ..parsing.expression_engine import WideExpressionEngine
-from ..search import SearchPolicy
+from ..search import DecisionContext, DecisionEngine, FamilyDecisionState, SearchPolicy
+from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
-from ..search.scoring import pairwise_similarity, safe_float, winner_improved
+from ..search.scoring import pairwise_similarity, safe_float
 from ..search.state import SearchNode
+
+
+_FAMILY_LOOP_SERIES_CACHE_ROOT = Path(__file__).resolve().parents[3] / "artifacts" / "cache" / "family_loop_series"
+
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
@@ -38,6 +44,75 @@ def _read_json(path: Path) -> dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _family_loop_log(message: str) -> None:
+    print(message, flush=True)
+
+
+def _series_cache_key(
+    *,
+    family: str,
+    factor_name: str,
+    expression: str,
+    panel_path: str,
+    benchmark_path: str,
+    start: str,
+    end: str,
+) -> str:
+    payload = {
+        "family": str(family or ""),
+        "factor_name": str(factor_name or ""),
+        "expression": str(expression or ""),
+        "panel_path": str(panel_path or ""),
+        "benchmark_path": str(benchmark_path or ""),
+        "start": str(start or ""),
+        "end": str(end or ""),
+    }
+    return hashlib.sha1(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _series_cache_path(
+    *,
+    family: str,
+    factor_name: str,
+    expression: str,
+    panel_path: str,
+    benchmark_path: str,
+    start: str,
+    end: str,
+) -> Path:
+    cache_key = _series_cache_key(
+        family=family,
+        factor_name=factor_name,
+        expression=expression,
+        panel_path=panel_path,
+        benchmark_path=benchmark_path,
+        start=start,
+        end=end,
+    )
+    family_dir = _FAMILY_LOOP_SERIES_CACHE_ROOT / str(family or "unknown_family").strip()
+    return family_dir / f"{cache_key}.pkl"
+
+
+def _load_cached_series(path: Path) -> pd.Series | None:
+    try:
+        if not path.exists():
+            return None
+        series = pd.read_pickle(path)
+        if isinstance(series, pd.Series):
+            return series
+    except Exception:
+        return None
+    return None
+
+
+def _save_cached_series(path: Path, series: pd.Series) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        series.to_pickle(path)
+    except Exception:
+        return
 
 
 def _normalize_models(values: list[str]) -> list[str]:
@@ -297,6 +372,45 @@ def _compute_series_for_factor_or_expression(
     return None
 
 
+def _load_or_compute_series_for_factor_or_expression(
+    *,
+    family_name: str,
+    factor_name: str,
+    expression: str,
+    panel_path: str,
+    benchmark_path: str,
+    start: str,
+    end: str,
+    family: Any,
+    data: dict[str, pd.Series],
+    engine: WideExpressionEngine,
+    registry: Any,
+) -> tuple[pd.Series | None, bool]:
+    cache_path = _series_cache_path(
+        family=family_name,
+        factor_name=factor_name,
+        expression=expression,
+        panel_path=panel_path,
+        benchmark_path=benchmark_path,
+        start=start,
+        end=end,
+    )
+    cached = _load_cached_series(cache_path)
+    if cached is not None:
+        return cached, True
+    computed = _compute_series_for_factor_or_expression(
+        family=family,
+        factor_name=factor_name,
+        expression=expression,
+        data=data,
+        engine=engine,
+        registry=registry,
+    )
+    if computed is not None:
+        _save_cached_series(cache_path, computed)
+    return computed, False
+
+
 def _finite_corr(value: float) -> float | None:
     if pd.isna(value):
         return None
@@ -471,6 +585,9 @@ def collect_anchor_candidates(
     min_material_excess_gain: float,
     min_material_icir_gain: float,
 ) -> dict[str, Any]:
+    _family_loop_log(
+        f"[family_loop] collect_anchor_candidates start family={family} scheduler_dir={scheduler_dir}"
+    )
     candidates_by_id: dict[str, dict[str, Any]] = {}
     discovered_parent_metrics = dict(parent_metrics or {})
     parent_node = _node_from_payload(
@@ -549,6 +666,9 @@ def collect_anchor_candidates(
 
     if candidates_by_id:
         try:
+            _family_loop_log(
+                f"[family_loop] building corr context family={family} candidates={len(candidates_by_id)}"
+            )
             family_cfg, data, engine = _build_corr_data(
                 seed_pool_path=seed_pool_path,
                 family_name=family,
@@ -558,31 +678,71 @@ def collect_anchor_candidates(
                 end=end,
             )
             registry = create_default_registry()
-            true_parent_series = _compute_series_for_factor_or_expression(
-                family=family_cfg,
+            cache_hits = 0
+            true_parent_series, parent_cache_hit = _load_or_compute_series_for_factor_or_expression(
+                family_name=family,
                 factor_name=parent_name,
                 expression=parent_expression,
+                panel_path=panel_path,
+                benchmark_path=benchmark_path,
+                start=start,
+                end=end,
+                family=family_cfg,
                 data=data,
                 engine=engine,
                 registry=registry,
             )
+            cache_hits += int(parent_cache_hit)
+            if true_parent_series is not None:
+                _family_loop_log(
+                    f"[family_loop] parent series ready family={family} parent={parent_name or '(expr-only)'} cache_hit={parent_cache_hit}"
+                )
+            computed_series_count = 0
             for candidate in candidates_by_id.values():
                 candidate_id = str(candidate.get("candidate_id", "") or "").strip()
                 if not candidate_id:
                     continue
-                factor_series = _compute_series_for_factor_or_expression(
-                    family=family_cfg,
+                factor_series, cache_hit = _load_or_compute_series_for_factor_or_expression(
+                    family_name=family,
                     factor_name=str(candidate.get("factor_name", "") or ""),
                     expression=str(candidate.get("expression", "") or ""),
+                    panel_path=panel_path,
+                    benchmark_path=benchmark_path,
+                    start=start,
+                    end=end,
+                    family=family_cfg,
                     data=data,
                     engine=engine,
                     registry=registry,
                 )
                 if factor_series is not None:
                     series_by_candidate_id[candidate_id] = factor_series
+                    computed_series_count += 1
+                    cache_hits += int(cache_hit)
+            _family_loop_log(
+                f"[family_loop] candidate series ready family={family} computed={computed_series_count}/{len(candidates_by_id)} cache_hits={cache_hits}"
+            )
             corr_mode = "true_correlation"
         except Exception as exc:
             corr_context_error = f"{type(exc).__name__}: {exc}"
+            _family_loop_log(
+                f"[family_loop] corr context fallback family={family} error={corr_context_error}"
+            )
+
+    parent_corr_by_candidate_id: dict[str, float] = {}
+    if true_parent_series is not None and series_by_candidate_id:
+        _family_loop_log(
+            f"[family_loop] computing parent corr batch family={family} count={len(series_by_candidate_id)}"
+        )
+        parent_corr_raw = factor_series_correlations(
+            true_parent_series,
+            [(candidate_id, series) for candidate_id, series in series_by_candidate_id.items()],
+        )
+        parent_corr_by_candidate_id = {
+            candidate_id: abs(value)
+            for candidate_id, value in parent_corr_raw.items()
+            if _finite_corr(value) is not None
+        }
 
     enriched: list[dict[str, Any]] = []
     for candidate in candidates_by_id.values():
@@ -599,7 +759,7 @@ def collect_anchor_candidates(
         candidate_series = series_by_candidate_id.get(candidate_id)
         true_corr_to_parent = None
         if candidate_series is not None and true_parent_series is not None:
-            true_corr_to_parent = _finite_corr(abs(factor_series_correlation(candidate_series, true_parent_series)))
+            true_corr_to_parent = _finite_corr(parent_corr_by_candidate_id.get(candidate_id))
         true_parent_corr_guard_blocked = bool(
             true_corr_to_parent is not None
             and true_corr_to_parent >= float(max_true_parent_corr)
@@ -633,6 +793,10 @@ def collect_anchor_candidates(
 
     enriched_sorted = sorted(enriched, key=_best_key, reverse=True)
     stronger_candidates: list[dict[str, Any]] = []
+    if series_by_candidate_id:
+        _family_loop_log(
+            f"[family_loop] computing stronger-sibling corr family={family} ordered_candidates={len(enriched_sorted)}"
+        )
     for candidate in enriched_sorted:
         candidate_id = str(candidate.get("candidate_id", "") or "").strip()
         candidate_series = series_by_candidate_id.get(candidate_id)
@@ -640,17 +804,25 @@ def collect_anchor_candidates(
         strongest_name = ""
         strongest_metrics: dict[str, Any] | None = None
         if candidate_series is not None:
+            stronger_refs: list[tuple[str, pd.Series]] = []
+            stronger_meta: dict[str, dict[str, Any]] = {}
             for stronger in stronger_candidates:
-                stronger_series = series_by_candidate_id.get(str(stronger.get("candidate_id", "") or "").strip())
+                stronger_id = str(stronger.get("candidate_id", "") or "").strip()
+                stronger_series = series_by_candidate_id.get(stronger_id)
                 if stronger_series is None:
                     continue
-                corr_value = _finite_corr(abs(factor_series_correlation(candidate_series, stronger_series)))
-                if corr_value is None:
-                    continue
-                if strongest_corr is None or corr_value > strongest_corr:
-                    strongest_corr = corr_value
-                    strongest_name = str(stronger.get("factor_name", "") or "")
-                    strongest_metrics = stronger
+                stronger_refs.append((stronger_id, stronger_series))
+                stronger_meta[stronger_id] = stronger
+            if stronger_refs:
+                corr_map = factor_series_correlations(candidate_series, stronger_refs)
+                for stronger_id, corr_value_raw in corr_map.items():
+                    corr_value = _finite_corr(abs(corr_value_raw))
+                    if corr_value is None:
+                        continue
+                    if strongest_corr is None or corr_value > strongest_corr:
+                        strongest_corr = corr_value
+                        strongest_metrics = stronger_meta.get(stronger_id)
+                        strongest_name = str((strongest_metrics or {}).get("factor_name", "") or "")
         if strongest_corr is not None:
             material_gain_vs_stronger = _material_gain(
                 candidate,
@@ -669,7 +841,12 @@ def collect_anchor_candidates(
             candidate["corr_guard_blocked"] = bool(candidate.get("corr_guard_blocked") or stronger_guard_blocked)
         stronger_candidates.append(candidate)
 
+    _family_loop_log(
+        f"[family_loop] collect_anchor_candidates done family={family} candidates={len(enriched_sorted)} corr_mode={corr_mode}"
+    )
+
     return {
+        "family": family,
         "parent_name": parent_name,
         "parent_expression": parent_expression,
         "parent_metrics": discovered_parent_metrics,
@@ -684,78 +861,39 @@ def collect_anchor_candidates(
 def select_best_anchor(
     *,
     collected: dict[str, Any],
+    target_profile: str = "raw_alpha",
     min_icir: float,
     min_sharpe: float,
     max_turnover: float,
     min_metrics_completeness: float,
 ) -> dict[str, Any]:
-    passed: list[dict[str, Any]] = []
-    rejected: list[dict[str, Any]] = []
-
-    for raw in list(collected.get("candidates") or []):
-        item = dict(raw)
-        gate_reasons: list[str] = []
-        status = str(item.get("status", "") or item.get("decision", "")).strip().lower()
-        if status not in {"research_winner", "winner", "research_keep", "keep"}:
-            gate_reasons.append("status_not_promotable")
-        anchor_eligible = ("winner" in status) or _safe_bool(item.get("eligible_for_best_node", True))
-        if not anchor_eligible:
-            gate_reasons.append("not_eligible_for_best_node")
-        if safe_float(item.get("metrics_completeness"), default=0.0) < float(min_metrics_completeness):
-            gate_reasons.append("metrics_incomplete")
-        if safe_float(item.get("quick_rank_icir"), default=float("-inf")) < float(min_icir):
-            gate_reasons.append("icir_below_threshold")
-        if safe_float(item.get("net_sharpe"), default=float("-inf")) < float(min_sharpe):
-            gate_reasons.append("sharpe_below_threshold")
-        if safe_float(item.get("mean_turnover"), default=float("inf")) > float(max_turnover):
-            gate_reasons.append("turnover_above_threshold")
-        if _safe_bool(item.get("true_parent_corr_guard_blocked")):
-            gate_reasons.append("true_parent_corr_guard_blocked")
-        if _safe_bool(item.get("stronger_candidate_corr_guard_blocked")):
-            gate_reasons.append("stronger_candidate_corr_guard_blocked")
-        if _safe_bool(item.get("heuristic_parent_guard_blocked")):
-            gate_reasons.append("heuristic_parent_guard_blocked")
-        if _safe_bool(item.get("corr_guard_blocked")) and not any(
-            reason.endswith("corr_guard_blocked") for reason in gate_reasons
-        ):
-            gate_reasons.append("corr_guard_blocked")
-
-        item["graduation_gate_reasons"] = list(gate_reasons)
-        item["graduation_passed"] = not gate_reasons
-        if item["graduation_passed"]:
-            passed.append(item)
-        else:
-            rejected.append(item)
-
-    def _sort_key(item: dict[str, Any]) -> tuple[float, float, float, float, float, float, float]:
-        status_rank = 1.0 if "winner" in str(item.get("status", "")).lower() else 0.0
-        return (
-            safe_float(item.get("net_excess_ann_return"), default=float("-inf")),
-            safe_float(item.get("quick_rank_icir"), default=float("-inf")),
-            safe_float(item.get("net_sharpe"), default=float("-inf")),
-            safe_float(item.get("winner_score"), default=float("-inf")),
-            -safe_float(item.get("mean_turnover"), default=float("inf")),
-            status_rank,
-            safe_float(item.get("quick_rank_ic_mean"), default=float("-inf")),
-        )
-
-    passed_sorted = sorted(passed, key=_sort_key, reverse=True)
-    best_anchor = dict(passed_sorted[0]) if passed_sorted else {}
-    if best_anchor:
-        best_anchor["selected_as_anchor"] = True
-
-    return {
-        "parent_name": collected.get("parent_name", ""),
-        "parent_expression": collected.get("parent_expression", ""),
-        "parent_metrics": dict(collected.get("parent_metrics") or {}),
-        "corr_mode": collected.get("corr_mode", ""),
-        "corr_context_error": collected.get("corr_context_error", ""),
-        "true_parent_corr_threshold": safe_float(collected.get("true_parent_corr_threshold"), default=0.0),
-        "true_sibling_corr_threshold": safe_float(collected.get("true_sibling_corr_threshold"), default=0.0),
-        "passed_candidates": passed_sorted,
-        "rejected_candidates": rejected,
-        "best_anchor": best_anchor,
-    }
+    context = DecisionContext.from_runtime(
+        family=str(collected.get("family", "") or collected.get("parent_name", "") or ""),
+        stage_mode="focused_refine",
+        target_profile=str(target_profile or "raw_alpha"),
+        policy_preset="balanced",
+        context_profile=resolve_context_profile(
+            ContextEvidence.from_runtime(
+                family=str(collected.get("family", "") or collected.get("parent_name", "") or ""),
+                stage_mode="focused_refine",
+                target_profile=str(target_profile or "raw_alpha"),
+                policy_preset="balanced",
+                is_seed_stage=False,
+                has_bootstrap_frontier=False,
+                has_donor_motifs=False,
+                has_decorrelation_targets=False,
+                selected_parent_kind="graduated_broad_candidate",
+            )
+        ),
+    )
+    engine = DecisionEngine(context)
+    return engine.select_anchor(
+        collected=collected,
+        min_icir=min_icir,
+        min_sharpe=min_sharpe,
+        max_turnover=max_turnover,
+        min_metrics_completeness=min_metrics_completeness,
+    )
 
 
 def build_family_loop_summary(
@@ -773,101 +911,64 @@ def build_family_loop_summary(
     broad_returncode: int = 0,
     focused_returncode: int = 0,
 ) -> dict[str, Any]:
-    broad_best = dict(broad_summary.get("best_node") or {})
-    broad_best_candidate = dict(
-        broad_summary.get("last_round_best_candidate")
-        or broad_summary.get("last_round_best_keep")
-        or broad_summary.get("last_round_winner")
-        or {}
-    )
     broad_snapshot = _snapshot_broad_results(broad_run_dir) if broad_run_dir is not None else {}
-    focused_best = dict(focused_summary.get("best_node") or {})
-    focused_best_candidate = dict(
-        focused_summary.get("last_round_best_candidate")
-        or focused_summary.get("last_round_best_keep")
-        or focused_summary.get("last_round_winner")
-        or {}
+    state = FamilyDecisionState.from_family_loop_inputs(
+        family=family,
+        target_profile=target_profile,
+        broad_summary=broad_summary,
+        broad_snapshot=broad_snapshot,
+        anchor_selection=anchor_selection,
+        focused_summary=focused_summary,
+        broad_returncode=int(broad_returncode),
+        focused_returncode=int(focused_returncode),
     )
-    broad_best_keep = dict(broad_summary.get("last_round_best_keep") or {})
-    focused_best_keep = dict(focused_summary.get("last_round_best_keep") or {})
-    best_anchor = dict(anchor_selection.get("best_anchor") or {})
-    broad_stop_reason = str(broad_summary.get("stop_reason", "") or "")
-    focused_stop_reason = str(focused_summary.get("stop_reason", "") or "")
-    passed_candidates = list(anchor_selection.get("passed_candidates") or [])
-
-    broad_display = dict(broad_best_candidate or broad_best)
+    broad_display = dict(state.broad_display_node or {})
     if not _has_any_eval_metric(broad_display):
         strongest_evaluated = dict(broad_snapshot.get("strongest_evaluated") or {})
         if strongest_evaluated:
             broad_display = strongest_evaluated
-    focused_display = dict(focused_best_candidate or focused_best)
-
-    def _strong_anchor(payload: dict[str, Any]) -> bool:
-        return (
-            safe_float(payload.get("net_excess_ann_return"), default=float("-inf")) > 0.0
-            and safe_float(payload.get("quick_rank_icir"), default=float("-inf")) >= 0.60
-            and safe_float(payload.get("net_sharpe"), default=float("-inf")) >= 4.0
-        )
-
-    recommended_stage_preset = ""
-    if not best_anchor:
-        recommendation = "return_to_broad"
-        reason = "broad 阶段没有候选通过 anchor graduation gate"
-        recommended_stage_preset = "new_family_broad"
-    elif focused_returncode != 0 or not focused_display:
-        if _strong_anchor(best_anchor):
-            recommendation = "donor_mode"
-            reason = "focused 阶段没有形成新的 best_node，但当前 anchor 已足够强，适合转 donor/confirmation"
-            recommended_stage_preset = "donor_validation"
-        else:
-            recommendation = "freeze_anchor"
-            reason = "anchor 已选出，但 focused 阶段没有形成可比 best candidate"
-    else:
-        improved = winner_improved(focused_display, best_anchor)
-        delta_excess = safe_float(focused_display.get("net_excess_ann_return"), default=0.0) - safe_float(
-            best_anchor.get("net_excess_ann_return"), default=0.0
-        )
-        delta_icir = safe_float(focused_display.get("quick_rank_icir"), default=0.0) - safe_float(
-            best_anchor.get("quick_rank_icir"), default=0.0
-        )
-        delta_sharpe = safe_float(focused_display.get("net_sharpe"), default=0.0) - safe_float(
-            best_anchor.get("net_sharpe"), default=0.0
-        )
-        material_improvement = delta_excess >= 0.02 or delta_icir >= 0.05 or delta_sharpe >= 0.25
-        if improved and material_improvement:
-            recommendation = "continue_focused"
-            reason = "focused best node 相对 broad anchor 仍有实质提升"
-            recommended_stage_preset = "focused_refine"
-        elif improved:
-            recommendation = "confirmation"
-            reason = "focused best node 仍优于 anchor，但增益已转小，适合进入轻量确认阶段"
-            recommended_stage_preset = "confirmation"
-        else:
-            if _strong_anchor(best_anchor):
-                recommendation = "donor_mode"
-                reason = "focused 阶段没有继续抬高 anchor，但当前 anchor 足够强，适合转 donor/confirmation"
-                recommended_stage_preset = "donor_validation"
-            elif len(passed_candidates) >= 2:
-                recommendation = "return_to_broad"
-                reason = "focused 未继续改善，而且 broad 阶段仍有其他通过 gate 的候选，建议回到 broad 重新展开"
-                recommended_stage_preset = "new_family_broad"
-            else:
-                recommendation = "freeze_anchor"
-                reason = "focused 阶段没有继续抬高 anchor 的综合质量"
-
-    delta = {}
-    if best_anchor and focused_display:
-        for metric in (
-            "quick_rank_ic_mean",
-            "quick_rank_icir",
-            "net_ann_return",
-            "net_excess_ann_return",
-            "net_sharpe",
-            "mean_turnover",
-        ):
-            delta[f"delta_anchor_to_focused_{metric}"] = safe_float(
-                focused_display.get(metric), default=0.0
-            ) - safe_float(best_anchor.get(metric), default=0.0)
+    decision_context = DecisionContext.from_runtime(
+        family=family,
+        stage_mode="family_loop",
+        target_profile=target_profile,
+        policy_preset="balanced",
+        context_profile=resolve_context_profile(
+            ContextEvidence.from_runtime(
+                family=family,
+                stage_mode="family_loop",
+                target_profile=target_profile,
+                policy_preset="balanced",
+                is_seed_stage=False,
+                has_bootstrap_frontier=False,
+                has_donor_motifs=False,
+                has_decorrelation_targets=False,
+                selected_parent_kind="family_loop_anchor",
+            )
+        ),
+    )
+    decision_engine = DecisionEngine(decision_context)
+    next_action = decision_engine.recommend_next_action(state)
+    orchestration_evidence = ContextEvidence.from_runtime(
+        family=family,
+        stage_mode="family_loop",
+        target_profile=target_profile,
+        policy_preset="balanced",
+        is_seed_stage=False,
+        has_bootstrap_frontier=False,
+        has_donor_motifs=False,
+        has_decorrelation_targets=False,
+        selected_parent_kind="family_loop_anchor",
+    )
+    orchestration_context_profile = resolve_context_profile(orchestration_evidence)
+    orchestration_profile = resolve_orchestration_profile(
+        evidence=orchestration_evidence,
+        context_profile=orchestration_context_profile,
+        last_round_status="ok" if int(focused_returncode) == 0 else "failed",
+        last_round_search_improved=bool(next_action.get("recommended_next_step") == "continue_focused"),
+        last_round_winner=dict(state.focused_best_candidate or state.broad_best_candidate or {}),
+        last_round_keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
+        recommended_stage_mode_hint=str(next_action.get("recommended_next_stage_preset", "") or ""),
+    )
 
     return {
         "family": family,
@@ -880,22 +981,27 @@ def build_family_loop_summary(
         "focused_run_dir": str(focused_run_dir) if focused_run_dir else "",
         "broad_prompt_trace": dict(broad_summary.get("prompt_trace") or {}),
         "focused_prompt_trace": dict(focused_summary.get("prompt_trace") or {}),
-        "broad_stop_reason": broad_stop_reason,
-        "focused_stop_reason": focused_stop_reason,
-        "broad_best_node": broad_best,
-        "broad_best_candidate": broad_best_candidate,
-        "broad_best_keep": broad_best_keep,
+        "broad_stop_reason": state.broad_stop_reason,
+        "focused_stop_reason": state.focused_stop_reason,
+        "broad_best_node": state.broad_best_node,
+        "broad_best_candidate": state.broad_best_candidate,
+        "broad_best_keep": state.broad_best_keep,
         "broad_display_node": broad_display,
         "broad_candidate_snapshot": broad_snapshot,
         "anchor_selection": anchor_selection,
-        "focused_best_node": focused_best,
-        "focused_best_candidate": focused_best_candidate,
-        "focused_best_keep": focused_best_keep,
-        "focused_display_node": focused_display,
-        "comparison": delta,
-        "recommended_next_step": recommendation,
-        "recommended_next_stage_preset": recommended_stage_preset,
-        "recommended_reason": reason,
+        "focused_best_node": state.focused_best_node,
+        "focused_best_candidate": state.focused_best_candidate,
+        "focused_best_keep": state.focused_best_keep,
+        "focused_display_node": state.focused_display_node,
+        "comparison": dict(next_action.get("comparison") or {}),
+        "recommended_next_step": next_action.get("recommended_next_step", ""),
+        "recommended_next_stage_preset": next_action.get("recommended_next_stage_preset", ""),
+        "recommended_reason": next_action.get("recommended_reason", ""),
+        "next_action_mode": next_action.get("next_action_mode", ""),
+        "next_action_trace": dict(next_action.get("next_action_trace") or {}),
+        "orchestration_context_evidence": orchestration_evidence.to_dict(),
+        "orchestration_context_profile": orchestration_context_profile.to_dict(),
+        "orchestration_profile": orchestration_profile.to_dict(),
         "broad_returncode": int(broad_returncode),
         "focused_returncode": int(focused_returncode),
     }
@@ -914,6 +1020,7 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     comparison = dict(summary.get("comparison") or {})
     broad_trace = dict(summary.get("broad_prompt_trace") or {})
     focused_trace = dict(summary.get("focused_prompt_trace") or {})
+    orchestration_profile = dict(summary.get("orchestration_profile") or {})
 
     def _metric_line(payload: dict[str, Any]) -> str:
         if not payload:
@@ -937,6 +1044,7 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- focused_run_dir: `{summary.get('focused_run_dir', '')}`",
         f"- recommended_next_step: `{summary.get('recommended_next_step', '')}`",
         f"- recommended_next_stage_preset: `{summary.get('recommended_next_stage_preset', '')}`",
+        f"- next_action_mode: `{summary.get('next_action_mode', '')}`",
         f"- reason: {summary.get('recommended_reason', '')}",
         f"- broad_stop_reason: `{summary.get('broad_stop_reason', '')}`",
         f"- focused_stop_reason: `{summary.get('focused_stop_reason', '')}`",
@@ -954,6 +1062,14 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- focused_requested_candidate_count: `{focused_trace.get('requested_candidate_count', '')}`",
         f"- focused_bootstrap_frontier_count: `{focused_trace.get('bootstrap_frontier_count', '')}`",
         f"- focused_donor_motifs_count: `{focused_trace.get('donor_motifs_count', '')}`",
+        "",
+        "## Orchestration Trace",
+        f"- recommended_stage_mode: `{orchestration_profile.get('recommended_stage_mode', '')}`",
+        f"- round_strategy: `{orchestration_profile.get('round_strategy', '')}`",
+        f"- promotion_bias: `{orchestration_profile.get('promotion_bias', '')}`",
+        f"- parent_selection_bias: `{orchestration_profile.get('parent_selection_bias', '')}`",
+        f"- termination_bias: `{orchestration_profile.get('termination_bias', '')}`",
+        f"- confidence: `{orchestration_profile.get('confidence', '')}`",
         "",
         "## Broad Strongest",
         f"- factor: `{broad.get('factor_name', '')}`",
@@ -985,6 +1101,7 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     if anchor_selection:
         lines.extend(
             [
+                f"- anchor_selection_mode: `{anchor_selection.get('anchor_selection_mode', '')}`",
                 f"- corr_mode: `{anchor_selection.get('corr_mode', '')}`",
                 f"- passed_count: `{len(anchor_selection.get('passed_candidates') or [])}`",
                 f"- rejected_count: `{len(anchor_selection.get('rejected_candidates') or [])}`",
@@ -1046,4 +1163,18 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
             lines.append(f"- {key}: {safe_float(value, default=0.0):.4f}")
     else:
         lines.append("- no comparable focused delta")
+    next_action_trace = dict(summary.get("next_action_trace") or {})
+    if next_action_trace:
+        lines.extend(["", "## Next Action Trace"])
+        for key in (
+            "target_profile",
+            "stage_mode",
+            "broad_stop_reason",
+            "focused_stop_reason",
+            "passed_anchor_candidate_count",
+            "strong_anchor",
+            "focused_improved_vs_anchor",
+        ):
+            if key in next_action_trace:
+                lines.append(f"- {key}: `{next_action_trace.get(key)}`")
     return "\n".join(lines) + "\n"

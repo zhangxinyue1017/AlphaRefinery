@@ -112,7 +112,8 @@ factors_store/factors/
 - `seed_baselines.py`
   - baseline / seed 基线因子
 - `llm_refined/`
-  - LLM refine 后正式沉淀进 registry 的 family 因子
+  - 本地或私有沉淀的 refined family 因子包
+  - 公开仓库中允许只保留包骨架，不包含私有 `*_family.py`
 
 ### `llm_refined/` 的定位
 
@@ -120,26 +121,15 @@ factors_store/factors/
 factors_store/factors/llm_refined/
 ├── __init__.py
 ├── common.py
-├── alpha003_family.py
-├── alpha013_family.py
-├── alpha016_family.py
-├── alpha040_family.py
-├── alpha044_family.py
-├── alpha069_family.py
-├── alpha095_family.py
-├── alpha132_family.py
-├── amplitude_structure_family.py
-├── salience_panic_family.py
-├── gp_downside_price_position_family.py
-└── gp_relative_volume_pressure_family.py
+└── *_family.py  (local/private optional)
 ```
 
-这是“已经正式收编进库”的 LLM refined 因子层。
+这是本地 / 私有可选的 LLM refined 因子层。
 
 一句话理解：
 
 - `artifacts/llm_refine_*` 是研究产物
-- `factors/llm_refined/*.py` 是正式沉淀后的代码资产
+- `factors/llm_refined/*.py` 可以是本地私有代码资产
 
 ## 3. LLM refine 子系统：`llm_refine/`
 

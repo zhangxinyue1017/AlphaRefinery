@@ -28,6 +28,7 @@ from ..core.archive import (
     create_run_dir,
     ensure_run_subdir,
     expression_hash,
+    get_candidate_record,
     get_latest_family_round,
     get_latest_family_winner,
     init_archive_db,
@@ -45,7 +46,8 @@ from ..core.archive import (
 from ..evaluation.evaluator import evaluate_refinement_run
 from ..core.models import LLMProposal, LLMProviderConfig, RefinementCandidate
 from ..parsing.parser import deduplicate_candidates, parse_refinement_response
-from ..prompting.prompt_builder import build_refinement_prompt, load_prompt_history_row
+from ..prompting.prompt_builder import PROMPT_TEMPLATE_VERSIONS, build_refinement_prompt, load_prompt_history_row
+from ..prompting.prompt_plan import build_prompt_plan
 from ..core.providers import OpenAICompatProvider
 from ..evaluation.redundancy import filter_structurally_redundant, structure_filter_markdown
 from ..knowledge.next_experiments import retrieve_runtime_donor_motifs
@@ -68,6 +70,7 @@ from ..core.seed_loader import (
 )
 from ..parsing.validator import validate_expression
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
+from ..search.context_resolver import ContextEvidence, resolve_context_profile
 from ..search.scoring import safe_float
 
 _STAGE_MODE_CHOICES = (
@@ -157,7 +160,10 @@ def _write_json(path: str | os.PathLike[str], payload: dict[str, object]) -> Non
 
 def _build_prompt_trace(
     *,
+    family: str,
     stage_mode: str,
+    target_profile: str,
+    policy_preset: str,
     seed_stage_active: bool,
     selected_parent: object,
     requested_candidate_count: int,
@@ -165,9 +171,38 @@ def _build_prompt_trace(
     role_slots: list[str],
     bootstrap_frontier: list[dict[str, object]],
     donor_motifs: list[dict[str, object]],
+    decorrelation_targets: list[str],
+    prompt_template_version: str,
 ) -> dict[str, object]:
+    context_evidence = ContextEvidence.from_runtime(
+        family=family,
+        stage_mode=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        is_seed_stage=seed_stage_active,
+        has_bootstrap_frontier=bool(bootstrap_frontier),
+        has_donor_motifs=bool(donor_motifs),
+        has_decorrelation_targets=bool(decorrelation_targets),
+        selected_parent_kind=str(getattr(selected_parent, "node_kind", "") or ""),
+        requested_candidate_count=int(requested_candidate_count),
+        final_candidate_target=int(final_candidate_target),
+    )
+    context_profile = resolve_context_profile(context_evidence)
+    prompt_plan = build_prompt_plan(
+        stage_mode=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        is_seed_stage=seed_stage_active,
+        has_donor_motifs=bool(donor_motifs),
+        has_bootstrap_frontier=bool(bootstrap_frontier),
+        has_decorrelation_targets=bool(decorrelation_targets),
+        context_profile=context_profile,
+    )
     return {
         "stage_mode": str(stage_mode or "auto"),
+        "target_profile": str(target_profile or "raw_alpha"),
+        "policy_preset": str(policy_preset or "balanced"),
+        "prompt_template_version": str(prompt_template_version or "current_compact"),
         "seed_stage_active": bool(seed_stage_active),
         "selected_parent_kind": str(getattr(selected_parent, "node_kind", "") or ""),
         "selected_parent_factor_name": str(getattr(selected_parent, "factor_name", "") or ""),
@@ -176,7 +211,22 @@ def _build_prompt_trace(
         "role_slots": list(role_slots),
         "bootstrap_frontier_count": len(list(bootstrap_frontier or [])),
         "donor_motifs_count": len(list(donor_motifs or [])),
+        "decorrelation_target_count": len(list(decorrelation_targets or [])),
+        "decorrelation_targets": list(decorrelation_targets or []),
+        "context_evidence": context_evidence.to_dict(),
+        "context_profile": context_profile.to_dict(),
+        "prompt_plan": prompt_plan.to_dict(),
     }
+
+
+def _normalize_multi_text(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    out: list[str] = []
+    for raw in values or ():
+        for part in str(raw).split(","):
+            text = part.strip()
+            if text and text not in out:
+                out.append(text)
+    return tuple(out)
 
 
 def _hard_validation_filter_reason(candidate: RefinementCandidate) -> str:
@@ -297,6 +347,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="retry provider generation this many times when the response cannot be parsed as valid JSON",
     )
     parser.add_argument("--additional-notes", default="", help="extra run-specific notes appended to the prompt")
+    parser.add_argument(
+        "--decorrelation-target",
+        action="append",
+        default=[],
+        help="explicit factor(s) to decorrelate from; may be repeated or passed as comma-separated names",
+    )
     parser.add_argument("--dry-run", action="store_true", help="only write prompts, do not call the provider")
     parser.add_argument("--print-only", action="store_true", help="print the prompt bundle and exit")
     parser.add_argument("--skip-eval", action="store_true", help="skip automatic family backtest for generated candidates")
@@ -338,6 +394,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=_STAGE_MODE_CHOICES,
         help="explicit orchestration stage label used for prompt routing and trace auditing",
     )
+    parser.add_argument(
+        "--prompt-template-version",
+        default="current_compact",
+        choices=PROMPT_TEMPLATE_VERSIONS,
+        help="prompt template variant used for this run",
+    )
     return parser
 
 
@@ -357,6 +419,12 @@ def main() -> int:
     stage_mode = str(args.stage_mode or "auto").strip() or "auto"
     explicit_parent_name = args.current_parent_name.strip()
     explicit_parent_expression = args.current_parent_expression.strip()
+    explicit_parent_candidate_id = args.parent_candidate_id.strip()
+    explicit_parent_record = (
+        get_candidate_record(db_path=archive_db, candidate_id=explicit_parent_candidate_id)
+        if explicit_parent_name and explicit_parent_candidate_id
+        else None
+    )
     bootstrap_frontier = build_bootstrap_frontier(seed_pool=seed_pool, family=family)
     bootstrap_parent = select_bootstrap_parent(bootstrap_frontier)
     forced_seed_stage = stage_mode == "new_family_broad"
@@ -369,6 +437,7 @@ def main() -> int:
     )
     effective_parent_expression = (
         explicit_parent_expression
+        or (str((explicit_parent_record or {}).get("expression", "")) if explicit_parent_name else "")
         or (str(latest_winner.get("expression", "")) if latest_winner else str(bootstrap_parent.get("expression", "")))
         or resolve_family_formula(family, effective_parent_name)
     )
@@ -378,7 +447,8 @@ def main() -> int:
             resolve_factor_direction(family, effective_parent_name),
         )
     effective_parent_candidate_id = (
-        args.parent_candidate_id.strip()
+        explicit_parent_candidate_id
+        or (str((explicit_parent_record or {}).get("candidate_id", "")) if explicit_parent_name else "")
         or (str(latest_winner.get("candidate_id", "")) if latest_winner and not explicit_parent_name else "")
         or make_seed_candidate_id(effective_parent_name)
     )
@@ -397,6 +467,7 @@ def main() -> int:
         role_slots=role_slots,
         seed_stage_active=seed_stage_active,
     )
+    decorrelation_targets = _normalize_multi_text(args.decorrelation_target)
     search_budget = SearchBudget(
         max_rounds=1,
         family_budget=1,
@@ -430,11 +501,11 @@ def main() -> int:
             )
         ),
         status=str((latest_winner or {}).get("status", "") or ("explicit_seed" if explicit_parent_name else "seed")),
-        source_run_id=str((latest_winner or {}).get("run_id", "")),
-        source_model=str((latest_winner or {}).get("source_model", "")),
-        source_provider=str((latest_winner or {}).get("source_provider", "")),
-        round_id=int((latest_winner or {}).get("round_id") or 0),
-        metrics=latest_winner or bootstrap_parent or {},
+        source_run_id=str((explicit_parent_record or latest_winner or {}).get("run_id", "")),
+        source_model=str((explicit_parent_record or latest_winner or {}).get("source_model", "")),
+        source_provider=str((explicit_parent_record or latest_winner or {}).get("source_provider", "")),
+        round_id=int((explicit_parent_record or latest_winner or {}).get("round_id") or 0),
+        metrics=explicit_parent_record or latest_winner or bootstrap_parent or {},
     )
     selected_parent = engine.select_next() or seed_node
     donor_motifs = (
@@ -449,7 +520,10 @@ def main() -> int:
         else []
     )
     prompt_trace = _build_prompt_trace(
+        family=family.family,
         stage_mode=stage_mode,
+        target_profile=str(args.target_profile),
+        policy_preset=str(args.policy_preset),
         seed_stage_active=seed_stage_active,
         selected_parent=selected_parent,
         requested_candidate_count=int(requested_candidate_count),
@@ -457,6 +531,8 @@ def main() -> int:
         role_slots=list(role_slots),
         bootstrap_frontier=bootstrap_frontier,
         donor_motifs=donor_motifs,
+        decorrelation_targets=list(decorrelation_targets),
+        prompt_template_version=str(args.prompt_template_version),
     )
     prompt_parent_row = load_prompt_history_row(seed_pool, selected_parent.factor_name, family=family)
     prompt = build_refinement_prompt(
@@ -476,6 +552,26 @@ def main() -> int:
         donor_motifs=donor_motifs,
         bootstrap_frontier=bootstrap_frontier,
         is_seed_stage=seed_stage_active,
+        decorrelation_targets=decorrelation_targets,
+        stage_mode=stage_mode,
+        target_profile=str(args.target_profile),
+        policy_preset=str(args.policy_preset),
+        prompt_template_version=str(args.prompt_template_version),
+        context_profile=resolve_context_profile(
+            ContextEvidence.from_runtime(
+                family=family.family,
+                stage_mode=stage_mode,
+                target_profile=str(args.target_profile),
+                policy_preset=str(args.policy_preset),
+                is_seed_stage=seed_stage_active,
+                has_bootstrap_frontier=bool(bootstrap_frontier),
+                has_donor_motifs=bool(donor_motifs),
+                has_decorrelation_targets=bool(decorrelation_targets),
+                selected_parent_kind=str(getattr(selected_parent, "node_kind", "") or ""),
+                requested_candidate_count=int(requested_candidate_count),
+                final_candidate_target=int(args.n_candidates),
+            )
+        ),
     )
     run_dir = create_run_dir(family=family.family, runs_dir=args.runs_dir)
 
@@ -531,6 +627,7 @@ def main() -> int:
             "role_slots": list(role_slots),
             "bootstrap_frontier": bootstrap_frontier,
             "donor_motifs": donor_motifs,
+            "decorrelation_targets": list(decorrelation_targets),
         },
     )
 
@@ -902,6 +999,7 @@ def main() -> int:
                 archive_db=archive_db,
                 auto_apply_promotion=args.auto_apply_promotion,
                 stage_mode=stage_mode,
+                decorrelation_targets=decorrelation_targets,
             )
             print(f"[saved] family_backtest_summary={eval_paths['family_backtest_summary']}")
             print(f"[saved] family_backtest_ranked={eval_paths['family_backtest_ranked']}")
@@ -976,6 +1074,7 @@ def main() -> int:
             "search": engine.summary(),
             "bootstrap_frontier": bootstrap_frontier,
             "donor_motifs": donor_motifs,
+            "decorrelation_targets": list(decorrelation_targets),
             "light_rerank": light_rerank_report,
             "reflection": reflection_card,
         }

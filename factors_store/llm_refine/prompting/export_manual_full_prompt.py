@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .prompt_builder import build_refinement_prompt
+from .prompt_builder import PROMPT_TEMPLATE_VERSIONS, build_refinement_prompt
 from ..core.seed_loader import DEFAULT_SEED_POOL, load_seed_pool, resolve_preferred_refine_seed
 
 
@@ -14,6 +14,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed-pool", default=str(DEFAULT_SEED_POOL), help="seed pool yaml path")
     parser.add_argument("--n-candidates", type=int, default=3, help="number of requested candidates")
     parser.add_argument("--output", required=True, help="output txt path")
+    parser.add_argument(
+        "--prompt-template-version",
+        default="current_compact",
+        choices=PROMPT_TEMPLATE_VERSIONS,
+        help="prompt template variant to export",
+    )
     return parser
 
 
@@ -27,6 +33,7 @@ def main() -> int:
         family=family,
         n_candidates=int(args.n_candidates),
         current_parent_name=parent_name,
+        prompt_template_version=str(args.prompt_template_version),
     )
     text = f"系统提示词：\n{prompt.system_prompt}\n\n用户提示词：\n{prompt.user_prompt}\n"
     output_path = Path(args.output)

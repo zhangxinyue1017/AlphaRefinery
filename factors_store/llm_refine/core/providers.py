@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import time
 from typing import Sequence
 
@@ -47,6 +49,12 @@ class OpenAICompatProvider:
                 except Exception as exc:
                     last_error = exc
                     if not self._is_retryable_error(exc) or attempt >= 2:
+                        if self._should_try_curl_fallback(exc):
+                            return self._generate_via_curl(
+                                messages=messages,
+                                max_tokens=request_max_tokens,
+                                restored_proxy_env=removed_proxy_env,
+                            )
                         raise
                     time.sleep(1.5 * (attempt + 1))
                     continue
@@ -80,11 +88,83 @@ class OpenAICompatProvider:
                     f"max_tokens={request_max_tokens})"
                 )
             if last_error is not None:
+                if self._should_try_curl_fallback(last_error):
+                    return self._generate_via_curl(
+                        messages=messages,
+                        max_tokens=request_max_tokens,
+                        restored_proxy_env=removed_proxy_env,
+                    )
                 raise last_error
         finally:
             for key, value in removed_proxy_env.items():
                 os.environ[key] = value
         raise RuntimeError("provider request loop exited without a response")
+
+    def _generate_via_curl(
+        self,
+        *,
+        messages: Sequence[dict[str, str]],
+        max_tokens: int,
+        restored_proxy_env: dict[str, str],
+    ) -> str:
+        payload = {
+            "model": self.config.model,
+            "messages": list(messages),
+            "temperature": self.config.temperature,
+            "max_tokens": int(max_tokens),
+        }
+        endpoint = self.config.base_url.rstrip("/") + "/chat/completions"
+        env = os.environ.copy()
+        for key, value in restored_proxy_env.items():
+            env[key] = value
+        command = [
+            "curl",
+            "-sS",
+            endpoint,
+            "-H",
+            f"Authorization: Bearer {self.config.api_key}",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            json.dumps(payload, ensure_ascii=False),
+        ]
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=max(30.0, float(self.config.timeout)),
+            env=env,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            stdout = (completed.stdout or "").strip()
+            detail = stderr or stdout or f"curl exited with code {completed.returncode}"
+            raise RuntimeError(f"curl fallback failed: {detail}")
+
+        try:
+            response = json.loads(completed.stdout)
+        except Exception as exc:
+            preview = (completed.stdout or "").strip()[:400]
+            raise RuntimeError(f"curl fallback returned invalid JSON: {preview}") from exc
+
+        error_payload = response.get("error")
+        if error_payload:
+            raise RuntimeError(f"curl fallback provider error: {error_payload}")
+
+        choices = response.get("choices") or []
+        if not choices:
+            raise RuntimeError("curl fallback returned no choices")
+        message = choices[0].get("message") or {}
+        content = self._extract_content(message.get("content"))
+        if content:
+            return content
+        reasoning = self._extract_content(message.get("reasoning_content"))
+        refusal = self._extract_content(message.get("refusal"))
+        raise RuntimeError(
+            "curl fallback returned empty content "
+            f"(reasoning_present={bool(reasoning)}, refusal_present={bool(refusal)})"
+        )
 
     @staticmethod
     def _extract_content(payload) -> str:
@@ -132,3 +212,23 @@ class OpenAICompatProvider:
             "timeout",
         )
         return any(marker in text for marker in retryable_markers)
+
+    @staticmethod
+    def _should_try_curl_fallback(exc: Exception) -> bool:
+        text = str(exc).lower()
+        fallback_markers = (
+            "apiconnectionerror",
+            "apitimeouterror",
+            "connection error",
+            "timed out",
+            "timeout",
+            "request timed out",
+            "ssl",
+            "unexpected eof",
+            "name resolution",
+            "temporary failure in name resolution",
+            "proxyerror",
+            "couldn't connect to server",
+            "failed to resolve",
+        )
+        return any(marker in text for marker in fallback_markers)

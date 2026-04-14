@@ -61,6 +61,25 @@
 
 重点不只是“生成”，而是“生成之后如何筛、如何留、如何继续演进”。
 
+### 2.5. 决策层开始统一，不再是分散 heuristic
+
+最近一轮优化里，框架开始把原来分散在不同模块里的选择逻辑往一层统一的 decision layer 收：
+
+- round-level rerank
+- anchor selection
+- family loop 的 next action recommendation
+- de-correlation 场景下的排序偏好
+
+也就是说，系统不再只是“各处各自聪明一点”，而是开始让同一套上下文去驱动：
+
+- `stage_mode`
+- `target_profile`
+- `policy_preset`
+- de-correlation targets
+- neutralized evaluation diagnostics
+
+这让 broad / focused / family loop 之间的口径更一致，也更便于后续继续扩展。
+
 ### 3. 研究产物与正式因子分层管理
 
 项目明确区分：
@@ -69,6 +88,12 @@
 - `factors_store/factors/`：正式沉淀、可注册、可复用的因子实现
 
 这保证了研究过程完整可追溯，同时保持正式代码层整洁。
+
+其中 `factors_store/factors/llm_refined/` 也可以作为本地或私有结果桶使用。公开仓库中可以只保留包骨架，而不包含具体 `*_family.py` 结果文件。
+
+关于 `stage_mode / target_profile / policy_preset / mode` 这几层模式的区别与推荐搭配，见：
+
+- [factors_store/llm_refine/README.md#模式分层说明](./factors_store/llm_refine/README.md#模式分层说明)
 
 ### 4. 搜索目标可扩展，而非只盯住 raw alpha
 
@@ -166,6 +191,12 @@ graph TD
 
 这意味着项目并不把 LLM 当作“表达式生成器”，而是把提案嵌入到完整研究闭环里。
 
+同时，`llm_refine` 也已经开始支持更明确的差异化搜索能力：
+
+- de-correlation target-aware prompt guidance
+- de-correlation diagnostics
+- context-aware rerank hooks
+
 ### Round1 bootstrap 策略
 
 对于新 family 或弱 seed，round1 不再是“围着单个 canonical seed 瞎改”。
@@ -252,6 +283,19 @@ export ALPHAREFINERY_PANEL_PATH=/path/to/panel.parquet
 export ALPHAREFINERY_BENCHMARK_PATH=/path/to/benchmark.csv
 export ALPHAREFINERY_INDUSTRY_CSV_PATH=/path/to/stock_industry.csv
 ```
+
+如果你的 BaoStock 原始 `daily.csv` 是单独按日更新的，建议在跑实验前先重建聚合 panel：
+
+```bash
+./update_panel_from_baostock.sh
+```
+
+这个脚本默认：
+
+- 输入目录：`/root/dmd/BaoStock/daily`
+- 输出 panel：`${ALPHAREFINERY_PANEL_PATH:-/root/dmd/BaoStock/panel.parquet}`
+
+也可以用 `--input-root`、`--output`、`--start-date`、`--end-date` 这些参数覆盖。
 
 ### 2. 加载 `llm_refine` provider 环境
 

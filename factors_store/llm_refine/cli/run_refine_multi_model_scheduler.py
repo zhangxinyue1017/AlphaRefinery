@@ -27,6 +27,7 @@ from ..core.archive import (
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..knowledge.round1 import build_bootstrap_frontier, is_seed_stage_node_kind, select_bootstrap_parent
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
+from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
 from ..search.scoring import pairwise_similarity
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
 from .run_refine_multi_model import build_arg_parser as build_multi_model_arg_parser
@@ -117,9 +118,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--end": str(multi.get_default("end")),
         "--max-parallel": multi.get_default("max_parallel"),
         "--multi-runs-dir": str(multi.get_default("multi_runs_dir")),
+        "--prompt-template-version": str(multi.get_default("prompt_template_version")),
     }
     for arg, default in passthrough_defaults.items():
         parser.add_argument(arg, default=default)
+    parser.add_argument(
+        "--decorrelation-target",
+        action="append",
+        default=list(multi.get_default("decorrelation_target") or []),
+        help="explicit factor(s) to decorrelate from; may be repeated or passed as comma-separated names",
+    )
 
     parser.add_argument("--skip-eval", action="store_true", help="skip backtest stage in each round")
     parser.add_argument("--dry-run", action="store_true", help="dry-run each round without provider calls")
@@ -204,6 +212,9 @@ def _build_round_cmd(
         cmd.extend(["--models", model])
     if str(args.additional_notes).strip():
         cmd.extend(["--additional-notes", str(args.additional_notes)])
+    for target in list(args.decorrelation_target or []):
+        if str(target).strip():
+            cmd.extend(["--decorrelation-target", str(target)])
     cmd.extend(["--current-parent-name", str(parent.get("factor_name", ""))])
     cmd.extend(["--current-parent-expression", str(parent.get("expression", ""))])
     if str(parent.get("candidate_id", "")).strip():
@@ -226,6 +237,8 @@ def _build_round_cmd(
         cmd.extend(["--target-profile", str(args.target_profile)])
     if str(child_stage_mode).strip():
         cmd.extend(["--stage-mode", str(child_stage_mode)])
+    if str(args.prompt_template_version).strip():
+        cmd.extend(["--prompt-template-version", str(args.prompt_template_version)])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
@@ -234,8 +247,16 @@ def _build_round_cmd(
     return cmd
 
 
-def _resolve_child_stage_mode(stage_mode: str, *, round_idx: int) -> str:
+def _resolve_child_stage_mode(stage_mode: str, *, round_idx: int, last_round: dict[str, Any] | None = None) -> str:
     stage = str(stage_mode or "auto").strip() or "auto"
+    if stage == "auto":
+        if int(round_idx) == 1:
+            return "new_family_broad"
+        profile = dict((last_round or {}).get("orchestration_profile") or {})
+        recommended = str(profile.get("recommended_stage_mode", "") or "").strip()
+        if recommended in _STAGE_MODE_CHOICES and recommended != "auto":
+            return recommended
+        return "broad_followup"
     if stage == "new_family_broad":
         return "new_family_broad" if int(round_idx) == 1 else "broad_followup"
     return stage
@@ -247,6 +268,52 @@ def _pick_round_prompt_trace(sub_runs: list[dict[str, Any]]) -> dict[str, Any]:
         if trace:
             return trace
     return {}
+
+
+def _build_orchestration_trace(
+    *,
+    family: str,
+    stage_mode: str,
+    target_profile: str,
+    policy_preset: str,
+    parent_kind: str,
+    requested_candidate_count: int,
+    final_candidate_target: int,
+    has_decorrelation_targets: bool,
+    round_status: str,
+    search_improved: bool,
+    winner: dict[str, Any],
+    keep: dict[str, Any],
+    recommended_stage_mode_hint: str = "",
+) -> dict[str, Any]:
+    evidence = ContextEvidence.from_runtime(
+        family=family,
+        stage_mode=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        is_seed_stage=stage_mode == "new_family_broad",
+        has_bootstrap_frontier=stage_mode == "new_family_broad",
+        has_donor_motifs=False,
+        has_decorrelation_targets=has_decorrelation_targets,
+        selected_parent_kind=parent_kind,
+        requested_candidate_count=requested_candidate_count,
+        final_candidate_target=final_candidate_target,
+    )
+    context_profile = resolve_context_profile(evidence)
+    orchestration_profile = resolve_orchestration_profile(
+        evidence=evidence,
+        context_profile=context_profile,
+        last_round_status=round_status,
+        last_round_search_improved=search_improved,
+        last_round_winner=winner,
+        last_round_keep=keep,
+        recommended_stage_mode_hint=recommended_stage_mode_hint,
+    )
+    return {
+        "context_evidence": evidence.to_dict(),
+        "context_profile": context_profile.to_dict(),
+        "orchestration_profile": orchestration_profile.to_dict(),
+    }
 
 
 def _resolve_dual_parent_model_allocations(args: argparse.Namespace, models: list[str]) -> dict[str, list[str]]:
@@ -286,6 +353,122 @@ def _resolve_dual_parent_model_allocations(args: argparse.Namespace, models: lis
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+def _metric_line(payload: dict[str, Any]) -> str:
+    if not payload:
+        return "(empty)"
+
+    def _float(name: str, default: float = 0.0) -> float:
+        value = payload.get(name)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    return (
+        f"IC={_float('quick_rank_ic_mean'):.4f}, "
+        f"ICIR={_float('quick_rank_icir'):.4f}, "
+        f"Ann={_float('net_ann_return'):.4f}, "
+        f"Excess={_float('net_excess_ann_return'):.4f}, "
+        f"Sharpe={_float('net_sharpe'):.4f}, "
+        f"TO={_float('mean_turnover'):.4f}"
+    )
+
+
+def render_scheduler_markdown(summary: dict[str, Any]) -> str:
+    last_round_winner = dict(summary.get("last_round_winner") or {})
+    last_best_candidate = dict(summary.get("last_round_best_candidate") or {})
+    last_best_keep = dict(summary.get("last_round_best_keep") or {})
+    best_node = dict(summary.get("best_node") or {})
+    prompt_trace = dict(summary.get("prompt_trace") or {})
+    context_evidence = dict(summary.get("orchestration_context_evidence") or {})
+    context_profile = dict(summary.get("orchestration_context_profile") or {})
+    orchestration_profile = dict(summary.get("orchestration_profile") or {})
+    rounds = list(summary.get("rounds") or [])
+    last_round = dict(rounds[-1] or {}) if rounds else {}
+    rationale_tags = list(orchestration_profile.get("rationale_tags") or [])
+
+    lines = [
+        f"# Multi-Model Scheduler Summary: {summary.get('family', '')}",
+        "",
+        f"- stage_mode: `{summary.get('stage_mode', '')}`",
+        f"- target_profile: `{summary.get('target_profile', '')}`",
+        f"- scheduler_dir: `{summary.get('scheduler_dir', '')}`",
+        f"- rounds_completed: `{summary.get('rounds_completed', 0)}`",
+        f"- stop_reason: `{summary.get('stop_reason', '')}`",
+        f"- last_round_status: `{summary.get('last_round_status', '')}`",
+        f"- last_selected_parent_name: `{summary.get('last_selected_parent_name', '')}`",
+        "",
+        "## Prompt Trace",
+        f"- stage_mode: `{prompt_trace.get('stage_mode', '')}`",
+        f"- prompt_template_version: `{prompt_trace.get('prompt_template_version', '')}`",
+        f"- seed_stage_active: `{prompt_trace.get('seed_stage_active', '')}`",
+        f"- selected_parent_kind: `{prompt_trace.get('selected_parent_kind', '')}`",
+        f"- requested_candidate_count: `{prompt_trace.get('requested_candidate_count', '')}`",
+        f"- bootstrap_frontier_count: `{prompt_trace.get('bootstrap_frontier_count', '')}`",
+        f"- donor_motifs_count: `{prompt_trace.get('donor_motifs_count', '')}`",
+        "",
+        "## Shared Context",
+        f"- search_phase: `{context_profile.get('search_phase', '')}`",
+        f"- exploration_pressure: `{context_profile.get('exploration_pressure', '')}`",
+        f"- redundancy_pressure: `{context_profile.get('redundancy_pressure', '')}`",
+        f"- prompt_constraint_style: `{context_profile.get('prompt_constraint_style', '')}`",
+        f"- memory_mode: `{context_profile.get('memory_mode', '')}`",
+        f"- examples_mode: `{context_profile.get('examples_mode', '')}`",
+        f"- branching_bias: `{context_profile.get('branching_bias', '')}`",
+        f"- next_action_bias: `{context_profile.get('next_action_bias', '')}`",
+        "",
+        "## Orchestration Trace",
+        f"- recommended_stage_mode: `{orchestration_profile.get('recommended_stage_mode', '')}`",
+        f"- round_strategy: `{orchestration_profile.get('round_strategy', '')}`",
+        f"- promotion_bias: `{orchestration_profile.get('promotion_bias', '')}`",
+        f"- parent_selection_bias: `{orchestration_profile.get('parent_selection_bias', '')}`",
+        f"- termination_bias: `{orchestration_profile.get('termination_bias', '')}`",
+        f"- confidence: `{orchestration_profile.get('confidence', '')}`",
+        f"- rationale_tags: `{', '.join(str(item) for item in rationale_tags)}`",
+        "",
+        "## Runtime Evidence",
+        f"- selected_parent_kind: `{context_evidence.get('selected_parent_kind', '')}`",
+        f"- requested_candidate_count: `{context_evidence.get('requested_candidate_count', '')}`",
+        f"- final_candidate_target: `{context_evidence.get('final_candidate_target', '')}`",
+        f"- has_decorrelation_targets: `{context_evidence.get('has_decorrelation_targets', '')}`",
+        "",
+        "## Last Round Winner",
+        f"- factor: `{last_round_winner.get('factor_name', '')}`",
+        f"- status: `{last_round_winner.get('status', '')}`",
+        f"- metrics: {_metric_line(last_round_winner)}",
+        "",
+        "## Last Round Best Candidate",
+        f"- factor: `{last_best_candidate.get('factor_name', '')}`",
+        f"- status: `{last_best_candidate.get('status', '')}`",
+        f"- metrics: {_metric_line(last_best_candidate)}",
+        "",
+        "## Last Round Best Keep",
+        f"- factor: `{last_best_keep.get('factor_name', '')}`",
+        f"- status: `{last_best_keep.get('status', '')}`",
+        f"- metrics: {_metric_line(last_best_keep)}",
+        "",
+        "## Search Best Node",
+        f"- factor: `{best_node.get('candidate_name', '') or best_node.get('factor_name', '')}`",
+        f"- status: `{best_node.get('status', '')}`",
+        f"- metrics: {_metric_line(best_node)}",
+        "",
+        "## Last Round Rollup",
+        f"- child_stage_mode: `{last_round.get('child_stage_mode', '')}`",
+        f"- search_improved: `{last_round.get('search_improved', '')}`",
+        f"- children_collected: `{last_round.get('children_collected', 0)}`",
+        f"- children_added_to_search: `{last_round.get('children_added_to_search', 0)}`",
+        f"- successful_model_count: `{last_round.get('successful_model_count', 0)}`",
+        f"- failed_model_count: `{last_round.get('failed_model_count', 0)}`",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _write_scheduler_summary_artifacts(summary_json_path: Path, payload: dict[str, Any]) -> None:
+    _write_json(summary_json_path, payload)
+    summary_md_path = summary_json_path.with_suffix(".md")
+    summary_md_path.write_text(render_scheduler_markdown(payload), encoding="utf-8")
 
 
 def _write_scheduler_error(
@@ -508,6 +691,9 @@ def _build_scheduler_summary_payload(
         "last_best_keep_expression": str(last_round_best_keep.get("expression", "") or ""),
         "last_round_best_keep": last_round_best_keep,
         "prompt_trace": dict(last_round.get("prompt_trace") or {}),
+        "orchestration_context_evidence": dict(last_round.get("context_evidence") or {}),
+        "orchestration_context_profile": dict(last_round.get("context_profile") or {}),
+        "orchestration_profile": dict(last_round.get("orchestration_profile") or {}),
         "best_node": final_best,
         "best_node_name": str(final_best.get("candidate_name", "") or final_best.get("factor_name", "") or ""),
         "best_node_expression": str(final_best.get("expression", "") or ""),
@@ -721,7 +907,11 @@ def main() -> int:
                     selected_models = models if len(selected_parents) == 1 else parent_model_allocations.get(parent_role, models)
                     parent_multi_root = round_multi_root / f"{idx:02d}_{parent_role}"
                     parent_multi_root.mkdir(parents=True, exist_ok=True)
-                    child_stage_mode = _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx)
+                    child_stage_mode = _resolve_child_stage_mode(
+                        str(args.stage_mode or "auto"),
+                        round_idx=round_idx,
+                        last_round=round_records[-1] if round_records else None,
+                    )
                     cmd = _build_round_cmd(
                         args,
                         parent={
@@ -845,9 +1035,14 @@ def main() -> int:
             primary_parent = selected_parents[0]["node"]
             current_search = engine.summary()
             current_best = current_search.get("best_node") or {}
+            resolved_child_stage_mode = _resolve_child_stage_mode(
+                str(args.stage_mode or "auto"),
+                round_idx=round_idx,
+                last_round=round_records[-1] if round_records else None,
+            )
             record = {
                 "round": round_idx,
-                "child_stage_mode": _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx),
+                "child_stage_mode": resolved_child_stage_mode,
                 "status": round_status,
                 "returncode": 0 if round_status != "failed" else 1,
                 "log_path": str(log_path),
@@ -888,9 +1083,8 @@ def main() -> int:
                 "best_archive_winner": best_archive_winner,
                 "prompt_trace": _pick_round_prompt_trace(sub_runs)
                 or {
-                    "stage_mode": _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx),
-                    "seed_stage_active": _resolve_child_stage_mode(str(args.stage_mode or "auto"), round_idx=round_idx)
-                    == "new_family_broad",
+                    "stage_mode": resolved_child_stage_mode,
+                    "seed_stage_active": resolved_child_stage_mode == "new_family_broad",
                     "selected_parent_kind": str(primary_parent.node_kind),
                     "selected_parent_factor_name": str(primary_parent.factor_name),
                 },
@@ -900,8 +1094,24 @@ def main() -> int:
                 "sub_runs": sub_runs,
                 "search_summary": current_search,
             }
+            record.update(
+                _build_orchestration_trace(
+                    family=args.family,
+                    stage_mode=resolved_child_stage_mode,
+                    target_profile=str(args.target_profile),
+                    policy_preset=str(args.policy_preset),
+                    parent_kind=str(primary_parent.node_kind),
+                    requested_candidate_count=int(getattr(args, "n_candidates", 0) or 0),
+                    final_candidate_target=int(getattr(args, "n_candidates", 0) or 0),
+                    has_decorrelation_targets=bool(args.decorrelation_target),
+                    round_status=round_status,
+                    search_improved=bool(expansion.get("improved")),
+                    winner=dict(round_best_candidate or round_winner or {}),
+                    keep=dict(round_best_keep or {}),
+                )
+            )
             round_records.append(record)
-            _write_json(
+            _write_scheduler_summary_artifacts(
                 summary_path,
                 _build_scheduler_summary_payload(
                     family=args.family,
@@ -940,7 +1150,7 @@ def main() -> int:
             error=exc,
             context={**error_context, "rounds_completed": len(round_records), "stop_reason": stop_reason},
         )
-        _write_json(
+        _write_scheduler_summary_artifacts(
             summary_path,
             _build_scheduler_summary_payload(
                 family=args.family,
@@ -963,7 +1173,7 @@ def main() -> int:
             error=exc,
             context={**error_context, "rounds_completed": len(round_records), "stop_reason": stop_reason},
         )
-        _write_json(
+        _write_scheduler_summary_artifacts(
             summary_path,
             _build_scheduler_summary_payload(
                 family=args.family,
@@ -978,7 +1188,7 @@ def main() -> int:
         )
         return 1
 
-    _write_json(
+    _write_scheduler_summary_artifacts(
         summary_path,
         _build_scheduler_summary_payload(
             family=args.family,

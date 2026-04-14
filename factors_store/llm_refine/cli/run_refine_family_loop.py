@@ -335,6 +335,7 @@ def main() -> int:
     )
     anchor_selection = select_best_anchor(
         collected=collected,
+        target_profile=str(args.target_profile),
         min_icir=float(args.anchor_min_icir),
         min_sharpe=float(args.anchor_min_sharpe),
         max_turnover=float(args.anchor_max_turnover),

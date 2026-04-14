@@ -26,7 +26,7 @@ from ..parsing.parser import expression_dedup_key
 from ..core.models import LLMProposal, RefinementCandidate, SeedFamily, SeedPool
 from ..core.seed_loader import resolve_family_formula, resolve_preferred_refine_seed
 from .promotion import write_pending_curated_manifest
-from .redundancy import factor_series_correlation
+from .redundancy import factor_series_correlation, factor_series_correlations
 
 PARENT_CORR_THRESHOLD = 0.995
 FAMILY_CORR_THRESHOLD = 0.98
@@ -50,6 +50,16 @@ NEW_FAMILY_BROAD_MATERIAL_THRESHOLDS: dict[str, float] = {
     "net_ann_return": 0.20,
     "net_excess_ann_return": 0.05,
 }
+_BENCHMARK_REQUIRED_FIELDS = {"market_return", "benchmark_open", "benchmark_close"}
+
+
+def _expression_needs_benchmark(expression: str) -> bool:
+    text = str(expression or "").strip()
+    if not text:
+        return False
+    if "benchmark_" in text:
+        return True
+    return bool(set(guess_required_fields(text)) & _BENCHMARK_REQUIRED_FIELDS)
 
 
 def _needs_benchmark(family: SeedFamily, proposal: LLMProposal) -> bool:
@@ -57,7 +67,10 @@ def _needs_benchmark(family: SeedFamily, proposal: LLMProposal) -> bool:
         return True
     if any(alias.startswith("alpha191.") for alias in family.aliases):
         return True
-    return any("benchmark_" in candidate.expression for candidate in proposal.candidates)
+
+    expressions: list[str] = [candidate.expression for candidate in proposal.candidates]
+    expressions.extend(str(expr or "") for expr in family.formulas.values())
+    return any(_expression_needs_benchmark(expr) for expr in expressions)
 
 
 def _build_data_for_family(
@@ -390,6 +403,100 @@ def _load_archive_exact_expression_refs(
         if key and key not in out:
             out[key] = ref
     return out
+
+
+def _load_decorrelation_target_series(
+    *,
+    target_names: tuple[str, ...],
+    data: dict[str, pd.Series],
+) -> list[dict[str, Any]]:
+    if not target_names:
+        return []
+    registry = create_default_registry()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for name in target_names:
+        target_name = str(name or "").strip()
+        if not target_name or target_name in seen:
+            continue
+        seen.add(target_name)
+        try:
+            series = registry.compute(target_name, data)
+        except Exception:
+            continue
+        out.append({"factor_name": target_name, "series": series})
+    return out
+
+
+def _decorrelation_diagnostics(
+    factor: pd.Series,
+    *,
+    factor_name: str,
+    target_refs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not target_refs:
+        return {
+            "decorrelation_target_count": 0,
+            "nearest_decorrelation_target": "",
+            "corr_to_nearest_decorrelation_target": np.nan,
+            "signed_corr_to_nearest_decorrelation_target": np.nan,
+            "avg_abs_decorrelation_target_corr": np.nan,
+        }
+
+    valid_targets: list[tuple[str, pd.Series]] = []
+    for ref in target_refs:
+        target_name = str(ref.get("factor_name", "") or "").strip()
+        target_series = ref.get("series")
+        if not target_name or target_name == factor_name or not isinstance(target_series, pd.Series):
+            continue
+        valid_targets.append((target_name, target_series))
+
+    if not valid_targets:
+        return {
+            "decorrelation_target_count": 0,
+            "nearest_decorrelation_target": "",
+            "corr_to_nearest_decorrelation_target": np.nan,
+            "signed_corr_to_nearest_decorrelation_target": np.nan,
+            "avg_abs_decorrelation_target_corr": np.nan,
+        }
+
+    aligned = pd.concat(
+        [factor.rename("__candidate__")] + [series.rename(name) for name, series in valid_targets],
+        axis=1,
+    ).dropna()
+    if aligned.empty or len(aligned) < 50:
+        return {
+            "decorrelation_target_count": 0,
+            "nearest_decorrelation_target": "",
+            "corr_to_nearest_decorrelation_target": np.nan,
+            "signed_corr_to_nearest_decorrelation_target": np.nan,
+            "avg_abs_decorrelation_target_corr": np.nan,
+        }
+
+    if len(aligned) > 200_000:
+        aligned = aligned.sample(200_000, random_state=42)
+
+    corr_series = aligned.drop(columns="__candidate__").corrwith(aligned["__candidate__"]).dropna()
+    if corr_series.empty:
+        return {
+            "decorrelation_target_count": 0,
+            "nearest_decorrelation_target": "",
+            "corr_to_nearest_decorrelation_target": np.nan,
+            "signed_corr_to_nearest_decorrelation_target": np.nan,
+            "avg_abs_decorrelation_target_corr": np.nan,
+        }
+
+    abs_corr = corr_series.abs()
+    nearest_name = str(abs_corr.idxmax())
+    nearest_abs = float(abs_corr.loc[nearest_name])
+    nearest_signed = float(corr_series.loc[nearest_name])
+    return {
+        "decorrelation_target_count": int(len(corr_series)),
+        "nearest_decorrelation_target": nearest_name,
+        "corr_to_nearest_decorrelation_target": nearest_abs,
+        "signed_corr_to_nearest_decorrelation_target": nearest_signed,
+        "avg_abs_decorrelation_target_corr": float(abs_corr.mean()),
+    }
 
 
 def _parent_reference(
@@ -889,6 +996,9 @@ def _slim_summary(summary_df: pd.DataFrame) -> pd.DataFrame:
         "max_abs_style_corr",
         "top_style_exposure",
         "top_style_corr",
+        "nearest_decorrelation_target",
+        "corr_to_nearest_decorrelation_target",
+        "avg_abs_decorrelation_target_corr",
         "raw_neutral_rank_icir_gap",
         "raw_neutral_net_sharpe_gap",
         "neutral_winner_guard_passed",
@@ -972,6 +1082,15 @@ def _markdown_report(
         lines.append(f"- neutral RankICIR: {_fmt_md_num(row.get('neutral_quick_rank_icir'))}")
         lines.append(f"- neutral NetSharpe: {_fmt_md_num(row.get('neutral_net_sharpe'))}")
         lines.append(f"- avg_abs_style_corr: {_fmt_md_num(row.get('avg_abs_style_corr'))}")
+        lines.append(f"- nearest_decorrelation_target: {row.get('nearest_decorrelation_target', '')}")
+        lines.append(
+            f"- corr_to_nearest_decorrelation_target: "
+            f"{_fmt_md_num(row.get('corr_to_nearest_decorrelation_target'))}"
+        )
+        lines.append(
+            f"- avg_abs_decorrelation_target_corr: "
+            f"{_fmt_md_num(row.get('avg_abs_decorrelation_target_corr'))}"
+        )
         if str(row.get("top_style_exposure", "")).strip():
             lines.append(
                 f"- top_style_exposure: {row.get('top_style_exposure')} "
@@ -1013,6 +1132,7 @@ def _evaluate_one_window(
     run_id: str,
     archive_db: str | Path,
     stage_mode: str = "auto",
+    decorrelation_targets: tuple[str, ...] = (),
 ) -> tuple[pd.DataFrame, dict[str, Any], dict[str, Any]]:
     registry = create_default_registry()
     register_proposal_candidates(registry, proposal=proposal, name_prefix=name_prefix)
@@ -1054,6 +1174,10 @@ def _evaluate_one_window(
         family=family,
         run_id=run_id,
     )
+    decorrelation_target_refs = _load_decorrelation_target_series(
+        target_names=decorrelation_targets,
+        data=data,
+    )
     accepted_candidate_refs: list[dict[str, Any]] = []
 
     for item in items:
@@ -1081,7 +1205,19 @@ def _evaluate_one_window(
                 series_cache[item["factor_name"]] = factor
 
             if item["role"] == "candidate" and parent_series is not None:
-                parent_corr = abs(factor_series_correlation(factor, parent_series))
+                corr_refs: list[tuple[str, pd.Series]] = [("__parent__", parent_series)]
+                corr_refs.extend(
+                    (f"archive::{idx}", ref["series"])
+                    for idx, ref in enumerate(archive_refs)
+                    if isinstance(ref.get("series"), pd.Series)
+                )
+                corr_refs.extend(
+                    (f"accepted::{idx}", ref["series"])
+                    for idx, ref in enumerate(accepted_candidate_refs)
+                    if isinstance(ref.get("series"), pd.Series)
+                )
+                corr_map = factor_series_correlations(factor, corr_refs)
+                parent_corr = abs(corr_map.get("__parent__", np.nan))
                 if not np.isnan(parent_corr) and parent_corr >= PARENT_CORR_THRESHOLD:
                     rows.append(
                         _filtered_row(
@@ -1094,14 +1230,14 @@ def _evaluate_one_window(
                     continue
 
                 matched_family_ref: tuple[str, float, str] | None = None
-                for ref in archive_refs:
-                    corr = abs(factor_series_correlation(factor, ref["series"]))
+                for idx, ref in enumerate(archive_refs):
+                    corr = abs(corr_map.get(f"archive::{idx}", np.nan))
                     if not np.isnan(corr) and corr >= FAMILY_CORR_THRESHOLD:
                         matched_family_ref = (ref["factor_name"], corr, str(ref.get("status", "")))
                         break
                 if matched_family_ref is None:
-                    for ref in accepted_candidate_refs:
-                        corr = abs(factor_series_correlation(factor, ref["series"]))
+                    for idx, ref in enumerate(accepted_candidate_refs):
+                        corr = abs(corr_map.get(f"accepted::{idx}", np.nan))
                         if not np.isnan(corr) and corr >= FAMILY_CORR_THRESHOLD:
                             matched_family_ref = (ref["factor_name"], corr, "same_run_candidate")
                             break
@@ -1141,6 +1277,13 @@ def _evaluate_one_window(
                 neutral_summary = summarize_backtest_result(neutralized_result)
                 summary.update(_prefixed_summary(neutral_summary, prefix="neutral_"))
             summary.update(dict(dual_result.get("style_diagnostics") or {}))
+            summary.update(
+                _decorrelation_diagnostics(
+                    factor,
+                    factor_name=str(item["factor_name"]),
+                    target_refs=decorrelation_target_refs,
+                )
+            )
             summary["neutralization_status"] = dual_result.get("neutralization_status", "")
             summary["neutralized_factor_nonnull"] = dual_result.get("neutralized_factor_nonnull", 0)
             summary["neutralized_factor_std"] = dual_result.get("neutralized_factor_std", np.nan)
@@ -1158,8 +1301,10 @@ def _evaluate_one_window(
 
     summary_df = pd.DataFrame(rows)
     if not summary_df.empty:
-        summary_df["metrics_completeness"] = summary_df.apply(lambda row: _metrics_completeness(row)[0], axis=1)
-        summary_df["missing_core_metrics_count"] = summary_df.apply(lambda row: _metrics_completeness(row)[1], axis=1)
+        completeness = summary_df.apply(lambda row: _metrics_completeness(row), axis=1)
+        completeness_df = pd.DataFrame(completeness.tolist(), index=summary_df.index)
+        summary_df["metrics_completeness"] = completeness_df[0]
+        summary_df["missing_core_metrics_count"] = completeness_df[1]
         summary_df["raw_neutral_rank_icir_gap"] = summary_df.apply(
             lambda row: _metric_gap(row, raw_key="quick_rank_icir", neutral_key="neutral_quick_rank_icir"),
             axis=1,
@@ -1285,6 +1430,7 @@ def evaluate_refinement_run(
     archive_db: str | Path = DEFAULT_ARCHIVE_DB,
     auto_apply_promotion: bool = False,
     stage_mode: str = "auto",
+    decorrelation_targets: tuple[str, ...] = (),
 ) -> dict[str, Path]:
     run_path = Path(run_dir)
     use_protocol = seed_pool.evaluation_protocol is not None and not (start or end)
@@ -1321,6 +1467,7 @@ def evaluate_refinement_run(
                 run_id=run_id,
                 archive_db=archive_db,
                 stage_mode=stage_mode,
+                decorrelation_targets=decorrelation_targets,
             )
             stage_outputs = _write_window_outputs(
                 run_path=run_path,
@@ -1356,6 +1503,7 @@ def evaluate_refinement_run(
                 "system-internal research decisions are based on selection. "
                 "If final_oos is configured, it is review-only and excluded from optimization and auto-parenting."
             ),
+            "decorrelation_targets": list(decorrelation_targets),
             "stage_details": stage_details,
             "stage_files": {key: str(value) for key, value in outputs.items()},
         }
@@ -1373,6 +1521,7 @@ def evaluate_refinement_run(
             run_id=run_id,
             archive_db=archive_db,
             stage_mode=stage_mode,
+            decorrelation_targets=decorrelation_targets,
         )
         outputs.update(
             _write_window_outputs(
@@ -1391,6 +1540,7 @@ def evaluate_refinement_run(
             "name_prefix": name_prefix,
             "evaluation_mode": "single_window",
             "stage_mode": str(stage_mode or "auto"),
+            "decorrelation_targets": list(decorrelation_targets),
             "settings": settings,
             "data_meta": data_meta,
             "stage_files": {key: str(value) for key, value in outputs.items()},

@@ -10,10 +10,7 @@ from ._bootstrap import ensure_project_roots
 ensure_project_roots()
 
 from ._vendor.gpqlib_runtime.evaluation.quick_ic.evaluation import evaluate_ic  # noqa: E402
-from ._vendor.gpqlib_runtime.evaluation.quick_ic.orthogonalize import (  # noqa: E402
-    avg_abs_corr_to_bases,
-    gram_schmidt_orthogonalize,
-)
+from ._vendor.gpqlib_runtime.evaluation.quick_ic.orthogonalize import gram_schmidt_orthogonalize  # noqa: E402
 from ._vendor.gpqlib_runtime.evaluation.single_factor_eval import (  # noqa: E402
     BacktestConfig,
     run_single_factor_backtest,
@@ -254,12 +251,8 @@ def style_exposure_diagnostics(
             "top_style_corr": np.nan,
         }
 
-    corr_map: dict[str, float] = {}
-    for col in aligned_exposures.columns:
-        corr = aligned_factor.corr(aligned_exposures[col])
-        if pd.notna(corr):
-            corr_map[str(col)] = float(corr)
-    if not corr_map:
+    corr_series = aligned_exposures.corrwith(aligned_factor).dropna()
+    if corr_series.empty:
         return {
             "style_exposure_count": int(aligned_exposures.shape[1]),
             "avg_abs_style_corr": np.nan,
@@ -267,11 +260,12 @@ def style_exposure_diagnostics(
             "top_style_exposure": "",
             "top_style_corr": np.nan,
         }
-
-    top_name, top_corr = max(corr_map.items(), key=lambda item: abs(item[1]))
+    corr_series = corr_series.astype(float)
+    top_name = str(corr_series.abs().idxmax())
+    top_corr = float(corr_series.loc[top_name])
     return {
         "style_exposure_count": int(aligned_exposures.shape[1]),
-        "avg_abs_style_corr": float(avg_abs_corr_to_bases(aligned_factor, aligned_exposures)),
+        "avg_abs_style_corr": float(corr_series.abs().mean()),
         "max_abs_style_corr": float(abs(top_corr)),
         "top_style_exposure": top_name,
         "top_style_corr": float(top_corr),
@@ -292,6 +286,77 @@ def prepare_backtest_inputs(
         "price_panel": price_panel,
         "exposures": exposures,
     }
+
+
+def _align_backtest_inputs(
+    factor: pd.Series,
+    *,
+    label: pd.Series,
+    price_panel: pd.DataFrame,
+    exposures: pd.DataFrame,
+    factor_name: str,
+) -> tuple[pd.Series, pd.Series, pd.DataFrame, pd.DataFrame]:
+    idx = factor.index.intersection(label.index)
+    idx = idx.intersection(price_panel.index)
+    idx = idx.intersection(exposures.index)
+    aligned_factor = factor.reindex(idx).astype(float).rename(factor_name)
+    aligned_label = label.reindex(idx).astype(float)
+    aligned_price_panel = price_panel.reindex(idx)
+    aligned_exposures = exposures.reindex(idx)
+    return aligned_factor, aligned_label, aligned_price_panel, aligned_exposures
+
+
+def _run_factor_backtest_on_aligned(
+    factor: pd.Series,
+    *,
+    label: pd.Series,
+    price_panel: pd.DataFrame,
+    exposures: pd.DataFrame,
+    factor_name: str,
+    horizon: int,
+    min_stocks: int,
+    winsorize: bool,
+    zscore: bool,
+    pure_mode: str,
+    rolling_window: int,
+    n_groups: int,
+    long_group: int | None,
+    short_group: int | None,
+    cost_bps: float,
+    enable_alphalens: bool,
+    alphalens_periods: tuple[int, ...],
+    alphalens_quantiles: int,
+    alphalens_max_loss: float,
+) -> dict[str, object]:
+    config = BacktestConfig(
+        min_stocks=min_stocks,
+        winsorize=winsorize,
+        zscore=zscore,
+        pure_mode=pure_mode,
+        rolling_window=rolling_window,
+        n_groups=n_groups,
+        long_group=long_group,
+        short_group=short_group,
+        cost_bps=cost_bps,
+        enable_alphalens=enable_alphalens,
+        alphalens_periods=alphalens_periods,
+        alphalens_quantiles=alphalens_quantiles,
+        alphalens_max_loss=alphalens_max_loss,
+    )
+    metadata = {
+        "factor_name": factor_name,
+        "data_source": "factors_store",
+        "eval_backend": "factors_store_bridge",
+        "label_horizon": int(horizon),
+    }
+    return run_single_factor_backtest(
+        factor=factor,
+        label=label,
+        exposures=exposures,
+        price_panel=price_panel,
+        metadata=metadata,
+        config=config,
+    )
 
 
 def run_factor_backtest(
@@ -326,15 +391,25 @@ def run_factor_backtest(
     if not isinstance(label, pd.Series) or not isinstance(price_panel, pd.DataFrame) or not isinstance(exposures, pd.DataFrame):
         raise TypeError("prepared backtest inputs have unexpected types")
 
-    idx = factor.index.intersection(label.index)
-    idx = idx.intersection(price_panel.index)
-    idx = idx.intersection(exposures.index)
-    factor = factor.reindex(idx).astype(float).rename(factor_name)
-    label = label.reindex(idx).astype(float)
-    price_panel = price_panel.reindex(idx)
-    exposures = exposures.reindex(idx)
-
-    config = BacktestConfig(
+    (
+        aligned_factor,
+        aligned_label,
+        aligned_price_panel,
+        aligned_exposures,
+    ) = _align_backtest_inputs(
+        factor,
+        label=label,
+        price_panel=price_panel,
+        exposures=exposures,
+        factor_name=factor_name,
+    )
+    return _run_factor_backtest_on_aligned(
+        aligned_factor,
+        label=aligned_label,
+        price_panel=aligned_price_panel,
+        exposures=aligned_exposures,
+        factor_name=factor_name,
+        horizon=horizon,
         min_stocks=min_stocks,
         winsorize=winsorize,
         zscore=zscore,
@@ -349,21 +424,6 @@ def run_factor_backtest(
         alphalens_quantiles=alphalens_quantiles,
         alphalens_max_loss=alphalens_max_loss,
     )
-    metadata = {
-        "factor_name": factor_name,
-        "data_source": "factors_store",
-        "eval_backend": "factors_store_bridge",
-        "label_horizon": int(horizon),
-    }
-    result = run_single_factor_backtest(
-        factor=factor,
-        label=label,
-        exposures=exposures,
-        price_panel=price_panel,
-        metadata=metadata,
-        config=config,
-    )
-    return result
 
 
 def run_factor_backtest_dual(
@@ -396,9 +456,29 @@ def run_factor_backtest_dual(
     if not isinstance(exposures, pd.DataFrame):
         raise TypeError("prepared backtest inputs have unexpected exposure type")
 
-    raw_result = run_factor_backtest(
+    label = prepared["label"]
+    price_panel = prepared["price_panel"]
+    if not isinstance(label, pd.Series) or not isinstance(price_panel, pd.DataFrame):
+        raise TypeError("prepared backtest inputs have unexpected types")
+
+    (
+        aligned_factor,
+        aligned_label,
+        aligned_price_panel,
+        aligned_exposures,
+    ) = _align_backtest_inputs(
         factor,
-        prepared=prepared,
+        label=label,
+        price_panel=price_panel,
+        exposures=exposures,
+        factor_name=factor_name,
+    )
+
+    raw_result = _run_factor_backtest_on_aligned(
+        aligned_factor,
+        label=aligned_label,
+        price_panel=aligned_price_panel,
+        exposures=aligned_exposures,
         factor_name=factor_name,
         horizon=horizon,
         min_stocks=min_stocks,
@@ -416,7 +496,7 @@ def run_factor_backtest_dual(
         alphalens_max_loss=alphalens_max_loss,
     )
 
-    diagnostics = style_exposure_diagnostics(factor, exposures=exposures)
+    diagnostics = style_exposure_diagnostics(aligned_factor, exposures=aligned_exposures)
     neutralization_status = "ok"
     neutralized_result: dict[str, object] | None = None
     neutralized_factor_nonnull = 0
@@ -424,19 +504,21 @@ def run_factor_backtest_dual(
 
     try:
         neutralized_factor = neutralize_factor(
-            factor,
-            exposures=exposures,
+            aligned_factor,
+            exposures=aligned_exposures,
             min_stocks=min_stocks,
         )
-        neutralized_factor = neutralized_factor.reindex(factor.index).astype(float).rename(factor_name)
+        neutralized_factor = neutralized_factor.reindex(aligned_factor.index).astype(float).rename(factor_name)
         neutralized_factor_nonnull = int(neutralized_factor.notna().sum())
         neutralized_factor_std = float(neutralized_factor.std(skipna=True))
         if neutralized_factor_nonnull <= 0 or not np.isfinite(neutralized_factor_std) or neutralized_factor_std <= EPS:
             neutralization_status = "degenerate_residual"
         else:
-            neutralized_result = run_factor_backtest(
+            neutralized_result = _run_factor_backtest_on_aligned(
                 neutralized_factor,
-                prepared=prepared,
+                label=aligned_label,
+                price_panel=aligned_price_panel,
+                exposures=aligned_exposures,
                 factor_name=factor_name,
                 horizon=horizon,
                 min_stocks=min_stocks,
