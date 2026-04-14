@@ -22,6 +22,8 @@ if root_path not in sys.path:
 
 from gp_factor_qlib.autofactorset.eval_service import _resolved_input_cache_key, _to_db_jsonable
 from gp_factor_qlib.autofactorset.library_db import LibraryFactorRecord, LibraryStore
+from gp_factor_qlib.core.expression_tree import ExprNode, parse_qlib_expr
+from gp_factor_qlib.engine.gp_engine import compute_factor_series
 
 
 DEFAULT_REBUILD_RUNS_DIR = Path("/root/workspace/zxy_workspace/AlphaRefinery/artifacts/runs/autofactorset_rebuild")
@@ -72,11 +74,42 @@ def _build_input_cache_key(
     return _resolved_input_cache_key(ns)
 
 
-def _resolve_required_columns(registry, factor_names: list[str]) -> list[str]:
+def _iter_leaf_fields(node: ExprNode):
+    if getattr(node, "op", None) == "id":
+        if node.args:
+            yield str(node.args[0])
+        return
+    for arg in getattr(node, "args", []):
+        if isinstance(arg, ExprNode):
+            yield from _iter_leaf_fields(arg)
+
+
+def _required_fields_from_expr_json(expr_json: str) -> set[str]:
+    payload = _resolve_expr_payload(expr_json)
+    if payload is None:
+        return set()
+    if "op" in payload and "args" in payload:
+        node = ExprNode.from_dict(payload)
+        return {field for field in _iter_leaf_fields(node)}
+    raw_expr = str(payload.get("expr") or payload.get("registry_expr") or "").strip()
+    if raw_expr:
+        try:
+            node = parse_qlib_expr(raw_expr)
+        except Exception:
+            return set()
+        return {field for field in _iter_leaf_fields(node)}
+    return set()
+
+
+def _resolve_required_columns(registry, records: list[LibraryFactorRecord]) -> list[str]:
     cols: set[str] = set()
-    for name in factor_names:
-        spec = registry.get(name)
-        cols.update(str(x) for x in spec.required_fields)
+    registry_names = set(registry.names())
+    for record in records:
+        if record.factor_name in registry_names:
+            spec = registry.get(record.factor_name)
+            cols.update(str(x) for x in spec.required_fields)
+        else:
+            cols.update(_required_fields_from_expr_json(record.expr_json))
     cols.update({"open", "close", "high", "low", "volume", "amount", "turnover"})
     return sorted(cols)
 
@@ -122,6 +155,60 @@ def _select_source_records(
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _resolve_expr_payload(expr_json: str) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(expr_json)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _resolve_rebuild_mode(
+    record: LibraryFactorRecord,
+    *,
+    registry_names: set[str],
+) -> tuple[str | None, str | None]:
+    if record.factor_name in registry_names:
+        return "registry", None
+    payload = _resolve_expr_payload(record.expr_json)
+    if payload is None:
+        return None, "invalid_expr_json"
+    if "op" in payload and "args" in payload:
+        return "expr_json_ast", None
+    raw_expr = str(payload.get("expr") or payload.get("registry_expr") or "").strip()
+    if raw_expr:
+        return "expr_json_expr", None
+    return None, "unsupported_expr_payload"
+
+
+def _compute_record_factor(
+    record: LibraryFactorRecord,
+    *,
+    registry,
+    data_ctx: dict[str, object],
+) -> tuple[pd.Series, str]:
+    if record.factor_name in set(registry.names()):
+        factor = registry.compute(record.factor_name, data_ctx).astype(float).rename(record.factor_name)
+        return factor, "registry"
+
+    payload = _resolve_expr_payload(record.expr_json)
+    if payload is None:
+        raise ValueError("invalid expr_json payload")
+
+    if "op" in payload and "args" in payload:
+        node = ExprNode.from_dict(payload)
+        factor = compute_factor_series(node, data_ctx, eval_backend="python").astype(float).rename(record.factor_name)
+        return factor, "expr_json_ast"
+
+    raw_expr = str(payload.get("expr") or payload.get("registry_expr") or "").strip()
+    if raw_expr:
+        node = parse_qlib_expr(raw_expr)
+        factor = compute_factor_series(node, data_ctx, eval_backend="python").astype(float).rename(record.factor_name)
+        return factor, "expr_json_expr"
+
+    raise ValueError("unsupported expr_json payload")
 
 
 def rebuild_library_from_db(
@@ -178,14 +265,16 @@ def rebuild_library_from_db(
     registry = create_default_registry()
     registry_names = set(registry.names())
 
-    missing_registry_rows: list[dict[str, Any]] = []
+    unrebuildable_rows: list[dict[str, Any]] = []
     rebuildable_records: list[LibraryFactorRecord] = []
     for rec in selected_records:
-        if rec.factor_name not in registry_names:
-            missing_registry_rows.append(
+        rebuild_mode, reason = _resolve_rebuild_mode(rec, registry_names=registry_names)
+        if rebuild_mode is None:
+            unrebuildable_rows.append(
                 {
                     "factor_name": rec.factor_name,
-                    "status": "missing_in_registry",
+                    "status": "unrebuildable",
+                    "reason": reason,
                     "source_row_id": rec.id,
                 }
             )
@@ -200,13 +289,13 @@ def rebuild_library_from_db(
             "selected": len(selected_records),
             "rebuildable": 0,
             "ok": 0,
-            "errors": len(missing_registry_rows),
-            "results": missing_registry_rows,
+            "errors": len(unrebuildable_rows),
+            "results": unrebuildable_rows,
         }
 
     required_columns = _resolve_required_columns(
         registry,
-        [rec.factor_name for rec in rebuildable_records],
+        rebuildable_records,
     )
     data, _meta = build_data_bundle(
         panel_path,
@@ -232,7 +321,7 @@ def rebuild_library_from_db(
 
     existing_target = {rec.factor_name: rec for rec in target_store.list_all()}
     results: list[dict[str, Any]] = []
-    results.extend(missing_registry_rows)
+    results.extend(unrebuildable_rows)
 
     total = len(rebuildable_records)
     for idx, rec in enumerate(rebuildable_records, start=1):
@@ -255,7 +344,11 @@ def rebuild_library_from_db(
                 results.append(result_row)
                 continue
 
-            factor_series = registry.compute(factor_name, data).astype(float).rename(factor_name)
+            factor_series, rebuild_mode = _compute_record_factor(
+                rec,
+                registry=registry,
+                data_ctx=data,
+            )
             cache_path = target_cache_dir / _stable_cache_filename(factor_name)
             factor_series.to_frame(name=factor_name).to_parquet(cache_path)
 
@@ -329,6 +422,7 @@ def rebuild_library_from_db(
                     "net_sharpe": net_sharpe,
                     "mean_turnover": mean_turnover,
                     "recompute_metrics": bool(recompute_metrics),
+                    "rebuild_mode": rebuild_mode,
                 }
             )
             existing_target[factor_name] = LibraryFactorRecord(
@@ -364,7 +458,7 @@ def rebuild_library_from_db(
         "ok": int((results_df["status"] == "ok").sum()) if not results_df.empty else 0,
         "skipped_existing": int((results_df["status"] == "skipped_existing").sum()) if not results_df.empty else 0,
         "errors": int((results_df["status"] == "error").sum()) if not results_df.empty else 0,
-        "missing_in_registry": int((results_df["status"] == "missing_in_registry").sum()) if not results_df.empty else 0,
+        "unrebuildable": int((results_df["status"] == "unrebuildable").sum()) if not results_df.empty else 0,
         "results_path": str(results_path),
     }
     summary_path = run_root / "rebuild_summary.json"

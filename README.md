@@ -1,201 +1,155 @@
 # AlphaRefinery
-> An LLM-augmented family-level research pipeline for A-share daily alpha factors
+> 🧠 An LLM-augmented research platform for A-share daily alpha factors, built around family-level refinement, search, and promotion
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg?style=flat)](https://www.python.org/)
-[![Registered Factors](https://img.shields.io/badge/Registered_Factors-1019-0A7F5A.svg?style=flat)](#-project-status)
+[![Registered Factors](https://img.shields.io/badge/Registered_Factors-1019-0A7F5A.svg?style=flat)](#project-status)
 [![LLM Refine](https://img.shields.io/badge/LLM_Refine-Family%20Loop%20%2B%20Round1%20Bootstrap-4C8BF5.svg?style=flat)](./factors_store/llm_refine/README.md)
-[![Target Search](https://img.shields.io/badge/Target--Conditioned_Search-v1-7B61FF.svg?style=flat)](./factors_store/llm_refine/README.md#target-conditioned-search)
+[![Target Search](https://img.shields.io/badge/Target--Conditioned_Search-v1-7B61FF.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Research Funnel](https://img.shields.io/badge/Research_Funnel-Uplift%20%2B%20Stability-0F766E.svg?style=flat)](./factors_store/llm_refine/README.md)
+
+🚩 **Flagship subsystem:** [`llm_refine`](./factors_store/llm_refine/README.md) — a family-level LLM-guided factor refinement engine with staged search progression, branch preservation, target-conditioned search, and context-aware decision support.
+
+<p align="center">
+  <img src="./docs/assets/alpharefinery_cover.png" alt="AlphaRefinery cover" width="92%">
+</p>
 
 ## ✨ Highlights
 
-- 🧠 **Family-level research loop**, not one-shot formula generation
-- 🧭 **Broad -> Anchor -> Focused** control over search progression
-- 🌿 **Dual-parent branch preservation** with **Path Evaluation v2**
-- 🎯 **Target-conditioned search** connected to evaluation, reports, promotion
-- 🧩 **Context-aware decision layer** to unify rerank, anchor selection, and next-step recommendation
-- 🪢 **Shared context + prompt/decision/orchestration alignment** through `ContextProfile`, `PromptPlan`, and `OrchestrationProfile`
-- 🪄 **De-correlation refine support** with target-aware prompt guidance, diagnostics, and rerank hooks
+- 🧠 **Flagship engine: `llm_refine`**, built for family-level refinement rather than one-shot formula mutation
+- 🧭 **Broad -> Anchor -> Focused** staged search progression
+- 🌿 **Dual-parent branch preservation** with **Path Evaluation**
+- 🎯 **Target-conditioned search** for `raw_alpha`, `deployability`, and `complementarity`
+- 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
+- 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
+- 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and optional downstream admission**
 
 ## 📌 Start Here
 
-- [Overview](#-overview)
-- [Why AlphaRefinery](#-why-alpharefinery)
-- [Core Capabilities](#-core-capabilities)
-- [Project Status](#-project-status)
-- [Quick Start](#-quick-start)
-- [Common Workflows](#-common-workflows)
-- [Roadmap](#-roadmap)
-- [LLM Refine Mode Layering](./factors_store/llm_refine/README.md#模式分层说明)
+- [Overview](#overview)
+- [Why AlphaRefinery](#why-alpharefinery)
+- [Core Design Principles](#core-design-principles)
+- [System Map](#system-map)
+- [Core Capabilities](#core-capabilities)
+- [Quick Start](#quick-start)
+- [Common Workflows](#common-workflows)
+- [Project Status](#project-status)
+- [Roadmap](#roadmap)
+- [Read the `llm_refine` subsystem README](./factors_store/llm_refine/README.md)
 
 ---
 
-## ✨ Overview
+## Overview
 
-**AlphaRefinery** is a unified research workspace for A-share daily alpha factors.
+**AlphaRefinery** is a unified research platform for A-share daily alpha factors.
 
-It is not a repository of disconnected factor formulas.  
-It is a family-level research pipeline for discovering, refining, evaluating, and promoting alpha factors.
+Its core differentiator is not a registry, a report folder, or a collection of factor formulas.  
+Its flagship subsystem, [`llm_refine`](./factors_store/llm_refine/README.md), is designed for **family-level factor refinement** rather than one-shot expression generation.
 
-AlphaRefinery brings the full research loop into one workspace:
+`llm_refine` organizes factor search as a staged, context-aware research process with:
 
-- Formal factor implementation, registration
-- Family-level LLM-guided search, refinement
-- Evaluation, archives, reports
-- Formal factor promotion
-- Optional admission-oriented validation
+- family-level search progression,
+- branch preservation,
+- target-conditioned objectives,
+- evaluation-aware continuation,
+- and promotion-oriented refinement.
 
-In short, AlphaRefinery is built to support the full lifecycle of factor research, from idea exploration to promotion-ready integration.
+Around this engine, AlphaRefinery provides the surrounding infrastructure needed for repeatable research:
+
+- formal factor implementation and registration,
+- evaluation, archives, and reports,
+- formal factor promotion,
+- and an optional downstream admission adapter.
+
+In short, AlphaRefinery combines a flagship LLM-driven refinement engine with the supporting infrastructure required for continuous factor research.
 
 ---
 
-## 🧠 Why AlphaRefinery
+## Why AlphaRefinery
 
 Traditional factor research workflows often stop at one of the following stages:
 
-- Formula implementation
-- Single-candidate evaluation
-- Limited expression expansion
-- Manual cross-experiment comparison
+- implementing a formula,
+- evaluating a single candidate,
+- generating a few nearby expressions,
+- or manually continuing from disconnected experiments.
 
 AlphaRefinery focuses on a different problem:
 
 > **How to continuously operate a structured, repeatable, and scalable factor research loop at the family level.**
 
-It is not just a generator of candidate expressions.  
-It is a research operating pipeline for factor discovery, refinement, selection, and promotion.
+This is why the project is not framed as a prompt wrapper or a factor generator.  
+It is built as a research operating platform for:
+
+- discovery,
+- refinement,
+- selection,
+- promotion,
+- and continued search.
 
 ---
 
-## 🧭 Core Design Principles
+## Core Design Principles
 
-### 1. Family-first research, not one-off formula generation
+### 1. Family-first search, not isolated candidate generation
 
-The system treats factor research as a structured search process over **factor families**, rather than a sequence of isolated formula proposals.
+AlphaRefinery treats refinement as search over a **factor family**, not as disconnected batches of candidate expressions.
 
-This is why AlphaRefinery includes mechanisms such as:
+This makes it possible to carry forward:
 
-- Unified `SearchEngine`
-- Family-level controller (`Broad -> Anchor -> Focused`)
-- Dual-parent branch preservation
-- Path Evaluation v2
-- Target-conditioned search.
+- search state,
+- parent choice,
+- branch diversity,
+- and accumulated research context.
 
-### 2. Controlled search progression, not flat candidate expansion
+### 2. Staged progression, not flat multi-sample prompting
 
-The system does not treat each round as a flat batch of disconnected proposals.
+The flagship refinement loop supports an explicit search progression:
 
-Instead, it drives search through a structured family-level progression:
+- **Broad** for opening the search space,
+- **Anchor** for selecting promising continuation points,
+- **Focused** for local deepening and confirmation.
 
-- Unified `SearchEngine`
-- Broad exploration for search-space coverage
-- Anchor graduation for parent selection
-- Focused continuation for local deepening
+This gives the system a more deliberate search policy than plain candidate sampling.
 
-This gives AlphaRefinery a more explicit search policy than simple multi-sample generation.
-
-### 2.5. Context-aware decision, not scattered local heuristics
-
-Recent iterations have started to unify several previously separate decision points:
-
-- round-level rerank
-- anchor selection
-- family-level next action recommendation
-- optional de-correlation-aware candidate preference
-
-Instead of treating these as unrelated heuristics, AlphaRefinery is moving toward a shared decision layer that reads:
-
-- `stage_mode`
-- `target_profile`
-- `policy_preset`
-- de-correlation targets
-- neutralized evaluation outputs
-
-This makes the overall research loop more consistent and easier to reason about.
-
-### 2.6. Shared context alignment, not prompt / decision / orchestration drift
-
-Recent work has pushed the framework one step further:
-
-- `PromptPlan` for prompt block inclusion / budget / style
-- `ContextEvidence` + `ContextProfile` for shared runtime interpretation
-- `OrchestrationProfile` for stage recommendation and orchestration trace
-
-The goal is not to over-automate research direction.
-It is to make the three main layers speak the same context language:
-
-- prompt construction
-- decision trace
-- scheduler / family-loop orchestration
-
-In practice, this means AlphaRefinery is moving away from a setup where:
-
-- prompt templates interpret stage and target one way
-- rerank / anchor logic interpret them another way
-- scheduler progression interprets them a third way
-
-Instead, the system now starts to project a shared context view and reuse it across those layers.
-
-This improves:
-
-- traceability
-- consistency across runs
-- easier diagnosis of why a round was broad / focused / branch-opening
-- safer gradual automation of the most repetitive orchestration decisions
-
-### 3. Branch preservation, not winner-take-all collapse
+### 3. Branch preservation, not premature top1 collapse
 
 Promising families do not always evolve along a single best-child line.
 
-AlphaRefinery is built to preserve branch diversity long enough for the search process to learn from it:
+AlphaRefinery therefore preserves branch diversity long enough for the search process to learn from it through:
 
-- Dual-parent branch preservation
-- Path Evaluation v2
-- Comparative continuation across rounds
-- Parent selection beyond immediate top1 scores
+- dual-parent continuation,
+- path-aware evaluation,
+- comparative branch development,
+- and parent selection beyond immediate top1 scores.
 
-This helps the system avoid premature collapse into a single local motif.
+### 4. Target-conditioned refinement, not raw-alpha-only optimization
 
-### 4. Target-conditioned search, not raw-alpha-only scoring
-
-The framework is already moving beyond a single-objective “raw alpha only” mindset.
-
-Current search objectives include:
+The refinement loop is already structured to support different downstream preferences, including:
 
 - `raw_alpha`
 - `deployability`
 - `complementarity`
 
-The same search loop can therefore optimize toward different downstream preferences rather than a single universal score.
-
-It also connects naturally to:
-
-- Promotion workflows
-- Funnel evaluation
-- Family reports
-- Admission-oriented downstream validation
-
-`robustness` has already been reserved at the interface level, which keeps the search objective layer extensible as research preferences evolve.
+This allows the same research engine to serve different goals, from stronger standalone alpha to better library complementarity and promotion quality.
 
 ---
 
-## 🏗 What the Repository Contains
+## What the Repository Contains
 
-AlphaRefinery currently serves as the unified root workspace for three major lines of work:
+AlphaRefinery serves as the unified workspace for three major layers of work:
 
-- **Formal factors, registry**
-- **Family-level research loops via `llm_refine`**
-- **Artifacts, reports, optional admission-oriented evaluation**
+- **formal factors and registry**
+- **family-level research loops driven by `llm_refine`**
+- **artifacts, reports, and optional downstream admission-oriented evaluation**
 
 In practice:
 
-- Shared tracked config in `config/`
-- Formal code in `factors_store/`
-- Vendored factor runtime in `factors_store/_vendor/gpqlib_runtime/`
-- Formal factors in `factors_store/factors/`
-- Research artifacts, reports in `artifacts/`
+- tracked config lives in `config/`
+- formal code lives in `factors_store/`
+- formal factors live in `factors_store/factors/`
+- research artifacts and reports live in `artifacts/`
 
-## 🗺 System Map
+## System Map
 
 ```mermaid
 graph LR
@@ -208,7 +162,7 @@ graph LR
     D --> H[artifacts/reports]
 ```
 
-## 🏛 Architecture
+## Architecture
 
 ```mermaid
 graph TD
@@ -259,68 +213,64 @@ graph TD
 
 ---
 
-## ⚙️ Core Capabilities
+## Core Capabilities
 
-### Formal factor library and registry
+### 1. `llm_refine`: the flagship research engine
 
-AlphaRefinery maintains a structured factor registry and a formal implementation layer for production-grade factors, including:
+The `llm_refine` subsystem is the main methodological core of the project.
 
-* Data contracts
-* Operator abstractions
-* Registry-based factor management
-* Formal factor implementations
-* Direct computation through the registry interface.
+It currently supports:
 
-### LLM-guided family-level refinement
-
-The `llm_refine` subsystem is currently the most active research engine in the project.
-
-It supports:
-
-* Family loop (`Broad -> Anchor Graduation -> Focused`)
-* Round1 bootstrap through preferred/oriented seeds, donor retrieval, role-constrained generation
-* Focused multi-model rounds
-* Multi-round schedulers
-* Dual-parent branch preservation
+* family loop (`Broad -> Anchor Graduation -> Focused`)
+* round1 bootstrap through preferred/oriented seeds, donor retrieval, and role-constrained generation
+* focused multi-model refinement rounds
+* multi-round schedulers
+* dual-parent branch preservation
 * Path Evaluation
-* Target-conditioned search
-* Archive, reporting, promotion, funnel evaluation workflows.
+* target-conditioned search
+* context-aware rerank and anchor selection
+* archive, reporting, promotion, and funnel evaluation workflows
 
-This means the project does not treat LLMs as simple expression generators.
-Instead, LLM proposals are embedded into a broader research loop.
+See:
 
-### Round1 bootstrap strategy
+* [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
 
-For new or weak families, round1 is no longer treated as a blind single-seed mutation step.
+### 2. Formal factor library and registry
 
-It can combine:
+AlphaRefinery maintains a structured factor registry and formal factor implementation layer, including:
 
-* Preferred/oriented seed selection
-* Donor motif retrieval from adjacent families
-* Role-constrained candidate slots
-* Light rerank before full evaluation.
+* data contracts,
+* operator abstractions,
+* registry-based factor management,
+* formal factor implementations,
+* and direct computation through the registry interface.
 
-### Research artifact management
+### 3. Research artifact management
 
-A major design principle of AlphaRefinery is the separation between:
+The project keeps research outputs separate from formal promoted factors.
 
-* **Research artifacts**
-* **Formal promoted factors**
+This allows it to preserve:
 
-This allows the system to retain full research history while keeping the official factor layer clean and maintainable.
+* full run history,
+* family reports,
+* promotion candidates,
+* and evaluation artifacts,
 
-### Optional admission adapter
+while keeping the formal factor layer cleaner and more maintainable.
 
-Promoted factors can be further evaluated through the `autofactorset_bridge` workflow, adding an optional adapter layer for downstream library admission or company-specific promotion checks.
+### 4. Optional downstream admission adapter
 
-The core research loop does not depend on this layer. If you do not need downstream admission, you can skip it entirely.
+Promoted factors can optionally flow through `autofactorset_bridge` for downstream library admission or company-specific promotion checks.
+
+This layer is intentionally optional.
+The main AlphaRefinery research workflow does **not** depend on it.
 
 ---
 
-## 📦 Project Status
+## Project Status
 
 AlphaRefinery has evolved beyond a lightweight prototype.
-It is already capable of supporting a complete factor research loop in a usable working environment.
+It is already capable of supporting a complete family-level factor research loop in a usable working environment.
 
 ### Registered factors
 
@@ -342,68 +292,47 @@ Current registered factor counts:
 
 **Total: `1019` registered factors**
 
+#### Public vs private factor assets
+
+This public repository keeps only a subset of factor implementations for reproducibility, examples, and benchmarking.
+
+- Publicly retained factors mainly include open benchmark families and a small number of illustrative refinement outputs.
+- Local/private factor assets such as full `llm_refined` families, mined research factors, and strategy-sensitive promotion results may remain outside version control.
+
+This keeps the repository useful as a research framework while avoiding unnecessary exposure of private alpha assets.
+
 ### Development note
 
 This project is still under active development.
 
 The current architecture is already functional, but several modules are still being improved, expanded, or restructured. Future iterations may include:
 
-* Additional search objectives
-* Richer evaluation criteria
-* More robust archive, promotion tooling
-* Improved reporting, workflow automation
-* Further extensions to intraday evaluation, downstream admission logic.
+* additional search objectives,
+* richer evaluation criteria,
+* more robust archive and promotion tooling,
+* improved reporting and workflow automation,
+* and further extensions to intraday evaluation and downstream admission logic.
 
 So while the system is already usable, it should still be viewed as an evolving research platform rather than a finalized product.
 
 ---
 
-## 🧩 Key Subsystems
+## Key Subsystems
 
-| Subsystem                           | Role                                                  | Typical Path                   |
-| ----------------------------------- | ----------------------------------------------------- | ------------------------------ |
-| Formal factors and computation      | Registry, data contract, formal factor implementation | `factors_store/`               |
-| LLM-driven factor research          | Family loop, round1 bootstrap, search, dual-parent    | `factors_store/llm_refine/`    |
-| Research evaluation                 | Seed-to-winner uplift, funnel, profile split          | `artifacts/reports/evaluator/` |
-| Artifacts and downstream evaluation | Runs, reports, promotion, autofactorset ingest        | `artifacts/`                   |
+| Subsystem                   | Role                                    |
+| --------------------------- | --------------------------------------- |
+| `factors_store/`            | formal factor computation and registry  |
+| `factors_store/llm_refine/` | flagship family-level refinement engine |
+| `artifacts/`                | runs, reports, promotion artifacts      |
+| `autofactorset_bridge/`     | optional downstream admission adapter   |
 
-### 1. Formal code layer
+For a more detailed structural walkthrough, see:
 
-`factors_store/` contains:
-
-* Data contracts
-* Registry definitions
-* Daily evaluation utilities
-* Formal factor implementations
-* `llm_refine` subsystem
-* `autofactorset_bridge`.
-
-### 2. Formal promoted factor layer
-
-`factors_store/factors/llm_refined/` stores factors that are already:
-
-* Formally registrable
-* Directly callable through `registry.compute(...)`
-* Ready to enter downstream admission workflows.
-
-In the public repository, this bucket may be intentionally empty or only keep package scaffolding. Local/private `*_family.py` results can remain outside version control.
-
-### 3. Research artifact layer
-
-`artifacts/` stores:
-
-* `llm_refine` runs
-* Family reports
-* Promotion candidates
-* `autofactorset` manifests, admission runs.
-
-The canonical run root is:
-
-* `artifacts/runs/`
+* [PROJECT_MAP.md](./PROJECT_MAP.md)
 
 ---
 
-## 🔄 Research Artifact Lifecycle
+## Research Artifact Lifecycle
 
 A typical family-level result usually follows the path below:
 
@@ -430,9 +359,11 @@ Typical repository destinations:
 
 ---
 
-## 🧾 Data Contract
+## Data Interface
 
-### Core daily fields
+AlphaRefinery currently works on A-share daily panel data with standard OHLCV-style fields, benchmark context, and optional cross-sectional context features.
+
+Representative fields include:
 
 * `open`
 * `high`
@@ -440,59 +371,27 @@ Typical repository destinations:
 * `close`
 * `volume`
 * `vwap`
-
-### Extended commonly used fields
-
-* `pre_close`
-* `amount`
-* `turnover`
-* `pct_chg`
-* `is_st`
-* `trade_status`
-
-### Derived fields
-
 * `returns`
-
-### Optional context fields
-
-* `benchmark_open`
-* `benchmark_close`
 * `market_return`
-* `cap`
-* `size`
-* `float_market_cap`
-* `smb`
-* `hml`
+
+Detailed field-level definitions are best understood from implementation code and project mapping docs rather than the homepage README.
 
 ---
 
-## ⏱ Intraday Evaluation
+## Intraday Support
 
-The project already supports part of the evaluation workflow for intraday factors:
+Partial intraday evaluation support is available for selected workflows:
 
 * `5min -> readout -> daily backtest`
 
-Current support includes:
-
-* Single-factor intraday evaluation
-* Batch evaluation
-* Standard `5min` YAML configurations
-* Selected custom higher-order operators.
-
-> Note: this part of the workflow is still being refined and may continue to evolve together with the broader evaluation stack.
+This remains an auxiliary capability and is still under active refinement.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 cd /root/workspace/zxy_workspace/AlphaRefinery
-```
-
-Install the core Python dependencies once:
-
-```bash
 python -m pip install -r requirements.txt
 ```
 
@@ -510,16 +409,9 @@ If your BaoStock raw `daily.csv` files are updated separately, rebuild the aggre
 ./update_panel_from_baostock.sh
 ```
 
-The script defaults to:
+### 0. Prepare the `llm_refine` provider environment
 
-* input root: `/root/dmd/BaoStock/daily`
-* output panel: `${ALPHAREFINERY_PANEL_PATH:-/root/dmd/BaoStock/panel.parquet}`
-
-You can override them with flags such as `--input-root`, `--output`, `--start-date`, and `--end-date`.
-
-### 0. Load the `llm_refine` provider environment
-
-Before running any `llm_refine` workflow, first execute:
+Before running any `llm_refine` workflow, execute:
 
 ```bash
 cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
@@ -529,14 +421,7 @@ source ./llm_refine_provider_env.sh
 The tracked template is `llm_refine_provider_env.example.sh`.
 The copied `llm_refine_provider_env.sh` stays local and is ignored by git.
 
-This is recommended because the `run_refine_*` CLI tools contain fallback defaults.
-If the environment is not loaded explicitly, they may fall back to built-in provider or base URL settings, which is usually not the intended configuration.
-
-Most shared run / provider / path defaults are centralized in:
-
-* `factors_store/llm_refine/config.py`
-
-### 1. Compute a formal factor directly
+### 1. Compute a formal factor
 
 ```python
 from factors_store import build_data, create_default_registry
@@ -577,25 +462,17 @@ python -m factors_store.llm_refine.cli.run_refine_family_loop \
 
 ---
 
-## 🛠 Common Workflows
+## Common Workflows
 
-Unless stated otherwise, all `llm_refine` workflows are typically run after:
+### 1. Start a new family
 
-```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
-source ./llm_refine_provider_env.sh
-```
+Use `run_refine_family_loop` when you want the system to run:
 
-### 1. First run for a new family
+* a broad pass,
+* anchor graduation,
+* and focused continuation
 
-Suitable for:
-
-* Starting a new family under the current default workflow
-* Broad pass, anchor graduation, focused continuation.
-
-Recommended entry:
-
-* `run_refine_family_loop`
+under the current default family controller.
 
 ```bash
 PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
@@ -607,24 +484,9 @@ python -m factors_store.llm_refine.cli.run_refine_family_loop \
   --target-profile raw_alpha
 ```
 
-Typical outputs to inspect:
+### 2. Refine around an existing parent
 
-* `artifacts/runs/llm_refine_family_loop/...`
-* `family_loop_summary.md`
-* Broad, focused `summary.json`
-
-If you only need a smoke test for prompt / parser / evaluator wiring, use `run_refine_loop`.
-
-### 2. Focused round around an existing parent
-
-Suitable for:
-
-* Continuing refinement around a known strong parent
-* Multi-model proposals around the same line of development.
-
-Recommended entry:
-
-* `run_refine_multi_model`
+Use `run_refine_multi_model` when you already have a strong parent and want to continue the main line with multi-model proposals.
 
 ```bash
 PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
@@ -638,57 +500,13 @@ python -m factors_store.llm_refine.cli.run_refine_multi_model \
   --n-candidates 6
 ```
 
-What to focus on:
+### 3. Evaluate framework effectiveness
 
-* Multi-model convergence toward similar structural motifs
-* Agreement between `research_winner`, `best child`
-* Emergence of a more suitable next-round parent.
+Use `run_research_funnel.py` when you want to inspect whether recent framework changes improved:
 
-### 3. Dual-track continuation with scheduler
-
-Suitable for:
-
-* Preserving two promising research branches
-* Avoiding premature collapse into a single line
-* Running 2–3 rounds of automatic comparative exploration.
-
-Recommended entry:
-
-* `run_refine_multi_model_scheduler`
-
-```bash
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
-python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
-  --family weighted_upper_shadow_distribution \
-  --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
-  --policy-preset balanced \
-  --target-profile complementarity \
-  --enable-dual-parent-round \
-  --bootstrap-parent-name llm_refined.upper_body_reject_amt_10 \
-  --bootstrap-parent-expression "neg(ema(where(div(sub(high, rowmax(open, close)), add(pre_close, 1e-12)) > 0.01, mul(div(sub(high, rowmax(open, close)), add(pre_close, 1e-12)), amount), 0), 10))" \
-  --bootstrap-parent-name llmgen.turnover_confirmed_shadow_15 \
-  --bootstrap-parent-expression "neg(ema(where(gt(turnover, ts_mean(turnover, 20)), mul(div(sub(high, close), add(pre_close, 1e-12)), amount), 0), 15))" \
-  --n-candidates 6 \
-  --max-rounds 2
-```
-
-What to focus on:
-
-* Preservation of `quality_parent`, `expandability_parent`
-* Parent selection shifts under `branch_value_score`, `target_conditioned_score`
-* Meaningful divergence in round 2 or round 3.
-
-### 4. Evaluate framework effectiveness
-
-Suitable for:
-
-* Recent framework impact on `seed -> winner` uplift
-* `raw_alpha` vs `complementarity`
-* Stability of top3 / keep / winner outcomes.
-
-Recommended entry:
-
-* `run_research_funnel.py`
+* `seed -> winner` uplift,
+* family funnel stability,
+* or profile-specific outcomes.
 
 ```bash
 cd /root/workspace/zxy_workspace/AlphaRefinery
@@ -697,80 +515,13 @@ PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_research_funnel
 ```
 
-Typical outputs to inspect:
+For more detailed execution patterns, read:
 
-* `artifacts/reports/evaluator/run_uplift_summary.csv`
-* `artifacts/reports/evaluator/family_funnel_summary.csv`
-* `artifacts/reports/evaluator/family_profile_funnel_summary.csv`
-
-### 5. Promote research results into formal Python factors
-
-Suitable for:
-
-* Factors worth preserving from a research run
-* Converting run artifacts into formal registry assets.
-
-Typical process:
-
-1. Inspect `artifacts/reports/family/...`
-2. Select promising factors from `research_winner` or the shortlist
-3. Write them into the appropriate family file under:
-
-   * `factors_store/factors/llm_refined/..._family.py`
-4. Update, if necessary:
-
-   * `FACTOR_SPECS`
-   * `__all__`
-   * `factors_store/factors/llm_refined/__init__.py`
-5. Run basic compilation checks
-
-Example:
-
-```bash
-python -m py_compile \
-  /root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/weighted_upper_shadow_distribution_family.py
-```
-
-After this step, a candidate factor is no longer just a research artifact — it becomes a formal, registrable factor.
-
-### 6. Optional: run `autofactorset` admission
-
-Suitable for:
-
-* Factors already registered in the formal library
-* Optional downstream admission evaluation before broader use or deployment-oriented consideration.
-
-Recommended entry:
-
-* `evaluate_registry_manifest.py`
-
-```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
-
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
-python -m factors_store.autofactorset_bridge.evaluate_registry_manifest \
-  --manifest /root/workspace/zxy_workspace/AlphaRefinery/artifacts/autofactorset_ingest/manifests/example.yaml \
-  --run-root /root/workspace/zxy_workspace/AlphaRefinery/artifacts/runs/autofactorset_ingest/manual_smoke \
-  --label-horizon 1
-```
-
-To insert promoted factors into the library:
-
-```bash
---insert-promoted
-```
-
-Typical downstream concerns:
-
-* Promotion pass status
-* Similarity, redundancy against the existing library
-* Realistic deployment candidacy.
-
-This step is optional. The main AlphaRefinery workflow remains usable without `autofactorset_bridge`.
+* [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
 
 ---
 
-## 🗂 Repository Structure
+## Repository Structure
 
 ```text
 AlphaRefinery/
@@ -781,8 +532,6 @@ AlphaRefinery/
 ├── run_refine.sh
 ├── config/
 │   ├── factor_manifests/
-│   │   ├── alpha158.yaml
-│   │   └── alpha360.yaml
 │   └── refinement_seed_pool.yaml
 ├── factors_store/
 │   ├── _vendor/
@@ -798,49 +547,45 @@ AlphaRefinery/
     └── autofactorset_ingest/
 ```
 
-For a more detailed project map, see:
-
-* [PROJECT_MAP.md](./PROJECT_MAP.md)
-
 ---
 
-## 📚 Recommended Reading Order
+## Recommended Reading Order
 
-### If you want to understand the full repository first
+### If you want the big picture first
 
 1. [README.md](./README.md)
 2. [PROJECT_MAP.md](./PROJECT_MAP.md)
 
-### If you want to focus on `llm_refine`
+### If you want the flagship subsystem first
 
 1. [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
 2. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
 3. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
 
-### If you want to inspect a family research result
+### If you want to inspect research outputs
 
 Start with:
 
 * [artifacts/reports/family/](./artifacts/reports/family)
 
-Then trace back to the corresponding:
+Then trace back to:
 
 * `artifacts/runs/...`
 
 ---
 
-## 🛣 Roadmap
+## Roadmap
 
-The project is continuing to evolve. Near-term directions may include:
+Near-term directions may include:
 
-* More target-conditioned search objectives
-* Stronger robustness-aware evaluation
-* More automated promotion, reporting pipelines
-* Cleaner integration between family research, admission workflows
-* Expanded support for intraday, cross-frequency evaluation.
+* more target-conditioned search objectives,
+* stronger robustness-aware evaluation,
+* more automated promotion and reporting pipelines,
+* cleaner integration between family research and optional admission workflows,
+* and broader support for intraday and cross-frequency evaluation.
 
 ---
 
-## 🪪 One-Sentence Summary
+## One-Sentence Summary
 
-**AlphaRefinery is a unified research workspace for A-share alpha factors, integrating formal factor implementation, LLM-guided family refinement, research artifact management, and an optional downstream admission adapter into a single evolving pipeline.**
+> **AlphaRefinery is an LLM-augmented research platform for A-share alpha factors, centered on the `llm_refine` family-level refinement engine and supported by formal factor infrastructure, research artifact management, and optional downstream admission workflows.**

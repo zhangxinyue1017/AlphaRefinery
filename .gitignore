@@ -31,12 +31,33 @@ venv/
 # Local provider secrets
 llm_refine_provider_env.sh
 factors_store/factors/llm_refined/*_family.py
+factors_store/factors/gp_mined.py
+factors_store/factors/qp_behavior.py
+factors_store/factors/qp_chip.py
+factors_store/factors/qp_kline.py
+factors_store/factors/qp_momentum.py
+factors_store/factors/qp_path_convexity.py
+factors_store/factors/qp_pressure.py
+factors_store/factors/qp_salience.py
+factors_store/factors/qp_volatility.py
+factors_store/factors/_pattern_retrieval.py
+factors_store/factors/cicc_daily.py
+factors_store/factors/factor365_daily.py
+factors_store/factors/factor365_pattern.py
+
+# Keep selected public examples / benchmarks
 !factors_store/factors/llm_refined/__init__.py
 !factors_store/factors/llm_refined/common.py
+!factors_store/factors/alpha101_like.py
+!factors_store/factors/alpha158_like.py
+!factors_store/factors/alpha191_like.py
+!factors_store/factors/alpha360_like.py
+!factors_store/factors/seed_baselines.py
 
 # Local maintenance helpers
 scripts/organize_runs_by_family.py
 scripts/refresh_run_indexes.py
+update_panel_from_baostock.sh
 
 # Generated artifacts and runtime outputs
 artifacts/**

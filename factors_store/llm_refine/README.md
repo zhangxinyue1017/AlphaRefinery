@@ -1,74 +1,169 @@
 # llm_refine
-> AlphaRefinery 中负责 family 级因子 refine / search / evaluation 的子系统说明
+> The flagship research engine inside AlphaRefinery for family-level LLM-guided factor refinement
 
-## 这份 README 的角色
+## ✨ What makes `llm_refine` different
 
-这份文档不再承担“仓库首页”的职责。  
-仓库级说明请看：
+- 🧠 **Family-level refinement**, not one-shot formula mutation
+- 🧭 **Broad -> Anchor -> Focused** staged search progression
+- 🌿 **Dual-parent branch preservation** with path-aware continuation
+- 🎯 **Target-conditioned search** beyond raw-alpha-only optimization
+- 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
+- 🪢 **Shared context alignment** across prompting, decision trace, and orchestration
+- 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
+
+---
+
+## Overview
+
+`llm_refine` is the core research subsystem inside **AlphaRefinery** for **family-level factor search, refinement, evaluation, and continuation**.
+
+It is not designed as a thin prompt wrapper or a one-off expression generator.  
+Instead, it organizes factor research as a **structured search process** over a factor family, where each round can contribute to:
+
+- search-space opening,
+- parent selection,
+- branch continuation,
+- evaluation-aware rerank,
+- archive and promotion decisions,
+- and next-step orchestration.
+
+At a high level, `llm_refine` connects:
+
+- seed family definition,
+- parent selection,
+- LLM proposal generation,
+- parser / repair,
+- evaluation / redundancy checks,
+- archive / promotion,
+- search-state update and continuation.
+
+In practice, it behaves more like:
+
+- a **family-level factor research engine**,
+- a **best-first / dual-parent search layer**,
+- and a **control surface for iterative research progression**.
+
+For repository-level context, see:
 
 - [AlphaRefinery/README.md](../../README.md)
 
-这份 README 只回答三个问题：
+---
 
-1. `llm_refine` 这个子系统是做什么的
-2. 什么时候该用哪个入口
-3. 代码和文档应该从哪里继续往下看
+## Why `llm_refine`
 
-## 子系统定位
+Many factor-generation workflows stop at one of these points:
 
-`llm_refine` 负责把：
+- mutating a single seed,
+- sampling multiple expressions from a prompt,
+- evaluating a local batch,
+- or manually continuing from a top candidate.
 
-- `seed family`
-- `parent selection`
-- `LLM proposal`
-- `parser / repair`
-- `evaluation / redundancy`
-- `archive / promotion`
-- `search state update`
+`llm_refine` focuses on a different problem:
 
-串成一个可复用的研究闭环。
+> **How to turn factor refinement into a staged, repeatable, and controllable family-level research process.**
 
-它当前更像：
+This means the subsystem is explicitly designed around:
 
-- family 级因子研究引擎
-- unified best-first / dual-parent search 层
-- 研究产物沉淀与下一轮 budget allocation 的控制层
+- staged search rather than flat generation,
+- continuation policy rather than isolated rounds,
+- branch preservation rather than immediate top1 collapse,
+- and target-aware refinement rather than raw-alpha-only expansion.
 
-## 运行前默认前置步骤
+---
 
-凡是运行 `llm_refine` CLI，都默认先执行：
+## Scope of this README
 
-```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
-cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
-source ./llm_refine_provider_env.sh
-```
+This document focuses on the `llm_refine` subsystem itself:
 
-原因：
+1. what problem it solves,
+2. how the search process is organized,
+3. which entry points fit which research scenarios,
+4. how the internal layers are divided,
+5. and where to continue reading in code and docs.
 
-- `run_refine_*` CLI 如果没有显式 provider 参数，会读取环境变量
-- 如果环境变量也没有加载，就会退回到 CLI 内置默认值
-- 那个默认值只适合本地兜底，不应当被当成日常研究 workflow 的默认配置
+---
 
-所以现在的约定是：
+## Core Ideas
 
-- **先从 `llm_refine_provider_env.example.sh` 复制出本地 `llm_refine_provider_env.sh`**
-- **再 `source ./llm_refine_provider_env.sh`**
-- **再运行任意 `run_refine_*` / scheduler / family explore 命令**
+### 1. Family-level search, not isolated formula proposals
 
-## 当前关键能力
+`llm_refine` treats refinement as search over a **family-level state**, not as a sequence of disconnected candidate batches.
+
+This is why it supports:
+
+- family loop orchestration,
+- staged progression control,
+- parent selection beyond immediate top1,
+- branch-aware continuation,
+- and search-policy tuning.
+
+### 2. Controlled progression, not flat batch generation
+
+The subsystem can explicitly separate:
+
+- **Broad** exploration for motif opening and search-space coverage,
+- **Anchor** graduation for parent selection,
+- **Focused** continuation for local deepening and confirmation.
+
+This gives the system a more deliberate search progression than plain multi-sample prompting.
+
+### 3. Branch preservation, not premature winner-take-all collapse
+
+Strong families do not always evolve along a single line.  
+`llm_refine` therefore preserves branch diversity long enough to let the search process learn from it.
+
+This includes:
+
+- dual-parent continuation,
+- path-aware evaluation,
+- comparative continuation across rounds,
+- and parent selection beyond raw top1 scores.
+
+### 4. Target-conditioned refinement, not raw-alpha-only optimization
+
+The subsystem can refine toward different research objectives, such as:
+
+- `raw_alpha`
+- `deployability`
+- `complementarity`
+- `robustness`
+
+This makes refinement more useful for downstream research goals such as:
+
+- promotion,
+- redundancy control,
+- factor library complementarity,
+- and optional admission-oriented evaluation.
+
+### 5. Context-aware decision support, not scattered local heuristics
+
+Several decision points that were previously separate are being unified into a more shared decision layer.
+
+This currently includes:
+
+- round-level rerank,
+- anchor selection,
+- family-level next action recommendation,
+- optional de-correlation-aware candidate preference.
+
+The goal is not over-automation.  
+The goal is to make the refinement loop **more consistent, more traceable, and easier to reason about**.
+
+---
+
+## Current Key Capabilities
 
 - `run_refine_loop`
-  - 单轮 smoke / 单 parent refine
+  - single-round smoke / single-parent refine
 - `run_refine_multi_model`
-  - focused multi-model 单轮
+  - focused multi-model round
 - `run_refine_multi_model_scheduler`
-  - unified search + 多轮 scheduler
+  - unified search + multi-round scheduler
 - `run_refine_family_explore`
-  - multi-seed breadth explore
-  - 当前是 family 级 orchestration 的过渡入口
+  - multi-seed breadth exploration
+  - transitional family-level orchestration entry
 - `run_refine_family_loop`
-  - broad -> anchor graduation -> focused 的 family controller v1
+  - `Broad -> Anchor Graduation -> Focused` family controller v1
 - MMR rerank
 - dual-parent round v1
 - Path Evaluation v2
@@ -81,9 +176,61 @@ source ./llm_refine_provider_env.sh
   - target-aware prompt block
   - de-correlation diagnostics
   - rerank hook
-- `NA-heavy keep / best_node` 收紧
+- `NA-heavy keep / best_node` tightening
 
-## 目录结构
+---
+
+## Typical Research Flow
+
+A simplified view of how `llm_refine` is typically used:
+
+```mermaid
+graph LR
+    A[Seed / Parent] --> B[Prompting]
+    B --> C[LLM Proposal]
+    C --> D[Parsing / Repair]
+    D --> E[Evaluation / Redundancy]
+    E --> F[Rerank / Selection]
+    F --> G[Archive / Promotion / Continuation]
+```
+
+For family-level control, the process can be staged as:
+
+```mermaid
+graph LR
+    A[Family Start] --> B[Broad]
+    B --> C[Anchor Graduation]
+    C --> D[Focused]
+    D --> E[Branch Continue / Promote / Stop]
+```
+
+---
+
+## Before You Run Anything
+
+For any `llm_refine` CLI workflow, the default convention is:
+
+```bash
+cd /root/workspace/zxy_workspace/AlphaRefinery
+cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
+source ./llm_refine_provider_env.sh
+```
+
+### Why this is the default
+
+* `run_refine_*` CLI tools read provider settings from environment variables unless they are explicitly overridden
+* if those variables are not loaded, the CLI may fall back to built-in defaults
+* those defaults are only intended as local fallbacks, not as the normal research configuration
+
+So the current convention is:
+
+* copy `llm_refine_provider_env.example.sh` into a local `llm_refine_provider_env.sh`
+* source that local file
+* then run any `run_refine_*`, scheduler, or family-loop command
+
+---
+
+## Directory Layout
 
 ```text
 factors_store/llm_refine/
@@ -98,319 +245,356 @@ factors_store/llm_refine/
 └── search/
 ```
 
-### 各层职责
-
-- `config.py`
-  - `llm_refine` 的共享默认值入口，集中管理常用 run/provider/path 默认参数
-- `cli/`
-  - 运行入口与 scheduler orchestration
-- `core/`
-  - provider / archive / model / seed_loader
-- `prompting/`
-  - prompt 构建与导出
-  - PromptPlan / prompt block structuring
-- `parsing/`
-  - parser / validator / repair / expression engine
-- `evaluation/`
-  - evaluator / redundancy / promotion
-- `knowledge/`
-  - retrieval / reflection / next experiment planning
-- `search/`
-  - frontier / policy / engine / objectives / path evaluation
-- `docs/`
-  - 子系统设计与调参说明
+### Responsibility by layer
 
-## 最常用入口
+* `config.py`
 
-| 入口 | 适合场景 |
-|------|----------|
-| `run_refine_loop` | 验证 family 能不能跑 |
-| `run_refine_multi_model` | 围绕一个 parent 做 focused round |
-| `run_refine_multi_model_scheduler` | 让系统自动连续跑多轮 |
-| `run_refine_family_explore` | 新 family 广搜、主线未明 |
-| `run_refine_family_loop` | broad 结束后自动挑 anchor 并继续 focused |
+  * shared default values for `llm_refine`, including common run / provider / path defaults
+* `cli/`
 
-## 模式分层说明
+  * runnable entry points and scheduler orchestration
+* `core/`
 
-`llm_refine` 不同层参数解释：
+  * provider / archive / model / seed loading infrastructure
+* `prompting/`
 
-- `stage_mode`
-- `target_profile`
-- `policy_preset`
-- `mode`
+  * prompt construction, export, PromptPlan, prompt block structuring
+* `parsing/`
 
+  * parser / validator / repair / expression engine
+* `evaluation/`
 
-| 层 | 回答的问题 | 典型字段 |
-|---|---|---|
-| 阶段层 | 这轮现在在整个流程里处于什么阶段 | `stage_mode` |
-| 目标层 | 这轮最终想优化什么类型的因子 | `target_profile` |
-| 风格层 | 搜索时更激进还是更保守 | `policy_preset` |
-| 搜索器层 | 搜索器如何组织候选与 frontier | `mode` |
+  * evaluator / redundancy / promotion
+* `knowledge/`
 
-### 补充：context-aware decision layer
+  * retrieval / reflection / next experiment planning
+* `search/`
 
-除了上面的“模式分层”，`llm_refine` 最近还开始把原来分散的选择逻辑往一层统一 decision layer 收敛。
+  * frontier / policy / engine / objectives / path evaluation
+* `docs/`
 
-当前这层主要统一了：
+  * subsystem design, tuning, and usage notes
 
-- multi-model round 的 `best_candidate / best_keep / rerank preview`
-- family loop 的 `anchor selection`
-- family loop 的 `next action recommendation`
+---
 
-它读取的上下文包括：
+## Most Common Entry Points
 
-- `stage_mode`
-- `target_profile`
-- `policy_preset`
-- optional `decorrelation_targets`
-- neutralized evaluation diagnostics
+| Entry                              | Best for                                                  |
+| ---------------------------------- | --------------------------------------------------------- |
+| `run_refine_loop`                  | Smoke testing whether a family can run                    |
+| `run_refine_multi_model`           | Focused round around an existing parent                   |
+| `run_refine_multi_model_scheduler` | Automatically continuing across multiple rounds           |
+| `run_refine_family_explore`        | New family breadth exploration when no main line is clear |
+| `run_refine_family_loop`           | Broad pass, anchor selection, and focused continuation    |
 
-目标不是引入新的大而杂规则，而是让 broad / focused / family loop 在同一套上下文下做更一致的决策。
+---
 
-### 补充：shared context resolver
+## Mode Layering
 
-在 `DecisionContext` 和 `PromptPlan` 之间，最近又补了一层更轻的共享解释层：
+`llm_refine` uses several orthogonal knobs to define what a round is trying to do and how it should behave:
 
-- `ContextEvidence`
-- `ContextProfile`
-- `resolve_context_profile(...)`
-- `OrchestrationProfile`
-- `resolve_orchestration_profile(...)`
+* `stage_mode`
+* `target_profile`
+* `policy_preset`
+* `mode`
 
-它的目标不是替代原始运行参数，而是把：
+| Layer           | Answers                                                   | Typical field    |
+| --------------- | --------------------------------------------------------- | ---------------- |
+| Stage layer     | What stage of the research process this round belongs to  | `stage_mode`     |
+| Objective layer | What kind of factor this round prefers to optimize toward | `target_profile` |
+| Style layer     | How aggressive or conservative the search should be       | `policy_preset`  |
+| Searcher layer  | How candidates and frontier are organized                 | `mode`           |
 
-- `stage_mode`
-- `target_profile`
-- `policy_preset`
-- seed-stage / bootstrap / donor / decorrelation 等运行时证据
+---
 
-先统一解析成一份共享的中间画像，再分别提供给：
+## Additional Notes on the Decision Layer
 
-- prompt block planning
-- decision trace
-- 后续 family / scheduler orchestration
+Beyond the explicit mode layering above, recent iterations have started to consolidate previously scattered selection logic into a shared decision layer.
 
-当前这层还比较克制，主要先统一：
+This currently unifies:
 
-- `search_phase`
-- `exploration_pressure`
-- `redundancy_pressure`
-- `prompt_constraint_style`
-- `memory_mode`
-- `examples_mode`
-- `branching_bias`
-- `next_action_bias`
+* multi-model round `best_candidate / best_keep / rerank preview`
+* family-loop `anchor selection`
+* family-loop `next action recommendation`
 
-它现在已经会随 run 一起记录到 `prompt_trace` 中，便于后续排查：
+It reads context such as:
 
-- 为什么某轮 prompt 更偏 guided / strict
-- 为什么 donor / bootstrap block 被打开或关闭
-- 当前上下文更像 opening / refining / confirming 的哪一种
+* `stage_mode`
+* `target_profile`
+* `policy_preset`
+* optional `decorrelation_targets`
+* neutralized evaluation diagnostics
 
-在 scheduler / family-loop 这一层，最近还新增了更动作导向的 `OrchestrationProfile`。
+The goal is not to introduce a large rule engine.
+The goal is to let broad / focused / family-loop stages make **more coherent decisions under a shared context view**.
 
-它当前不是用来全面接管 orchestration，而是先服务于：
+---
 
-- stage resolve recommendation
-- round strategy trace
-- promotion / parent selection / termination bias 的显式记录
-- 顶层 `summary.json / summary.md` 中的 orchestration-aware 可读展示
+## Additional Notes on Shared Context Resolution
 
-这层的目标是：
+Between `DecisionContext` and `PromptPlan`, the subsystem has also added a lighter shared interpretation layer:
 
-- 先让 orchestration 和 prompt / decision 说同一种上下文语言
-- 再逐步把最稳定、最重复、最容易解释的判断收进自动流程
+* `ContextEvidence`
+* `ContextProfile`
+* `resolve_context_profile(...)`
+* `OrchestrationProfile`
+* `resolve_orchestration_profile(...)`
 
-### 补充：de-correlation refine
+This layer does not replace raw runtime arguments.
+Instead, it interprets them into a reusable intermediate view shared by:
 
-de-correlation 不是默认全局强制目标，而是一种可显式启用的 refine 方向。
+* prompt block planning,
+* decision trace,
+* and family / scheduler orchestration.
 
-当前已落地的部分包括：
+Current dimensions include:
 
-- prompt 中的 de-correlation target set
-- evaluator 中的 nearest-target / average-target correlation diagnostics
-- rerank 中的 soft adjustment hook
+* `search_phase`
+* `exploration_pressure`
+* `redundancy_pressure`
+* `prompt_constraint_style`
+* `memory_mode`
+* `examples_mode`
+* `branching_bias`
+* `next_action_bias`
 
-它更适合用在：
+These are already recorded into `prompt_trace`, which makes it easier to diagnose:
 
-- family 已有主线
-- admission / library 冗余明显
-- 想继续产出“质量不差且不那么像”的支线因子时
+* why a round was guided or strict,
+* why donor / bootstrap blocks were enabled or disabled,
+* whether the context looked more like opening, refining, or confirming.
 
-### 补充：PromptPlan / prompt block structuring
+An additional `OrchestrationProfile` has also been added for the scheduler / family-loop layer.
 
-最近 prompt 层开始做一层更轻量的结构化整理，但**不改变模型最终看到的输入格式**。
+Its role is currently limited and conservative. It mainly serves:
 
-当前新增的不是另一套“强控制 prompt 引擎”，而是一层较克制的 `PromptPlan`：
+* stage resolve recommendation,
+* round strategy trace,
+* explicit recording of promotion / parent selection / termination bias,
+* orchestration-aware summaries in top-level `summary.json / summary.md`
 
-- 只控制 prompt block 的 inclusion / budget / style
-- 暂时不压缩 family 语义
-- 仍然把最终内容 render 成自然语言
+The long-term goal is:
 
-当前 `PromptPlan` 主要覆盖三块：
+* first, let orchestration speak the same context language as prompting and decision
+* then gradually automate only the most stable and most interpretable orchestration behaviors
 
-- `memory`
-  - 是否展示 recent winners / keeps / failures / lineage / reflection
-  - 以及各自的数量预算
-- `constraints`
-  - 约束区块的组织方式与是否展示 anti-pattern / allowed edit types / decorrelation guidance
-- `examples`
-  - family examples / bootstrap frontier / donor motifs 是否出现，以及展示多少
+---
 
-这层的目的不是替代原始上下文，而是把原来散在 prompt builder 里的 block-level if/else 显式化、可追踪化。
+## Additional Notes on De-correlation Refine
 
-当前 run artifact 里的 `prompt_trace` 也已经会一并记录：
+De-correlation is not a globally forced objective.
+It is an explicit refinement direction that can be enabled when needed.
 
-- `stage_mode`
-- `target_profile`
-- `policy_preset`
-- `context_evidence`
-- `context_profile`
-- `prompt_plan`
+Currently implemented pieces include:
 
-这样后面调 prompt 时，可以直接看到：
+* de-correlation target sets in prompting,
+* nearest-target / average-target correlation diagnostics in evaluation,
+* soft rerank adjustment hooks.
 
-- 为什么某轮开了 memory block
-- 为什么 donor motifs 没开
-- 当前 constraints 是按什么 style 组织的
+This is most useful when:
 
-而不需要只靠读最终 prompt 反推。
+* a family already has a strong main line,
+* redundancy against the library becomes visible,
+* and you want to continue producing candidates that are still good, but less similar.
 
-### 1. `stage_mode`
+---
 
-`stage_mode` 是“任务语义标签”，决定这一轮在整个 family research loop 里扮演什么角色。
+## Additional Notes on PromptPlan and Prompt Block Structuring
 
-| `stage_mode` | 含义 | 典型行为 | 适合场景 |
-|---|---|---|---|
-| `auto` | 让系统根据上下文自动判断阶段 | 是否开 seed-stage 由上下文决定 | 兼容旧 workflow、普通试跑 |
-| `new_family_broad` | 新 family 的首轮 broad | 强制 seed-stage、开启 bootstrap / donor / 更丰富 role slots | 新 family 第一次启动 |
-| `broad_followup` | broad 的后续轮 | 仍然偏 search-space opening，但不再是首轮 seed-stage | broad 第 2 轮及以后 |
-| `focused_refine` | 围绕已有 parent 做局部精修 | 倾向小步改写、减少无谓发散 | 已找到 anchor 或主线 |
-| `confirmation` | 对已有候选做确认 | 更偏稳定性与可持续性验证 | 准备 freeze / promote 前 |
-| `donor_validation` | 做 donor / transfer 假设验证 | 更关注跨 family motif 是否成立 | donor 试验、迁移验证 |
+Recent work has introduced a lighter structural layer in prompting, while **not changing the final natural-language prompt format shown to the model**.
 
-即：
+This is not a hard prompt engine.
+It is a relatively conservative `PromptPlan` layer that controls:
 
-- `stage_mode` 决定的是“**这轮在干嘛**”。
+* prompt block inclusion,
+* budget,
+* and style.
 
-### 2. `target_profile`
+It currently covers three main areas:
 
-`target_profile` 是“目标函数偏好”，决定这轮更希望找到哪类因子。
+* `memory`
 
-当前可选项来自 [policy.py](./search/policy.py)：
+  * whether to include recent winners / keeps / failures / lineage / reflection, and how many
+* `constraints`
 
-| `target_profile` | 含义 | 更偏重什么 | 适合场景 |
-|---|---|---|---|
-| `raw_alpha` | 优先找原始 alpha 强度高的因子 | `Ann` / `Excess` / `ICIR` | broad、focused 早中期，先找强信号 |
-| `deployability` | 优先找更容易落地、约束更友好的因子 | constraint / 可部署性 | 后期收口、实盘友好筛选 |
-| `complementarity` | 优先找与已有库互补的因子 | 低冗余、组合补充价值 | admission 前、去冗余 refine |
-| `robustness` | 优先找更稳健的因子 | regime / 稳定性 | confirmation、后期稳健性检查 |
+  * how to organize anti-patterns, allowed edit types, de-correlation guidance
+* `examples`
 
-即：
+  * whether family examples, bootstrap frontier, donor motifs are included, and in what amount
 
-- `target_profile` 决定的是“**这轮想要什么**”。
+The point is not to compress away family semantics.
+It is to make the previously scattered block-level if/else logic more explicit and traceable.
 
-### 3. `policy_preset`
+Current run artifacts already record:
 
-`policy_preset` 是“搜索风格包”，决定同样的搜索器更保守还是更激进。
+* `stage_mode`
+* `target_profile`
+* `policy_preset`
+* `context_evidence`
+* `context_profile`
+* `prompt_plan`
 
-当前可选项同样来自 [policy.py](./search/policy.py)：
+This makes it easier to inspect:
 
-| `policy_preset` | 含义 | 典型特征 | 适合场景 |
-|---|---|---|---|
-| `balanced` | 平衡型默认配置 | 探索、质量、冗余控制都保持中间水平 | 大多数普通 run |
-| `exploratory` | 更愿意打开结构空间 | 更高 exploration / novelty bonus、更大的候选池 | broad、新 family、想多开分支时 |
-| `conservative` | 更注重稳健局部改进 | 更重 turnover / complexity penalty，更少发散 | focused、confirmation、主线已明时 |
+* why memory blocks were enabled,
+* why donor motifs were not included,
+* how constraints were structured,
+* without inferring all of that only from the final prompt text.
 
-即：
+---
 
-- `policy_preset` 决定的是“**这轮怎么搜得更激进/更保守**”。
+## 1. `stage_mode`
 
-### 4. `mode`
+`stage_mode` is the semantic stage label of a round.
+It decides **what this round is doing** inside the overall family research process.
 
-`mode` 更偏“搜索器组织方式”，决定 frontier 与 child record 如何被组织和 rerank。
+| `stage_mode`       | Meaning                                       | Typical behavior                                                 | Best for                     |
+| ------------------ | --------------------------------------------- | ---------------------------------------------------------------- | ---------------------------- |
+| `auto`             | Let the system infer the stage from context   | seed-stage may be enabled by context                             | compatibility / general runs |
+| `new_family_broad` | First broad round for a new family            | force seed-stage, bootstrap / donor / richer role slots          | first launch of a new family |
+| `broad_followup`   | Follow-up rounds within broad search          | still opening search space, but no longer first-round seed-stage | later broad rounds           |
+| `focused_refine`   | Local refinement around an existing main line | smaller-step edits, less unnecessary branching                   | once an anchor exists        |
+| `confirmation`     | Confirm stronger candidates                   | more stability / continuity oriented                             | before freeze / promotion    |
+| `donor_validation` | Validate donor / transfer hypotheses          | focus on whether transferred motifs hold                         | donor experiments            |
 
-目前在 [policy.py](./search/policy.py) 里可以看到的典型 `mode` 包括：
+In short:
 
-| `mode` | 含义 | 典型行为 | 适合场景 |
-|---|---|---|---|
-| `multi_model_best_first` | 多模型 best-first 搜索 | 从多模型 child 中统一挑当前更值得继续的记录 | multi-model / scheduler 主路径 |
-| `family_breadth_first` | family 级 breadth-first 搜索 | 更优先扩 branch / motif，而不是只追 top1 邻域 | broad、family explore、新 family 起步 |
+* `stage_mode` answers **what this round is doing**
 
-即：
+---
 
-- `mode` 决定的是“**搜索树怎么走**”。
+## 2. `target_profile`
 
-## 推荐组合
+`target_profile` is the objective preference of a round.
+It decides **what kind of factor this round wants**.
 
-下面这张表给出当前最常用的组合方式。
+Current options come from [policy.py](./search/policy.py):
 
-| 任务 | `stage_mode` | `target_profile` | `policy_preset` | 常见 `mode` |
-|---|---|---|---|---|
-| 新 family 首轮 broad | `new_family_broad` | `raw_alpha` | `exploratory` | `multi_model_best_first` 或 `family_breadth_first` |
-| broad 后续轮 | `broad_followup` | `raw_alpha` | `exploratory` 或 `balanced` | `multi_model_best_first` |
-| 已有主线 focused | `focused_refine` | `raw_alpha` | `balanced` | `multi_model_best_first` |
-| admission 前去冗余 refine | `focused_refine` | `complementarity` | `balanced` | `multi_model_best_first` |
-| 后期确认 / freeze 前检查 | `confirmation` | `robustness` 或 `deployability` | `conservative` | `multi_model_best_first` |
+| `target_profile`  | Meaning                                                 | Emphasis                                | Best for                             |
+| ----------------- | ------------------------------------------------------- | --------------------------------------- | ------------------------------------ |
+| `raw_alpha`       | prioritize stronger raw alpha                           | `Ann` / `Excess` / `ICIR`               | broad and early / mid focused search |
+| `deployability`   | prioritize more constraint-friendly candidates          | constraint / deployability friendliness | late-stage refinement                |
+| `complementarity` | prioritize lower redundancy and library complementarity | library diversification                 | admission-oriented refinement        |
+| `robustness`      | prioritize stability across regimes and conditions      | stability / regime robustness           | confirmation / late-stage checks     |
 
+In short:
 
-## dual-parent 当前语义
+* `target_profile` answers **what this round wants**
 
-当 dual-parent 触发时，同一轮会保留两条线：
+---
 
-- `quality_parent`
-- `expandability_parent`
+## 3. `policy_preset`
 
-当前执行方式是：
+`policy_preset` is the search-style package.
+It decides **how aggressively or conservatively the round should search**.
 
-- 同轮双 parent
-- 两条 parent 子批次可并行启动
-- 完成后统一 merge child
+Current options also come from [policy.py](./search/policy.py):
+
+| `policy_preset` | Meaning                              | Typical characteristics                                | Best for                      |
+| --------------- | ------------------------------------ | ------------------------------------------------------ | ----------------------------- |
+| `balanced`      | balanced default configuration       | moderate exploration / quality / redundancy trade-off  | most runs                     |
+| `exploratory`   | more willing to open structure space | higher exploration / novelty bonus / larger pool       | broad runs, new families      |
+| `conservative`  | emphasize safer local improvement    | stronger turnover / complexity penalty, less branching | focused / confirmation rounds |
+
+In short:
+
+* `policy_preset` answers **how this round searches**
+
+---
+
+## 4. `mode`
+
+`mode` is closer to the searcher organization itself.
+It decides **how the search tree or frontier is traversed**.
+
+Typical modes in [policy.py](./search/policy.py) include:
+
+| `mode`                   | Meaning                           | Typical behavior                                                               | Best for                           |
+| ------------------------ | --------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| `multi_model_best_first` | multi-model best-first search     | unify candidates from multiple models and continue the most promising ones     | multi-model / scheduler main path  |
+| `family_breadth_first`   | family-level breadth-first search | prefer opening branches and motifs rather than only chasing top1 neighborhoods | broad exploration / family explore |
+
+In short:
+
+* `mode` answers **how the search tree is walked**
+
+---
+
+## Recommended Combinations
+
+| Task                                       | `stage_mode`       | `target_profile`                | `policy_preset`             | Common `mode`                                      |
+| ------------------------------------------ | ------------------ | ------------------------------- | --------------------------- | -------------------------------------------------- |
+| first broad round for a new family         | `new_family_broad` | `raw_alpha`                     | `exploratory`               | `multi_model_best_first` or `family_breadth_first` |
+| later broad rounds                         | `broad_followup`   | `raw_alpha`                     | `exploratory` or `balanced` | `multi_model_best_first`                           |
+| focused refinement around an existing line | `focused_refine`   | `raw_alpha`                     | `balanced`                  | `multi_model_best_first`                           |
+| de-correlation / admission-oriented refine | `focused_refine`   | `complementarity`               | `balanced`                  | `multi_model_best_first`                           |
+| late confirmation / freeze checks          | `confirmation`     | `robustness` or `deployability` | `conservative`              | `multi_model_best_first`                           |
+
+---
+
+## Current Dual-Parent Semantics
+
+When dual-parent is triggered, the system currently keeps two parallel continuation lines:
+
+* `quality_parent`
+* `expandability_parent`
+
+Current execution style:
+
+* dual parent within the same round,
+* child batches from both parents can launch in parallel,
+* children are merged afterward for unified continuation and comparison.
+
+---
 
 ## Target-Conditioned Search v1
 
-当前已支持 target profile：
+Currently supported target profiles:
 
-- `raw_alpha`
-- `deployability`
-- `complementarity`
-- `robustness`
+* `raw_alpha`
+* `deployability`
+* `complementarity`
+* `robustness`
 
-当前已落地的 aware module：
+Currently implemented aware modules:
 
-- `Constraint-aware`
-- `Portfolio-aware`
+* `Constraint-aware`
+* `Portfolio-aware`
 
-当前先保留接口：
+Interfaces currently reserved:
 
-- `Regime-aware`
-- `Transfer-aware`
+* `Regime-aware`
+* `Transfer-aware`
 
-## 先看哪份文档
+---
 
-### 想知道该用哪个入口
+## Where to Read Next
 
-- [docs/modes.md](./docs/modes.md)
+### Want to know which entry to use
 
-### 想看 frontier / MMR / dual-parent
+* [docs/modes.md](./docs/modes.md)
 
-- [docs/search_and_dual_parent.md](./docs/search_and_dual_parent.md)
+### Want to inspect frontier / MMR / dual-parent
 
-### 想调 `SearchPolicy`
+* [docs/search_and_dual_parent.md](./docs/search_and_dual_parent.md)
 
-- [docs/policy_tuning.md](./docs/policy_tuning.md)
+### Want to tune `SearchPolicy`
 
-### 想看 `research_keep / research_winner / promotion`
+* [docs/policy_tuning.md](./docs/policy_tuning.md)
 
-- [docs/evaluation_and_promotion.md](./docs/evaluation_and_promotion.md)
+### Want to inspect `research_keep / research_winner / promotion`
 
-### 想看 `Path Evaluation v2`
+* [docs/evaluation_and_promotion.md](./docs/evaluation_and_promotion.md)
 
-- [docs/path_evaluation.md](./docs/path_evaluation.md)
+### Want to understand `Path Evaluation v2`
 
-## 快速示例
+* [docs/path_evaluation.md](./docs/path_evaluation.md)
 
-所有示例都默认已经执行过：
+---
+
+## Quick Examples
+
+All examples assume you have already run:
 
 ```bash
 cd /root/workspace/zxy_workspace/AlphaRefinery
@@ -418,7 +602,7 @@ cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
 
-### 单轮 smoke
+### Single-round smoke test
 
 ```bash
 PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
@@ -428,7 +612,7 @@ python -m factors_store.llm_refine.cli.run_refine_loop \
   --auto-parent
 ```
 
-### focused multi-model
+### Focused multi-model round
 
 ```bash
 PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
@@ -440,15 +624,22 @@ python -m factors_store.llm_refine.cli.run_refine_multi_model \
   --n-candidates 6
 ```
 
-## 产物目录
+---
 
-- 单轮：
-  - `artifacts/runs/llm_refine_single/`
-- 多模型：
-  - `artifacts/runs/llm_refine_multi/`
-- 多模型 scheduler：
-  - `artifacts/runs/llm_refine_multi_scheduler/`
-- family explore：
-  - `artifacts/runs/llm_refine_family_explore/`
-- family loop：
-  - `artifacts/runs/llm_refine_family_loop/`
+## Artifact Directories
+
+* single-round:
+
+  * `artifacts/runs/llm_refine_single/`
+* multi-model:
+
+  * `artifacts/runs/llm_refine_multi/`
+* multi-model scheduler:
+
+  * `artifacts/runs/llm_refine_multi_scheduler/`
+* family explore:
+
+  * `artifacts/runs/llm_refine_family_explore/`
+* family loop:
+
+  * `artifacts/runs/llm_refine_family_loop/`
