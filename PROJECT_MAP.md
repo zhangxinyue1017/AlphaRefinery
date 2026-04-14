@@ -35,7 +35,7 @@ AlphaRefinery/
 ├── config/
 ├── docs/
 └── factors_store/
-````
+```
 
 ### Top-level files
 
@@ -60,7 +60,6 @@ AlphaRefinery/
 ## `config/`: tracked shared configuration
 
 ```text
-```
 config/
 ├── factor_manifests/
 │   ├── alpha158.yaml
