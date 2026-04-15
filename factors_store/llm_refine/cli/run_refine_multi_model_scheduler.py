@@ -771,6 +771,12 @@ def _bootstrap_round1_selection(
     return selected_parents, latest_selection
 
 def main() -> int:
+    try:
+        sys.stdout.reconfigure(line_buffering=True, write_through=True)
+        sys.stderr.reconfigure(line_buffering=True, write_through=True)
+    except Exception:
+        pass
+
     args = build_arg_parser().parse_args()
     models = _normalize_models(args.models)
 

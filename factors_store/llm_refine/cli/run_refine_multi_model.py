@@ -381,6 +381,17 @@ def _read_child_run_summary(child_runs_dir: str | Path) -> dict[str, object]:
         return {}
 
 
+def _read_child_runtime_status(child_runs_dir: str | Path) -> dict[str, object]:
+    root = Path(child_runs_dir)
+    status_paths = sorted(root.glob("*/metadata/runtime_status.json"))
+    if not status_paths:
+        return {}
+    try:
+        return json.loads(status_paths[-1].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def _pick_prompt_trace(completed: list[dict[str, object]]) -> dict[str, object]:
     for item in completed:
         summary = dict(item.get("child_summary") or {})
@@ -607,6 +618,12 @@ def _resolve_initial_parent(args: argparse.Namespace) -> dict[str, str]:
 
 
 def main() -> int:
+    try:
+        sys.stdout.reconfigure(line_buffering=True, write_through=True)
+        sys.stderr.reconfigure(line_buffering=True, write_through=True)
+    except Exception:
+        pass
+
     args = build_arg_parser().parse_args()
     models = _parse_models(args.models)
     if not models:
@@ -712,6 +729,7 @@ def main() -> int:
     pending = list(plan)
     running: list[dict[str, object]] = []
     completed: list[dict[str, object]] = []
+    next_progress_emit_at = time.monotonic() + 30.0
     engine.record_attempt(parent_node_id=selected_parent.node_id, note="run_refine_multi_model_orchestrator")
 
     while pending or running:
@@ -737,11 +755,32 @@ def main() -> int:
             running.append(item)
 
         still_running: list[dict[str, object]] = []
+        now = time.monotonic()
+        emit_running_progress = now >= next_progress_emit_at
         for item in running:
             proc = item["process"]
             assert isinstance(proc, subprocess.Popen)
             ret = proc.poll()
             if ret is None:
+                runtime_status = _read_child_runtime_status(str(item["child_runs_dir"]))
+                phase = str(runtime_status.get("phase", "") or "starting")
+                message = str(runtime_status.get("message", "") or "").strip()
+                elapsed = runtime_status.get("elapsed_seconds")
+                status_signature = (phase, message)
+                if emit_running_progress or status_signature != item.get("last_status_signature"):
+                    elapsed_text = (
+                        f"{float(elapsed):.1f}s"
+                        if isinstance(elapsed, (int, float))
+                        else str(elapsed)
+                        if elapsed is not None
+                        else "?"
+                    )
+                    suffix = f" message={message}" if message else ""
+                    print(
+                        f"[progress] model={item['model']} round_id={item['round_id']} "
+                        f"phase={phase} elapsed={elapsed_text}{suffix}"
+                    )
+                    item["last_status_signature"] = status_signature
                 still_running.append(item)
                 continue
             log_fp = item.pop("log_fp")
@@ -755,6 +794,8 @@ def main() -> int:
                 f"status={status} returncode={ret}"
             )
         running = still_running
+        if emit_running_progress:
+            next_progress_emit_at = time.monotonic() + 30.0
         if running:
             time.sleep(1.0)
 

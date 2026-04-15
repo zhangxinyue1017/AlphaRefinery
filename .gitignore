@@ -58,10 +58,10 @@ factors_store/factors/factor365_pattern.py
 scripts/organize_runs_by_family.py
 scripts/refresh_run_indexes.py
 update_panel_from_baostock.sh
+factors_store/autofactorset_bridge/
 
 # Generated artifacts and runtime outputs
 artifacts/**
 !artifacts/
 !artifacts/**/
 !artifacts/README.md
-!artifacts/**/README.md

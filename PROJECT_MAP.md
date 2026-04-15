@@ -105,8 +105,7 @@ factors_store/
 ├── registry.py
 ├── _vendor/
 ├── factors/
-├── llm_refine/
-└── autofactorset_bridge/
+└── llm_refine/
 ```
 
 This is the main code layer of AlphaRefinery.
@@ -241,19 +240,6 @@ For subsystem-level usage and design details, see:
 * `docs/`
 
   * subsystem-specific design and tuning notes
-
----
-
-## `factors_store/autofactorset_bridge/`: optional downstream adapter
-
-This layer provides an optional bridge between formal registry factors and downstream admission workflows.
-
-It is not required for the core `llm_refine` research loop.
-
-Representative scripts include:
-
-* [`evaluate_registry_manifest.py`](./factors_store/autofactorset_bridge/evaluate_registry_manifest.py)
-* [`batch_import_from_manifest.py`](./factors_store/autofactorset_bridge/batch_import_from_manifest.py)
 
 ---
 

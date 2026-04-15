@@ -21,7 +21,7 @@
 - 🎯 **Target-conditioned search** for `raw_alpha`, `deployability`, and `complementarity`
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
 - 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
-- 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and optional downstream admission**
+- 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and optional external admission tracking**
 
 ## 📌 Start Here
 
@@ -58,7 +58,7 @@ Around this engine, AlphaRefinery provides the surrounding infrastructure needed
 - formal factor implementation and registration,
 - evaluation, archives, and reports,
 - formal factor promotion,
-- and an optional downstream admission adapter.
+- and optional external admission-oriented result tracking.
 
 In short, AlphaRefinery combines a flagship LLM-driven refinement engine with the supporting infrastructure required for continuous factor research.
 
@@ -140,7 +140,7 @@ AlphaRefinery serves as the unified workspace for three major layers of work:
 
 - **formal factors and registry**
 - **family-level research loops driven by `llm_refine`**
-- **artifacts, reports, and optional downstream admission-oriented evaluation**
+- **artifacts, reports, and optional external admission-oriented evaluation**
 
 In practice:
 
@@ -157,7 +157,6 @@ graph LR
     B --> C[llm_refine]
     C --> D[search / evaluation / archive]
     D --> E[factors_store/factors/llm_refined]
-    E --> F[autofactorset_bridge]
     D --> G[artifacts/runs]
     D --> H[artifacts/reports]
 ```
@@ -187,8 +186,8 @@ graph TD
         C3["artifacts/llm_refine_promotions/*"]
     end
 
-    subgraph Admission["Admission Layer"]
-        D1["autofactorset_bridge/*"]
+    subgraph Admission["Optional External Admission Layer"]
+        D1["external admission workflow"]
         D2["artifacts/autofactorset_ingest/*"]
         D3["artifacts/runs/autofactorset_ingest/*"]
     end
@@ -258,9 +257,9 @@ This allows it to preserve:
 
 while keeping the formal factor layer cleaner and more maintainable.
 
-### 4. Optional downstream admission adapter
+### 4. Optional external admission workflows
 
-Promoted factors can optionally flow through `autofactorset_bridge` for downstream library admission or company-specific promotion checks.
+Promoted factors can optionally be evaluated by external admission workflows or private factor-library pipelines.
 
 This layer is intentionally optional.
 The main AlphaRefinery research workflow does **not** depend on it.
@@ -272,27 +271,7 @@ The main AlphaRefinery research workflow does **not** depend on it.
 AlphaRefinery has evolved beyond a lightweight prototype.
 It is already capable of supporting a complete family-level factor research loop in a usable working environment.
 
-### Registered factors
-
-Current registered factor counts:
-
-* `alpha101`: `101`
-* `alpha158`: `158`
-* `alpha191`: `191`
-* `alpha360`: `360`
-* `gp_mined`: `12`
-* `seed_baseline`: `4`
-* `qp_kline`: `9`
-* `qp_momentum`: `16`
-* `qp_volatility`: `20`
-* `qp_behavior`: `8`
-* `qp_salience`: `9`
-* `qp_chip`: `8`
-* `llm_refined`: `123`
-
-**Total: `1019` registered factors**
-
-#### Public vs private factor assets
+### Public vs private factor assets
 
 This public repository keeps only a subset of factor implementations for reproducibility, examples, and benchmarking.
 
@@ -311,7 +290,7 @@ The current architecture is already functional, but several modules are still be
 * richer evaluation criteria,
 * more robust archive and promotion tooling,
 * improved reporting and workflow automation,
-* and further extensions to intraday evaluation and downstream admission logic.
+* and further extensions to intraday evaluation and external admission logic.
 
 So while the system is already usable, it should still be viewed as an evolving research platform rather than a finalized product.
 
@@ -324,7 +303,7 @@ So while the system is already usable, it should still be viewed as an evolving 
 | `factors_store/`            | formal factor computation and registry  |
 | `factors_store/llm_refine/` | flagship family-level refinement engine |
 | `artifacts/`                | runs, reports, promotion artifacts      |
-| `autofactorset_bridge/`     | optional downstream admission adapter   |
+| optional admission outputs  | external admission results and summaries |
 
 For a more detailed structural walkthrough, see:
 
@@ -344,7 +323,7 @@ graph LR
     C --> E[Promotion / Manual Selection]
     E --> F[llm_refined/*.py]
     F --> G[registry]
-    G --> H[autofactorset admission]
+    G --> H[external admission]
 ```
 
 Typical repository destinations:
@@ -537,8 +516,7 @@ AlphaRefinery/
 │   ├── _vendor/
 │   │   └── gpqlib_runtime/
 │   ├── factors/
-│   ├── llm_refine/
-│   └── autofactorset_bridge/
+│   └── llm_refine/
 └── artifacts/
     ├── runs/
     ├── reports/
@@ -581,11 +559,11 @@ Near-term directions may include:
 * more target-conditioned search objectives,
 * stronger robustness-aware evaluation,
 * more automated promotion and reporting pipelines,
-* cleaner integration between family research and optional admission workflows,
+* cleaner integration between family research and optional external admission workflows,
 * and broader support for intraday and cross-frequency evaluation.
 
 ---
 
 ## One-Sentence Summary
 
-> **AlphaRefinery is an LLM-augmented research platform for A-share alpha factors, centered on the `llm_refine` family-level refinement engine and supported by formal factor infrastructure, research artifact management, and optional downstream admission workflows.**
+> **AlphaRefinery is an LLM-augmented research platform for A-share alpha factors, centered on the `llm_refine` family-level refinement engine and supported by formal factor infrastructure, research artifact management, and optional external admission workflows.**
