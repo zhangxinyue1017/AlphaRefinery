@@ -703,7 +703,7 @@ updated family state
 The first code-level step is a read-only stage-transition advisory layer, not a
 rewrite of the scheduler.
 
-Recommended first object:
+Implemented state/action/feedback objects:
 
 ```python
 @dataclass
@@ -719,6 +719,37 @@ class FamilyState:
     failure_state: FailureState
     promotion_state: PromotionState
     budget_state: BudgetState
+```
+
+```python
+@dataclass
+class RefinementAction:
+    stage_mode: str
+    target_profile: str
+    policy_preset: str
+    parent_selection: str
+    decorrelation_targets: list[str]
+    models: list[str]
+    n_candidates: int
+    max_rounds: int
+```
+
+```python
+@dataclass
+class EvaluationFeedback:
+    status: str
+    search_improved: bool
+    winner: dict
+    keep: dict
+    best_anchor: dict
+    passed_anchor_count: int
+    focused_best_node: dict
+    consecutive_no_improve: int
+    high_corr_count: int
+    high_turnover_count: int
+    validation_fail_count: int
+    budget_exhausted: bool
+    frontier_exhausted: bool
 ```
 
 Implemented transition decision object:
@@ -741,11 +772,18 @@ class StageTransitionDecision:
 Implemented resolver:
 
 ```python
-def resolve_stage_transition(
+def resolve_stage_transition_from_state(
     state: FamilyState,
     action: RefinementAction,
     feedback: EvaluationFeedback,
 ) -> StageTransitionDecision:
+    ...
+```
+
+There is also a lower-level compatibility resolver:
+
+```python
+def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransitionDecision:
     ...
 ```
 

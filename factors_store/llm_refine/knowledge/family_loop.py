@@ -26,10 +26,13 @@ from ..parsing.expression_engine import WideExpressionEngine
 from ..search import (
     DecisionContext,
     DecisionEngine,
+    EvaluationFeedback,
     FamilyDecisionState,
+    FamilyState,
+    RefinementAction,
     SearchPolicy,
-    StageTransitionEvidence,
-    resolve_stage_transition,
+    build_stage_transition_evidence,
+    resolve_stage_transition_from_state,
 )
 from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
@@ -976,22 +979,39 @@ def build_family_loop_summary(
         last_round_keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
         recommended_stage_mode_hint=str(next_action.get("recommended_next_stage_preset", "") or ""),
     )
-    stage_transition_evidence = StageTransitionEvidence(
-        family=family,
-        current_stage="focused_refine" if focused_run_dir is not None else "family_loop",
+    family_state = FamilyState(
+        family_id=family,
+        stage="focused_refine" if focused_run_dir is not None else "family_loop",
+        target_profile=target_profile,
+        best_node=dict(state.focused_best_node or state.broad_best_node or {}),
+        redundancy_state={},
+        failure_state={},
+        budget_state={"budget_exhausted": False, "frontier_exhausted": False},
+    )
+    refinement_action = RefinementAction(
+        stage_mode=family_state.stage,
         target_profile=target_profile,
         policy_preset="balanced",
-        last_round_status="ok" if int(focused_returncode) == 0 else "failed",
-        last_round_search_improved=bool(next_action.get("recommended_next_step") == "continue_focused"),
-        last_round_winner=dict(state.focused_best_candidate or state.broad_best_candidate or {}),
-        last_round_keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
+    )
+    evaluation_feedback = EvaluationFeedback(
+        status="ok" if int(focused_returncode) == 0 else "failed",
+        search_improved=bool(next_action.get("recommended_next_step") == "continue_focused"),
+        winner=dict(state.focused_best_candidate or state.broad_best_candidate or {}),
+        keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
         best_anchor=dict((anchor_selection or {}).get("best_anchor") or {}),
         passed_anchor_count=len((anchor_selection or {}).get("passed_candidates") or []),
         focused_best_node=dict(state.focused_best_node or {}),
-        budget_exhausted=False,
-        frontier_exhausted=False,
     )
-    stage_transition = resolve_stage_transition(stage_transition_evidence)
+    stage_transition_evidence = build_stage_transition_evidence(
+        family_state,
+        refinement_action,
+        evaluation_feedback,
+    )
+    stage_transition = resolve_stage_transition_from_state(
+        family_state,
+        refinement_action,
+        evaluation_feedback,
+    )
 
     return {
         "family": family,
@@ -1025,6 +1045,9 @@ def build_family_loop_summary(
         "orchestration_context_evidence": orchestration_evidence.to_dict(),
         "orchestration_context_profile": orchestration_context_profile.to_dict(),
         "orchestration_profile": orchestration_profile.to_dict(),
+        "family_state": family_state.to_dict(),
+        "refinement_action": refinement_action.to_dict(),
+        "evaluation_feedback": evaluation_feedback.to_dict(),
         "stage_transition_evidence": stage_transition_evidence.to_dict(),
         "stage_transition": stage_transition.to_dict(),
         "broad_returncode": int(broad_returncode),

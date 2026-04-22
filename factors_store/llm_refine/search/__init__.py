@@ -23,7 +23,16 @@ from .run_ingest import (
     resolve_materialized_single_run_dir,
 )
 from .scoring import compute_base_score, compute_frontier_score, winner_improved
-from .stage_transition import StageTransitionDecision, StageTransitionEvidence, resolve_stage_transition
+from .stage_transition import (
+    EvaluationFeedback,
+    FamilyState,
+    RefinementAction,
+    StageTransitionDecision,
+    StageTransitionEvidence,
+    build_stage_transition_evidence,
+    resolve_stage_transition,
+    resolve_stage_transition_from_state,
+)
 from .state import SearchBudget, SearchEdge, SearchNode
 
 __all__ = [
@@ -34,7 +43,10 @@ __all__ = [
     "OrchestrationProfile",
     "DecisionContext",
     "DecisionEngine",
+    "EvaluationFeedback",
     "FamilyDecisionState",
+    "FamilyState",
+    "RefinementAction",
     "SearchEdge",
     "SearchEngine",
     "SearchFrontier",
@@ -43,6 +55,7 @@ __all__ = [
     "SearchPolicy",
     "StageTransitionDecision",
     "StageTransitionEvidence",
+    "build_stage_transition_evidence",
     "build_search_normalizer",
     "compute_base_score",
     "compute_frontier_score",
@@ -55,5 +68,6 @@ __all__ = [
     "resolve_context_profile",
     "resolve_orchestration_profile",
     "resolve_stage_transition",
+    "resolve_stage_transition_from_state",
     "winner_improved",
 ]

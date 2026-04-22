@@ -27,11 +27,20 @@ from ..core.archive import (
 )
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..knowledge.round1 import build_bootstrap_frontier, is_seed_stage_node_kind, select_bootstrap_parent
-from ..search import SearchBudget, SearchEngine, SearchPolicy, StageTransitionEvidence, build_search_normalizer
+from ..search import (
+    EvaluationFeedback,
+    FamilyState,
+    RefinementAction,
+    SearchBudget,
+    SearchEngine,
+    SearchPolicy,
+    build_stage_transition_evidence,
+    build_search_normalizer,
+)
 from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
 from ..search.scoring import pairwise_similarity
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
-from ..search.stage_transition import resolve_stage_transition
+from ..search.stage_transition import resolve_stage_transition_from_state
 from .run_refine_multi_model import build_arg_parser as build_multi_model_arg_parser
 
 _STAGE_MODE_CHOICES = (
@@ -317,28 +326,58 @@ def _build_orchestration_trace(
         last_round_keep=keep,
         recommended_stage_mode_hint=recommended_stage_mode_hint,
     )
-    stage_transition_evidence = StageTransitionEvidence(
-        family=family,
-        current_stage=stage_mode,
+    family_state = FamilyState(
+        family_id=family,
+        stage=stage_mode,
+        target_profile=target_profile,
+        failure_state={
+            "high_corr_count": int(high_corr_count),
+            "high_turnover_count": int(high_turnover_count),
+            "validation_fail_count": int(validation_fail_count),
+        },
+        budget_state={
+            "consecutive_no_improve": int(consecutive_no_improve),
+            "budget_exhausted": bool(budget_exhausted),
+            "frontier_exhausted": bool(frontier_exhausted),
+        },
+        redundancy_state={"has_decorrelation_targets": bool(has_decorrelation_targets)},
+    )
+    refinement_action = RefinementAction(
+        stage_mode=stage_mode,
         target_profile=target_profile,
         policy_preset=policy_preset,
-        last_round_status=round_status,
-        last_round_search_improved=search_improved,
-        last_round_winner=dict(winner or {}),
-        last_round_keep=dict(keep or {}),
+        decorrelation_targets=("__present__",) if has_decorrelation_targets else (),
+        n_candidates=int(requested_candidate_count or 0),
+    )
+    evaluation_feedback = EvaluationFeedback(
+        status=round_status,
+        search_improved=search_improved,
+        winner=dict(winner or {}),
+        keep=dict(keep or {}),
         consecutive_no_improve=int(consecutive_no_improve),
         high_corr_count=int(high_corr_count),
         high_turnover_count=int(high_turnover_count),
         validation_fail_count=int(validation_fail_count),
         budget_exhausted=bool(budget_exhausted),
         frontier_exhausted=bool(frontier_exhausted),
-        has_decorrelation_targets=bool(has_decorrelation_targets),
     )
-    stage_transition = resolve_stage_transition(stage_transition_evidence)
+    stage_transition_evidence = build_stage_transition_evidence(
+        family_state,
+        refinement_action,
+        evaluation_feedback,
+    )
+    stage_transition = resolve_stage_transition_from_state(
+        family_state,
+        refinement_action,
+        evaluation_feedback,
+    )
     return {
         "context_evidence": evidence.to_dict(),
         "context_profile": context_profile.to_dict(),
         "orchestration_profile": orchestration_profile.to_dict(),
+        "family_state": family_state.to_dict(),
+        "refinement_action": refinement_action.to_dict(),
+        "evaluation_feedback": evaluation_feedback.to_dict(),
         "stage_transition_evidence": stage_transition_evidence.to_dict(),
         "stage_transition": stage_transition.to_dict(),
     }
@@ -735,6 +774,9 @@ def _build_scheduler_summary_payload(
         "orchestration_context_evidence": dict(last_round.get("context_evidence") or {}),
         "orchestration_context_profile": dict(last_round.get("context_profile") or {}),
         "orchestration_profile": dict(last_round.get("orchestration_profile") or {}),
+        "family_state": dict(last_round.get("family_state") or {}),
+        "refinement_action": dict(last_round.get("refinement_action") or {}),
+        "evaluation_feedback": dict(last_round.get("evaluation_feedback") or {}),
         "stage_transition_evidence": dict(last_round.get("stage_transition_evidence") or {}),
         "stage_transition": dict(last_round.get("stage_transition") or {}),
         "best_node": final_best,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
@@ -13,6 +13,59 @@ def _safe_float(value: object, default: float = float("nan")) -> float:
 
 def _finite(value: float) -> bool:
     return value == value
+
+
+@dataclass(frozen=True)
+class FamilyState:
+    family_id: str
+    stage: str = "auto"
+    target_profile: str = "raw_alpha"
+    parent_set: tuple[dict[str, Any], ...] = ()
+    best_node: dict[str, Any] | None = None
+    frontier_nodes: tuple[dict[str, Any], ...] = ()
+    motif_state: dict[str, Any] = field(default_factory=dict)
+    redundancy_state: dict[str, Any] = field(default_factory=dict)
+    failure_state: dict[str, Any] = field(default_factory=dict)
+    promotion_state: dict[str, Any] = field(default_factory=dict)
+    budget_state: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RefinementAction:
+    stage_mode: str = "auto"
+    target_profile: str = "raw_alpha"
+    policy_preset: str = "balanced"
+    parent_selection: str = "best_node"
+    decorrelation_targets: tuple[str, ...] = ()
+    models: tuple[str, ...] = ()
+    n_candidates: int = 0
+    max_rounds: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class EvaluationFeedback:
+    status: str = ""
+    search_improved: bool = False
+    winner: dict[str, Any] | None = None
+    keep: dict[str, Any] | None = None
+    best_anchor: dict[str, Any] | None = None
+    passed_anchor_count: int = 0
+    focused_best_node: dict[str, Any] | None = None
+    consecutive_no_improve: int = 0
+    high_corr_count: int = 0
+    high_turnover_count: int = 0
+    validation_fail_count: int = 0
+    budget_exhausted: bool = False
+    frontier_exhausted: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -88,6 +141,56 @@ def _material_gain(candidate: dict[str, Any], baseline: dict[str, Any]) -> bool:
 
 def _factor_name(payload: dict[str, Any]) -> str:
     return str(payload.get("factor_name") or payload.get("candidate_name") or "").strip()
+
+
+def build_stage_transition_evidence(
+    state: FamilyState,
+    action: RefinementAction,
+    feedback: EvaluationFeedback,
+) -> StageTransitionEvidence:
+    failure_state = dict(state.failure_state or {})
+    budget_state = dict(state.budget_state or {})
+    redundancy_state = dict(state.redundancy_state or {})
+    return StageTransitionEvidence(
+        family=str(state.family_id),
+        current_stage=str(action.stage_mode or state.stage or "auto"),
+        target_profile=str(action.target_profile or state.target_profile or "raw_alpha"),
+        policy_preset=str(action.policy_preset or "balanced"),
+        last_round_status=str(feedback.status or ""),
+        last_round_search_improved=bool(feedback.search_improved),
+        last_round_winner=dict(feedback.winner or {}),
+        last_round_keep=dict(feedback.keep or {}),
+        best_anchor=dict(feedback.best_anchor or {}),
+        passed_anchor_count=int(feedback.passed_anchor_count or 0),
+        focused_best_node=dict(feedback.focused_best_node or {}),
+        consecutive_no_improve=int(
+            feedback.consecutive_no_improve
+            or budget_state.get("consecutive_no_improve")
+            or 0
+        ),
+        high_corr_count=int(feedback.high_corr_count or failure_state.get("high_corr_count") or 0),
+        high_turnover_count=int(
+            feedback.high_turnover_count or failure_state.get("high_turnover_count") or 0
+        ),
+        validation_fail_count=int(
+            feedback.validation_fail_count or failure_state.get("validation_fail_count") or 0
+        ),
+        budget_exhausted=bool(feedback.budget_exhausted or budget_state.get("budget_exhausted")),
+        frontier_exhausted=bool(feedback.frontier_exhausted or budget_state.get("frontier_exhausted")),
+        has_decorrelation_targets=bool(
+            action.decorrelation_targets
+            or redundancy_state.get("decorrelation_targets")
+            or redundancy_state.get("has_decorrelation_targets")
+        ),
+    )
+
+
+def resolve_stage_transition_from_state(
+    state: FamilyState,
+    action: RefinementAction,
+    feedback: EvaluationFeedback,
+) -> StageTransitionDecision:
+    return resolve_stage_transition(build_stage_transition_evidence(state, action, feedback))
 
 
 def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransitionDecision:
