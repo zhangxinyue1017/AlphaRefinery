@@ -92,11 +92,19 @@ This directory stores tracked shared configuration.
 
 ```text
 docs/
+├── family_search_formulation.md
 └── assets/
     └── alpharefinery_cover.png
 ```
 
-This directory stores documentation assets used by the repository, such as the README cover figure.
+This directory stores project-level method notes and documentation assets.
+
+* [`docs/family_search_formulation.md`](./docs/family_search_formulation.md)
+
+  * formalizes family-level staged refinement as a sequential search / decision problem
+* [`docs/assets/`](./docs/assets/)
+
+  * README and documentation assets
 
 ---
 
@@ -297,7 +305,8 @@ This keeps the standalone repository lightweight while preserving a stable defau
 
 1. [README.md](./README.md)
 2. [PROJECT_MAP.md](./PROJECT_MAP.md)
-3. [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
+3. [docs/family_search_formulation.md](./docs/family_search_formulation.md)
+4. [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
 
 ### If you want to inspect the flagship subsystem
 

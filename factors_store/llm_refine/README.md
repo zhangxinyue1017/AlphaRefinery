@@ -570,6 +570,10 @@ Interfaces currently reserved:
 
 ## Where to Read Next
 
+### Want the formal search formulation
+
+* [../../docs/family_search_formulation.md](../../docs/family_search_formulation.md)
+
 ### Want to know which entry to use
 
 * [docs/modes.md](./docs/modes.md)

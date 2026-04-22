@@ -485,6 +485,7 @@ AlphaRefinery/
 │   ├── factor_manifests/
 │   └── refinement_seed_pool.yaml
 ├── docs/
+│   ├── family_search_formulation.md
 │   └── assets/
 ├── factors_store/
 │   ├── contract.py
@@ -517,8 +518,9 @@ AlphaRefinery/
 ### 如果你想先看旗舰子系统
 
 1. [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
-2. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
-3. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
+2. [docs/family_search_formulation.md](./docs/family_search_formulation.md)
+3. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
+4. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
 
 ### 如果你想看研究输出
 
