@@ -27,10 +27,11 @@ from ..core.archive import (
 )
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..knowledge.round1 import build_bootstrap_frontier, is_seed_stage_node_kind, select_bootstrap_parent
-from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
+from ..search import SearchBudget, SearchEngine, SearchPolicy, StageTransitionEvidence, build_search_normalizer
 from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
 from ..search.scoring import pairwise_similarity
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
+from ..search.stage_transition import resolve_stage_transition
 from .run_refine_multi_model import build_arg_parser as build_multi_model_arg_parser
 
 _STAGE_MODE_CHOICES = (
@@ -286,6 +287,12 @@ def _build_orchestration_trace(
     winner: dict[str, Any],
     keep: dict[str, Any],
     recommended_stage_mode_hint: str = "",
+    consecutive_no_improve: int = 0,
+    high_corr_count: int = 0,
+    high_turnover_count: int = 0,
+    validation_fail_count: int = 0,
+    budget_exhausted: bool = False,
+    frontier_exhausted: bool = False,
 ) -> dict[str, Any]:
     evidence = ContextEvidence.from_runtime(
         family=family,
@@ -310,10 +317,30 @@ def _build_orchestration_trace(
         last_round_keep=keep,
         recommended_stage_mode_hint=recommended_stage_mode_hint,
     )
+    stage_transition_evidence = StageTransitionEvidence(
+        family=family,
+        current_stage=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        last_round_status=round_status,
+        last_round_search_improved=search_improved,
+        last_round_winner=dict(winner or {}),
+        last_round_keep=dict(keep or {}),
+        consecutive_no_improve=int(consecutive_no_improve),
+        high_corr_count=int(high_corr_count),
+        high_turnover_count=int(high_turnover_count),
+        validation_fail_count=int(validation_fail_count),
+        budget_exhausted=bool(budget_exhausted),
+        frontier_exhausted=bool(frontier_exhausted),
+        has_decorrelation_targets=bool(has_decorrelation_targets),
+    )
+    stage_transition = resolve_stage_transition(stage_transition_evidence)
     return {
         "context_evidence": evidence.to_dict(),
         "context_profile": context_profile.to_dict(),
         "orchestration_profile": orchestration_profile.to_dict(),
+        "stage_transition_evidence": stage_transition_evidence.to_dict(),
+        "stage_transition": stage_transition.to_dict(),
     }
 
 
@@ -386,9 +413,11 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
     context_evidence = dict(summary.get("orchestration_context_evidence") or {})
     context_profile = dict(summary.get("orchestration_context_profile") or {})
     orchestration_profile = dict(summary.get("orchestration_profile") or {})
+    stage_transition = dict(summary.get("stage_transition") or {})
     rounds = list(summary.get("rounds") or [])
     last_round = dict(rounds[-1] or {}) if rounds else {}
     rationale_tags = list(orchestration_profile.get("rationale_tags") or [])
+    stage_transition_tags = list(stage_transition.get("rationale_tags") or [])
 
     lines = [
         f"# Multi-Model Scheduler Summary: {summary.get('family', '')}",
@@ -428,6 +457,17 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- termination_bias: `{orchestration_profile.get('termination_bias', '')}`",
         f"- confidence: `{orchestration_profile.get('confidence', '')}`",
         f"- rationale_tags: `{', '.join(str(item) for item in rationale_tags)}`",
+        "",
+        "## Stage Transition Advisory",
+        f"- current_stage: `{stage_transition.get('current_stage', '')}`",
+        f"- next_stage: `{stage_transition.get('next_stage', '')}`",
+        f"- action: `{stage_transition.get('action', '')}`",
+        f"- confidence: `{stage_transition.get('confidence', '')}`",
+        f"- termination_bias: `{stage_transition.get('termination_bias', '')}`",
+        f"- parent_selection_bias: `{stage_transition.get('parent_selection_bias', '')}`",
+        f"- target_profile_bias: `{stage_transition.get('target_profile_bias', '')}`",
+        f"- rationale_tags: `{', '.join(str(item) for item in stage_transition_tags)}`",
+        f"- reason: {stage_transition.get('reason', '')}",
         "",
         "## Runtime Evidence",
         f"- selected_parent_kind: `{context_evidence.get('selected_parent_kind', '')}`",
@@ -695,6 +735,8 @@ def _build_scheduler_summary_payload(
         "orchestration_context_evidence": dict(last_round.get("context_evidence") or {}),
         "orchestration_context_profile": dict(last_round.get("context_profile") or {}),
         "orchestration_profile": dict(last_round.get("orchestration_profile") or {}),
+        "stage_transition_evidence": dict(last_round.get("stage_transition_evidence") or {}),
+        "stage_transition": dict(last_round.get("stage_transition") or {}),
         "best_node": final_best,
         "best_node_name": str(final_best.get("candidate_name", "") or final_best.get("factor_name", "") or ""),
         "best_node_expression": str(final_best.get("expression", "") or ""),
@@ -1115,6 +1157,7 @@ def main() -> int:
                     search_improved=bool(expansion.get("improved")),
                     winner=dict(round_best_candidate or round_winner or {}),
                     keep=dict(round_best_keep or {}),
+                    consecutive_no_improve=int(engine.consecutive_no_improve),
                 )
             )
             round_records.append(record)

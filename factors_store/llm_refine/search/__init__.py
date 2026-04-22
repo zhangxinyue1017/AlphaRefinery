@@ -23,6 +23,7 @@ from .run_ingest import (
     resolve_materialized_single_run_dir,
 )
 from .scoring import compute_base_score, compute_frontier_score, winner_improved
+from .stage_transition import StageTransitionDecision, StageTransitionEvidence, resolve_stage_transition
 from .state import SearchBudget, SearchEdge, SearchNode
 
 __all__ = [
@@ -40,6 +41,8 @@ __all__ = [
     "SearchNode",
     "SearchNormalizer",
     "SearchPolicy",
+    "StageTransitionDecision",
+    "StageTransitionEvidence",
     "build_search_normalizer",
     "compute_base_score",
     "compute_frontier_score",
@@ -51,5 +54,6 @@ __all__ = [
     "resolve_materialized_single_run_dir",
     "resolve_context_profile",
     "resolve_orchestration_profile",
+    "resolve_stage_transition",
     "winner_improved",
 ]

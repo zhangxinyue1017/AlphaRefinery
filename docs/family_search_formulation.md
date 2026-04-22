@@ -698,10 +698,10 @@ updated family state
 
 ---
 
-## 10. Practical Next Implementation Step
+## 10. Practical Implementation Path
 
-The first code-level step should be a read-only state object, not a rewrite of
-the scheduler.
+The first code-level step is a read-only stage-transition advisory layer, not a
+rewrite of the scheduler.
 
 Recommended first object:
 
@@ -721,7 +721,7 @@ class FamilyState:
     budget_state: BudgetState
 ```
 
-Recommended transition decision object:
+Implemented transition decision object:
 
 ```python
 @dataclass
@@ -738,7 +738,7 @@ class StageTransitionDecision:
     branch_reopen_candidates: list[str]
 ```
 
-Recommended resolver:
+Implemented resolver:
 
 ```python
 def resolve_stage_transition(
@@ -755,7 +755,7 @@ Initial rule:
 * It should not own execution.
 * It should not change current behavior.
 * It should only make the scheduler's implicit context inspectable.
-* `StageTransitionDecision` should first be written into `summary.json` and
+* `StageTransitionDecision` is first written into `summary.json` and
   `summary.md` as an audit artifact before it controls any automatic launch.
 
 Once this is stable, `V(S_t, A_t)`, `pi(S_t)`, and `g_stage(S_t, A_t, R_t)` can

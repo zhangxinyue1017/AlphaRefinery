@@ -23,7 +23,14 @@ from ..core.archive import utc_now_iso
 from ..core.seed_loader import load_seed_pool, resolve_family_formula
 from ..evaluation.redundancy import factor_series_correlations
 from ..parsing.expression_engine import WideExpressionEngine
-from ..search import DecisionContext, DecisionEngine, FamilyDecisionState, SearchPolicy
+from ..search import (
+    DecisionContext,
+    DecisionEngine,
+    FamilyDecisionState,
+    SearchPolicy,
+    StageTransitionEvidence,
+    resolve_stage_transition,
+)
 from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
 from ..search.scoring import pairwise_similarity, safe_float
@@ -969,6 +976,22 @@ def build_family_loop_summary(
         last_round_keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
         recommended_stage_mode_hint=str(next_action.get("recommended_next_stage_preset", "") or ""),
     )
+    stage_transition_evidence = StageTransitionEvidence(
+        family=family,
+        current_stage="focused_refine" if focused_run_dir is not None else "family_loop",
+        target_profile=target_profile,
+        policy_preset="balanced",
+        last_round_status="ok" if int(focused_returncode) == 0 else "failed",
+        last_round_search_improved=bool(next_action.get("recommended_next_step") == "continue_focused"),
+        last_round_winner=dict(state.focused_best_candidate or state.broad_best_candidate or {}),
+        last_round_keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
+        best_anchor=dict((anchor_selection or {}).get("best_anchor") or {}),
+        passed_anchor_count=len((anchor_selection or {}).get("passed_candidates") or []),
+        focused_best_node=dict(state.focused_best_node or {}),
+        budget_exhausted=False,
+        frontier_exhausted=False,
+    )
+    stage_transition = resolve_stage_transition(stage_transition_evidence)
 
     return {
         "family": family,
@@ -1002,6 +1025,8 @@ def build_family_loop_summary(
         "orchestration_context_evidence": orchestration_evidence.to_dict(),
         "orchestration_context_profile": orchestration_context_profile.to_dict(),
         "orchestration_profile": orchestration_profile.to_dict(),
+        "stage_transition_evidence": stage_transition_evidence.to_dict(),
+        "stage_transition": stage_transition.to_dict(),
         "broad_returncode": int(broad_returncode),
         "focused_returncode": int(focused_returncode),
     }
@@ -1021,6 +1046,8 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     broad_trace = dict(summary.get("broad_prompt_trace") or {})
     focused_trace = dict(summary.get("focused_prompt_trace") or {})
     orchestration_profile = dict(summary.get("orchestration_profile") or {})
+    stage_transition = dict(summary.get("stage_transition") or {})
+    stage_transition_tags = list(stage_transition.get("rationale_tags") or [])
 
     def _metric_line(payload: dict[str, Any]) -> str:
         if not payload:
@@ -1070,6 +1097,17 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- parent_selection_bias: `{orchestration_profile.get('parent_selection_bias', '')}`",
         f"- termination_bias: `{orchestration_profile.get('termination_bias', '')}`",
         f"- confidence: `{orchestration_profile.get('confidence', '')}`",
+        "",
+        "## Stage Transition Advisory",
+        f"- current_stage: `{stage_transition.get('current_stage', '')}`",
+        f"- next_stage: `{stage_transition.get('next_stage', '')}`",
+        f"- action: `{stage_transition.get('action', '')}`",
+        f"- confidence: `{stage_transition.get('confidence', '')}`",
+        f"- termination_bias: `{stage_transition.get('termination_bias', '')}`",
+        f"- parent_selection_bias: `{stage_transition.get('parent_selection_bias', '')}`",
+        f"- target_profile_bias: `{stage_transition.get('target_profile_bias', '')}`",
+        f"- rationale_tags: `{', '.join(str(item) for item in stage_transition_tags)}`",
+        f"- reason: {stage_transition.get('reason', '')}",
         "",
         "## Broad Strongest",
         f"- factor: `{broad.get('factor_name', '')}`",
