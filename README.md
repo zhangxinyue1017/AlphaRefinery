@@ -143,6 +143,8 @@ AlphaRefinery also treats family refinement as a sequential decision problem:
 - `EvaluationFeedback`: what the last run actually produced,
 - `StageTransitionDecision`: whether to continue focused search, reopen a branch, switch to complementarity, confirm, or terminate.
 
+Formally, each family can be viewed as a search state `S_t`. The system chooses a refinement action `A_t`, receives evaluation feedback `R_t`, and updates the family through a transition `T(S_t, A_t, R_t) -> S_{t+1}`. The advisory policy `π(S_t)` is not just a prompt choice; it is a continuation plan over stages, parents, objectives, and branch budgets.
+
 This gives the framework a research-plan layer above individual prompts. The goal is to make continuation decisions explicit, inspectable, and comparable against expert judgment rather than hidden inside ad hoc run scripts.
 
 ---
