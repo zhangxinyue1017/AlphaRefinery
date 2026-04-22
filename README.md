@@ -20,6 +20,7 @@
 - 🧭 **Broad -> Anchor -> Focused** staged search progression
 - 🌿 **Dual-parent branch preservation** with **Path Evaluation**
 - 🎯 **Target-conditioned search** for `raw_alpha`, `deployability`, and `complementarity`
+- 🧠 **Search-plan advisory layer** that frames family refinement as a state-action-feedback transition process
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
 - 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
 - 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and local optional downstream hooks**
@@ -133,6 +134,17 @@ The refinement loop is already structured to support different downstream prefer
 
 This allows the same research engine to serve different goals, from stronger standalone alpha to better library complementarity and promotion quality.
 
+### 5. Search plans, not only run commands
+
+AlphaRefinery also treats family refinement as a sequential decision problem:
+
+- `FamilyState`: what is known about the current family,
+- `RefinementAction`: what the next run is trying to do,
+- `EvaluationFeedback`: what the last run actually produced,
+- `StageTransitionDecision`: whether to continue focused search, reopen a branch, switch to complementarity, confirm, or terminate.
+
+This gives the framework a research-plan layer above individual prompts. The goal is to make continuation decisions explicit, inspectable, and comparable against expert judgment rather than hidden inside ad hoc run scripts.
+
 ---
 
 ## What the Repository Contains
@@ -219,6 +231,8 @@ It currently supports:
 * dual-parent branch preservation
 * Path Evaluation
 * target-conditioned search
+* stage-transition advisory over `FamilyState -> RefinementAction -> EvaluationFeedback`
+* small historical eval sets for comparing advisory decisions with human research judgment
 * context-aware rerank and anchor selection
 * archive, reporting, promotion, and funnel evaluation workflows
 
