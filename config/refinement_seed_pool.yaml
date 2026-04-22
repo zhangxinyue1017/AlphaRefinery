@@ -725,13 +725,19 @@ seed_groups:
     canonical_seed: "factor365.ideal_amplitude_20_q25"
     aliases:
       - "factor365.ideal_amplitude_20_q25_oriented"
+      - "20260327_143937_022_neg_ts_corr_sub_close_ts_mean_vwap_1_87fa8f97"
+      - "20260407_160959_004_neg_ts_corr_delta_vwap_3_div_turnove_f31549fa"
+      - "20260402_113732_008_neg_ts_cov_vwap_turnover_10_c0a2c749"
     direction: "use_negative_sign"
-    preferred_refine_seed: "factor365.ideal_amplitude_20_q25_oriented"
+    preferred_refine_seed: "20260327_143937_022_neg_ts_corr_sub_close_ts_mean_vwap_1_87fa8f97"
     implementation_paths:
       - "factors_store/factors/factor365_daily.py"
     formulas:
       factor365.ideal_amplitude_20_q25: "mean(amplitude on top-close states, 20, q=0.25) - mean(amplitude on bottom-close states, 20, q=0.25)"
       factor365.ideal_amplitude_20_q25_oriented: "mean(amplitude on top-close states, 20, q=0.25) - mean(amplitude on bottom-close states, 20, q=0.25)"
+      20260327_143937_022_neg_ts_corr_sub_close_ts_mean_vwap_1_87fa8f97: "neg(ts_corr(sub(close, ts_mean(vwap, 10)), turnover_rate, 15))"
+      20260407_160959_004_neg_ts_corr_delta_vwap_3_div_turnove_f31549fa: "neg(ts_corr(delta(vwap, 3), div(turnover_rate, add(ts_std(returns, 10), 1e-12)), 15))"
+      20260402_113732_008_neg_ts_cov_vwap_turnover_10_c0a2c749: "neg(ts_cov(vwap, turnover_rate, 10))"
     formula_directions:
       factor365.ideal_amplitude_20_q25_oriented: "positive_as_is"
     interpretation: "Ideal-amplitude structure family. Use the negative sign by default. It compares amplitude observed on high-close states versus low-close states, aiming to detect whether large ranges are concentrated in elevated price states where over-heating or unstable continuation is more likely."
@@ -745,6 +751,7 @@ seed_groups:
       - "test high-minus-low, high / (low + eps), zscored spread, or pressure-confirmed spread forms"
       - "blend the amplitude-state contrast with pressure, reversal-event frequency, upper shadow, or abnormal-volume context"
       - "compare different quantile cuts or smoothed state definitions, but avoid trivial parameter-only variants"
+    relation_note: "Preferred refine seed is manually switched to an external vwap-relative donor from the library. Use the added donor seeds to pull this family toward vwap-anchor deviation, vwap-drift turnover coupling, and vwap-turnover covariance rather than only reusing the original close-quantile amplitude split."
 
 llm_refinement_template:
   objective: "Generate 3 formula refinements from one seed factor, focused on stability, lower turnover, lower redundancy, or stronger economic interpretation."

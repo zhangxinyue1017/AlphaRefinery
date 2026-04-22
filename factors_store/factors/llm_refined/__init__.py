@@ -17,6 +17,9 @@ from .gp_historical_anchor_ratio_family import *  # noqa: F401,F403
 from .qp_amplitude_sliced_momentum_family import *  # noqa: F401,F403
 from .gp_return_open_marketfit_family import *  # noqa: F401,F403
 from .salience_panic_score_family import *  # noqa: F401,F403
+from .ideal_amplitude_structure_family import *  # noqa: F401,F403
+from .abnormal_volume_attention_family import *  # noqa: F401,F403
+from .qp_apb_price_bias_family import *  # noqa: F401,F403
 from .common import LLM_REFINED_SOURCE
 
 _EXPRESSION_RE = re.compile(r'expression\s*=\s*"(?P<expr>(?:[^"\\]|\\.)*)"')

@@ -1133,7 +1133,7 @@ def _evaluate_one_window(
     archive_db: str | Path,
     stage_mode: str = "auto",
     decorrelation_targets: tuple[str, ...] = (),
-) -> tuple[pd.DataFrame, dict[str, Any], dict[str, Any]]:
+) -> tuple[pd.DataFrame, dict[str, pd.Series], dict[str, Any], dict[str, Any]]:
     registry = create_default_registry()
     register_proposal_candidates(registry, proposal=proposal, name_prefix=name_prefix)
     data, data_meta, settings = _build_data_for_family(
@@ -1341,7 +1341,7 @@ def _evaluate_one_window(
     summary_df = _assign_winners(summary_df, stage_mode=stage_mode, parent=parent)
     summary_df["run_id"] = run_id
     summary_df["evaluated_at"] = utc_now_iso()
-    return summary_df, settings, data_meta
+    return summary_df, data, settings, data_meta
 
 
 def _write_window_outputs(
@@ -1450,12 +1450,13 @@ def evaluate_refinement_run(
         decision_stage = protocol.keep_decision_stage
         stage_details: dict[str, Any] = {}
         decision_summary_df: pd.DataFrame | None = None
+        decision_data: dict[str, pd.Series] | None = None
         decision_settings: dict[str, Any] | None = None
         decision_data_meta: dict[str, Any] | None = None
 
         for stage_name in tuple(stage_windows.keys()):
             window = stage_windows[stage_name]
-            summary_df, settings, data_meta = _evaluate_one_window(
+            summary_df, data, settings, data_meta = _evaluate_one_window(
                 seed_pool=seed_pool,
                 family=family,
                 proposal=proposal,
@@ -1485,10 +1486,16 @@ def evaluate_refinement_run(
             }
             if stage_name == decision_stage:
                 decision_summary_df = summary_df
+                decision_data = data
                 decision_settings = settings
                 decision_data_meta = data_meta
 
-        if decision_summary_df is None or decision_settings is None or decision_data_meta is None:
+        if (
+            decision_summary_df is None
+            or decision_data is None
+            or decision_settings is None
+            or decision_data_meta is None
+        ):
             raise ValueError(f"decision stage `{decision_stage}` did not produce evaluation output")
 
         meta_payload = {
@@ -1509,7 +1516,7 @@ def evaluate_refinement_run(
         }
         summary_df_for_archive = decision_summary_df
     else:
-        summary_df, settings, data_meta = _evaluate_one_window(
+        summary_df, data, settings, data_meta = _evaluate_one_window(
             seed_pool=seed_pool,
             family=family,
             proposal=proposal,
@@ -1587,6 +1594,7 @@ def evaluate_refinement_run(
         name_prefix=name_prefix,
         metadata_dir=metadata_dir,
         auto_apply=auto_apply_promotion,
+        data=decision_data if use_protocol else data,
     )
     if promote_outputs:
         outputs.update(promote_outputs)

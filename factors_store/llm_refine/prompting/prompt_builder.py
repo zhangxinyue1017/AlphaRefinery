@@ -186,6 +186,23 @@ def _family_expression_safety_block(family: SeedFamily) -> str:
     ).strip()
 
 
+def _global_expression_engine_safety_block() -> str:
+    return dedent(
+        """
+        当前表达式引擎语法限制：
+        - 除 `half_life` 和 `min_obs` 外，不要使用任何 keyword argument。
+        - 也就是说，不要写 `q=0.3`、`m=1`、`side="low"`、`window=20`、`cond=...`。
+        - 请统一使用位置参数，例如：
+          `ts_quantile(close, 20, 0.3)`
+          `sma(x, 20, 1)`
+          `bucket_sum(x, key, 60, 0.3, "low")`
+        - 不要输出带点号的引用，不要写 `family.factor_name`、`module.helper(...)`、`qp_pressure.xxx` 这类 dotted reference。
+        - 不要发明新的 helper 名、标签名、宏名；只能使用 contract 中已有字段和算子。
+        - 如果一个想法需要 helper function 才能表达，请改写成基础原语组合，而不是直接输出 helper 名。
+        """
+    ).strip()
+
+
 def _candidate_role_block(roles: tuple[str, ...], n_candidates: int) -> str:
     roles = list(roles[: int(n_candidates)])
     labels = {
@@ -358,7 +375,6 @@ def _render_constraints_section(
         [
             "",
             "改写幅度：",
-            "- 每个候选优先只改 1 个核心点，最多改 2 个核心点。",
             "- 可以做方向修正、平滑、归一化、替换一个确认项。",
             "- 不要把整个主结构重写成另一类因子。",
             "- 改动要轻，不要无意义增加嵌套、字段和条件分支。",
@@ -376,6 +392,8 @@ def _render_constraints_section(
 
     if plan.include_allowed_edit_types:
         lines.extend(["", "允许的 edit 类型：", _allowed_edit_block(family)])
+
+    lines.extend(["", _global_expression_engine_safety_block()])
 
     lines.extend(
         [
@@ -450,10 +468,10 @@ def _legacy_constraints_section(
         _allowed_edit_block(family),
         "",
         "小步改写限制：",
-        "- 最多只允许改动 parent 中 1~2 个核心子结构。",
+        "- 最多只允许改动 parent 中 2~4 个核心子结构。",
         "- 不允许完全替换主逻辑分支。",
-        "- 不允许新增超过 1 层嵌套。",
-        "- 不允许引入超过 1 个新的原始字段。",
+        "- 不允许新增超过 2 层嵌套。",
+        "- 不允许引入超过 2 个新的原始字段。",
         "- 不允许只做符号翻转，除非明确说明理由。",
         "- 不允许窗口跨度跳跃过大，除非有明确经济理由。",
         "",

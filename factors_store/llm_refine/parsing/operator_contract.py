@@ -39,7 +39,7 @@ PROMPT_OPERATOR_DESCRIPTIONS = (
     "ts_std(x, window)",
     "mean(x, window)",
     "ts_mean(x, window)",
-    "sma(x, window, m=1)",
+    "sma(x, window, 1)",
     "wma(x, window)",
     "product(x, window)",
     "sum(x, window)",

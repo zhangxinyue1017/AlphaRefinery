@@ -389,6 +389,156 @@ def _build_parse_retry_user_prompt(*, original_user_prompt: str, parse_error: st
     )
 
 
+def _build_validation_retry_user_prompt(
+    *,
+    original_user_prompt: str,
+    dropped_validation: list[dict[str, object]],
+) -> str:
+    lines: list[str] = []
+    for item in dropped_validation[:6]:
+        candidate = item.get("candidate")
+        candidate_name = str(getattr(candidate, "name", "") or "candidate").strip()
+        reason = str(item.get("filter_reason", "") or "").strip()
+        if candidate_name and reason:
+            lines.append(f"- {candidate_name}: {reason}")
+    issue_block = "\n".join(lines) if lines else "- all candidates failed hard validation"
+    return (
+        f"{original_user_prompt}\n\n"
+        "Your previous proposal was parsed, but every candidate expression was rejected by the expression validator.\n"
+        "Keep the same economic intent and candidate diversity, but rewrite the expressions so they are directly executable by the current expression engine.\n\n"
+        "Validation failures:\n"
+        f"{issue_block}\n\n"
+        "Hard requirements:\n"
+        "- Output JSON only, no markdown fences, no commentary.\n"
+        "- Re-emit the full response from scratch as exactly one complete JSON object.\n"
+        "- Keep the same schema with `parent_factor` and `candidate_formulas`.\n"
+        "- Use only fields and operators already defined by the current contract.\n"
+        "- Do not invent helper names, macro names, alias names, or dotted references.\n"
+        "- Do not use keyword arguments except `half_life` and `min_obs`.\n"
+        "- Use positional arguments for windows, quantiles, sides, and branch arguments.\n"
+        "- Preserve the candidate roles and broad intended logic, but rewrite invalid syntax into valid expressions.\n"
+        "- Ensure all quotes, commas, brackets, and braces are closed.\n"
+    )
+
+
+def _parse_proposal_with_retries(
+    *,
+    provider: OpenAICompatProvider | None,
+    system_prompt: str,
+    user_prompt: str,
+    raw_response: str,
+    family,
+    provider_name: str,
+    model_name: str,
+    role_slots: tuple[str, ...],
+    retry_budget: int,
+    runtime_status,
+    dry_run: bool,
+) -> tuple[LLMProposal, str, list[dict[str, object]]]:
+    parse_retry_records: list[dict[str, object]] = []
+    last_parse_error: Exception | None = None
+    proposal: LLMProposal | None = None
+    candidate_raw_response = raw_response
+    while True:
+        try:
+            runtime_status("parse", "parsing provider response", retry_count=len(parse_retry_records))
+            proposal = parse_refinement_response(
+                candidate_raw_response,
+                family=family,
+                provider_name=provider_name,
+                model_name=model_name,
+                allowed_candidate_roles=role_slots,
+                default_candidate_roles=role_slots,
+            )
+            raw_response = candidate_raw_response
+            break
+        except Exception as exc:
+            last_parse_error = exc
+            retry_index = len(parse_retry_records) + 1
+            if dry_run or retry_index > retry_budget or provider is None:
+                raise last_parse_error
+            retry_prompt = _build_parse_retry_user_prompt(
+                original_user_prompt=user_prompt,
+                parse_error=str(exc),
+            )
+            runtime_status("parse_retry", f"retrying parse via provider call #{retry_index}")
+            retry_raw_response = provider.generate(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": retry_prompt},
+                ]
+            )
+            parse_retry_records.append(
+                {
+                    "retry_index": retry_index,
+                    "error": str(exc),
+                    "raw_response": retry_raw_response,
+                }
+            )
+            candidate_raw_response = retry_raw_response
+    if proposal is None:
+        raise last_parse_error or ValueError("provider response JSON parse failed")
+    return proposal, raw_response, parse_retry_records
+
+
+def _rebuild_and_validate_candidates(
+    *,
+    proposal: LLMProposal,
+    family_name: str,
+    effective_round_id: int,
+    effective_parent_candidate_id: str,
+) -> tuple[LLMProposal, tuple[RefinementCandidate, ...], list[dict[str, object]], list[dict[str, object]]]:
+    unique_candidates, dropped_duplicates = deduplicate_candidates(proposal.candidates)
+    proposal = _rebuild_proposal(proposal, unique_candidates)
+
+    rebuilt_candidates: list[RefinementCandidate] = []
+    for candidate in proposal.candidates:
+        candidate_id = make_candidate_id(
+            family=family_name,
+            round_id=int(effective_round_id),
+            expression=candidate.expression,
+            name=candidate.name,
+        )
+        rebuilt_candidates.append(
+            _with_validation(
+                RefinementCandidate(
+                    name=candidate.name,
+                    expression=candidate.expression,
+                    explanation=candidate.explanation,
+                    candidate_role=candidate.candidate_role,
+                    rationale=candidate.rationale,
+                    expected_improvement=candidate.expected_improvement,
+                    risk=candidate.risk,
+                    source_model=candidate.source_model,
+                    source_provider=candidate.source_provider,
+                    parent_factor=candidate.parent_factor,
+                    family=candidate.family,
+                    candidate_id=candidate_id,
+                    round_id=int(effective_round_id),
+                    parent_candidate_id=effective_parent_candidate_id,
+                    status="proposed",
+                    validation_warnings=candidate.validation_warnings,
+                )
+            )
+        )
+
+    valid_rebuilt_candidates: list[RefinementCandidate] = []
+    dropped_validation: list[dict[str, object]] = []
+    for candidate in rebuilt_candidates:
+        filter_reason = _hard_validation_filter_reason(candidate)
+        if not filter_reason:
+            valid_rebuilt_candidates.append(candidate)
+            continue
+        dropped_validation.append(
+            {
+                "candidate": candidate,
+                "filter_stage": "validation",
+                "filter_reason": filter_reason,
+            }
+        )
+    return proposal, tuple(valid_rebuilt_candidates), dropped_duplicates, dropped_validation
+
+
 def _pick_best_child_record(records: list[dict[str, object]]) -> dict[str, object] | None:
     if not records:
         return None
@@ -787,6 +937,8 @@ def main() -> int:
             prompt_template_version=str(args.prompt_template_version),
         )
         engine.record_attempt(parent_node_id=selected_parent.node_id, note="run_refine_loop_single_attempt")
+        provider: OpenAICompatProvider | None = None
+        parse_retry_records: list[dict[str, object]] = []
         if args.dry_run:
             runtime_status("dry_run", "building placeholder response")
             raw_response = json.dumps(
@@ -821,51 +973,24 @@ def main() -> int:
             )
             runtime_status("llm_response", "provider response received")
 
-        parse_retry_records: list[dict[str, object]] = []
-        last_parse_error: Exception | None = None
-        proposal = None
-        candidate_raw_response = raw_response
         retry_budget = max(int(args.retry_on_parse_fail), 0)
-        while True:
-            try:
-                runtime_status("parse", "parsing provider response", retry_count=len(parse_retry_records))
-                proposal = parse_refinement_response(
-                    candidate_raw_response,
-                    family=family,
-                    provider_name=provider_config.name,
-                    model_name=provider_config.model,
-                    allowed_candidate_roles=role_slots,
-                    default_candidate_roles=role_slots,
-                )
-                raw_response = candidate_raw_response
-                break
-            except Exception as exc:
-                last_parse_error = exc
-                retry_index = len(parse_retry_records) + 1
-                if args.dry_run or retry_index > retry_budget:
-                    break
-                retry_prompt = _build_parse_retry_user_prompt(
-                    original_user_prompt=prompt.user_prompt,
-                    parse_error=str(exc),
-                )
-                runtime_status("parse_retry", f"retrying parse via provider call #{retry_index}")
-                retry_raw_response = provider.generate(
-                    [
-                        {"role": "system", "content": prompt.system_prompt},
-                        {"role": "user", "content": retry_prompt},
-                    ]
-                )
-                parse_retry_records.append(
-                    {
-                        "retry_index": retry_index,
-                        "error": str(exc),
-                        "raw_response": retry_raw_response,
-                    }
-                )
-                candidate_raw_response = retry_raw_response
-
-        if proposal is None:
-            exc = last_parse_error or ValueError("provider response JSON parse failed")
+        candidate_raw_response = raw_response
+        try:
+            proposal, raw_response, parse_retry_records = _parse_proposal_with_retries(
+                provider=provider,
+                system_prompt=prompt.system_prompt,
+                user_prompt=prompt.user_prompt,
+                raw_response=raw_response,
+                family=family,
+                provider_name=provider_config.name,
+                model_name=provider_config.model,
+                role_slots=role_slots,
+                retry_budget=retry_budget,
+                runtime_status=runtime_status,
+                dry_run=bool(args.dry_run),
+            )
+            candidate_raw_response = raw_response
+        except Exception as exc:
             parse_failure_dir = ensure_run_subdir(run_dir, "parse_failure")
             (parse_failure_dir / "raw_response.txt").write_text(candidate_raw_response, encoding="utf-8")
             (parse_failure_dir / "system_prompt.txt").write_text(prompt.system_prompt, encoding="utf-8")
@@ -892,78 +1017,81 @@ def main() -> int:
                 },
             )
             raise exc
-        runtime_status("candidate_processing", "running dedup and validation")
-        unique_candidates, dropped_duplicates = deduplicate_candidates(proposal.candidates)
-        if dropped_duplicates:
-            proposal = _rebuild_proposal(proposal, unique_candidates)
-            print(
-                "[dedup] dropped "
-                f"{len(dropped_duplicates)} duplicate candidate(s) before archive/write/backtest"
+        validation_retry_records: list[dict[str, object]] = []
+        while True:
+            runtime_status(
+                "candidate_processing",
+                "running dedup and validation",
+                retry_count=len(validation_retry_records),
             )
-            for item in dropped_duplicates:
+            proposal, valid_rebuilt_candidates, dropped_duplicates, dropped_validation = _rebuild_and_validate_candidates(
+                proposal=proposal,
+                family_name=family.family,
+                effective_round_id=int(effective_round_id),
+                effective_parent_candidate_id=effective_parent_candidate_id,
+            )
+            if dropped_duplicates:
                 print(
-                    "[dedup] "
-                    f"{item['name']} -> {item['duplicate_of_name']}"
+                    "[dedup] dropped "
+                    f"{len(dropped_duplicates)} duplicate candidate(s) before archive/write/backtest"
                 )
-        if not proposal.candidates:
-            raise ValueError("all parsed candidates were removed by expression deduplication")
-        rebuilt_candidates: list[RefinementCandidate] = []
-        for candidate in proposal.candidates:
-            candidate_id = make_candidate_id(
-                family=family.family,
-                round_id=int(effective_round_id),
-                expression=candidate.expression,
-                name=candidate.name,
-            )
-            rebuilt_candidates.append(
-                _with_validation(
-                    RefinementCandidate(
-                        name=candidate.name,
-                        expression=candidate.expression,
-                        explanation=candidate.explanation,
-                        candidate_role=candidate.candidate_role,
-                        rationale=candidate.rationale,
-                        expected_improvement=candidate.expected_improvement,
-                        risk=candidate.risk,
-                        source_model=candidate.source_model,
-                        source_provider=candidate.source_provider,
-                        parent_factor=candidate.parent_factor,
-                        family=candidate.family,
-                        candidate_id=candidate_id,
-                        round_id=int(effective_round_id),
-                        parent_candidate_id=effective_parent_candidate_id,
-                        status="proposed",
-                        validation_warnings=candidate.validation_warnings,
+                for item in dropped_duplicates:
+                    print(
+                        "[dedup] "
+                        f"{item['name']} -> {item['duplicate_of_name']}"
                     )
+            if not proposal.candidates:
+                raise ValueError("all parsed candidates were removed by expression deduplication")
+            if dropped_validation:
+                print(
+                    "[validation-filter] dropped "
+                    f"{len(dropped_validation)} candidate(s) before structure filter / backtest"
                 )
+                for item in dropped_validation:
+                    candidate = item["candidate"]
+                    print(
+                        "[validation-filter] "
+                        f"{candidate.name}: {item['filter_reason']}"
+                    )
+            if valid_rebuilt_candidates:
+                break
+            retry_index = len(validation_retry_records) + 1
+            if args.dry_run or retry_index > retry_budget:
+                raise ValueError("all rebuilt candidates were removed by hard validation filter")
+            validation_retry_prompt = _build_validation_retry_user_prompt(
+                original_user_prompt=prompt.user_prompt,
+                dropped_validation=dropped_validation,
             )
-        valid_rebuilt_candidates: list[RefinementCandidate] = []
-        dropped_validation: list[dict[str, object]] = []
-        for candidate in rebuilt_candidates:
-            filter_reason = _hard_validation_filter_reason(candidate)
-            if not filter_reason:
-                valid_rebuilt_candidates.append(candidate)
-                continue
-            dropped_validation.append(
+            runtime_status("validation_retry", f"retrying validation via provider call #{retry_index}")
+            validation_retry_raw_response = provider.generate(
+                [
+                    {"role": "system", "content": prompt.system_prompt},
+                    {"role": "user", "content": validation_retry_prompt},
+                ]
+            )
+            retry_proposal, retry_raw_response, retry_parse_records = _parse_proposal_with_retries(
+                provider=provider,
+                system_prompt=prompt.system_prompt,
+                user_prompt=validation_retry_prompt,
+                raw_response=validation_retry_raw_response,
+                family=family,
+                provider_name=provider_config.name,
+                model_name=provider_config.model,
+                role_slots=role_slots,
+                retry_budget=retry_budget,
+                runtime_status=runtime_status,
+                dry_run=bool(args.dry_run),
+            )
+            validation_retry_records.append(
                 {
-                    "candidate": candidate,
-                    "filter_stage": "validation",
-                    "filter_reason": filter_reason,
+                    "retry_index": retry_index,
+                    "dropped_validation_count": len(dropped_validation),
+                    "raw_response": retry_raw_response,
+                    "parse_retry_records": retry_parse_records,
                 }
             )
-        if dropped_validation:
-            print(
-                "[validation-filter] dropped "
-                f"{len(dropped_validation)} candidate(s) before structure filter / backtest"
-            )
-            for item in dropped_validation:
-                candidate = item["candidate"]
-                print(
-                    "[validation-filter] "
-                    f"{candidate.name}: {item['filter_reason']}"
-                )
-        if not valid_rebuilt_candidates:
-            raise ValueError("all rebuilt candidates were removed by hard validation filter")
+            raw_response = retry_raw_response
+            proposal = retry_proposal
         kept_candidates, dropped_structure = filter_structurally_redundant(tuple(valid_rebuilt_candidates))
         if dropped_structure:
             print(

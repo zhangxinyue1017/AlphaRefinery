@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import difflib
 import json
+import math
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -13,6 +14,7 @@ import yaml
 
 from ..config import DEFAULT_LLM_REFINED_INIT_PATH, DEFAULT_PENDING_CURATED_DIR
 from ..core.archive import utc_now_iso
+from .redundancy import factor_series_correlations
 from ..parsing.expression_engine import guess_required_fields
 from ..parsing.parser import expression_dedup_key
 from ..core.models import SeedFamily
@@ -21,6 +23,8 @@ DEFAULT_LLM_REFINED_INIT = DEFAULT_LLM_REFINED_INIT_PATH
 MAX_PENDING_RESEARCH_KEEP = 2
 RESEARCH_KEEP_WINNER_SCORE_THRESHOLD = 0.55
 RESEARCH_KEEP_MAX_TURNOVER = 0.25
+RESEARCH_WINNER_MAX_EXISTING_FAMILY_CORR = 0.90
+RESEARCH_KEEP_MAX_EXISTING_FAMILY_CORR = 0.85
 
 
 def _safe_float(value: Any) -> float | None:
@@ -57,49 +61,105 @@ def _suggest_registry_name(factor_name: str) -> str:
     return f"llm_refined.{suffix}"
 
 
-def _promotion_gate(row: dict[str, Any]) -> tuple[bool, str]:
+def _corr_threshold_for_decision(decision: str) -> float:
+    return (
+        float(RESEARCH_WINNER_MAX_EXISTING_FAMILY_CORR)
+        if str(decision or "").strip() == "research_winner"
+        else float(RESEARCH_KEEP_MAX_EXISTING_FAMILY_CORR)
+    )
+
+
+def _promotion_gate(
+    row: dict[str, Any],
+    *,
+    family_existing_refs: list[tuple[str, pd.Series]] | None = None,
+    data: dict[str, pd.Series] | None = None,
+) -> tuple[bool, str]:
     if str(row.get("role", "")) != "candidate":
         return False, "not candidate role"
     decision = str(row.get("decision", "")).strip()
+    corr_threshold = _corr_threshold_for_decision(decision)
     if decision == "research_winner":
         expression = str(row.get("expression", "")).strip()
         if not expression:
             return False, "empty expression"
-        return True, "broad research_winner pending-curation gate"
-    if decision != "research_keep":
+    elif decision != "research_keep":
         return False, "decision is not research_winner/research_keep"
+    else:
+        expression = str(row.get("expression", "")).strip()
+        if not expression:
+            return False, "empty expression"
+
+        completeness = _safe_float(row.get("metrics_completeness"))
+        missing_core = _safe_int(row.get("missing_core_metrics_count"), default=99)
+        turnover = _safe_float(row.get("mean_turnover"))
+        winner_score = _safe_float(row.get("winner_score"))
+        net_ann = _safe_float(row.get("net_ann_return"))
+        net_sharpe = _safe_float(row.get("net_sharpe"))
+        rank_icir = _safe_float(row.get("quick_rank_icir"))
+
+        if completeness is not None and completeness < 0.95:
+            return False, "research_keep incomplete metrics"
+        if missing_core > 0:
+            return False, "research_keep missing core metrics"
+        if turnover is not None and turnover > RESEARCH_KEEP_MAX_TURNOVER:
+            return False, "research_keep turnover too high"
+
+        quality_ok = False
+        if winner_score is not None and winner_score >= RESEARCH_KEEP_WINNER_SCORE_THRESHOLD:
+            quality_ok = True
+        elif (
+            (net_ann is not None and net_ann > 0.0)
+            and (net_sharpe is not None and net_sharpe > 0.0)
+            and (rank_icir is not None and rank_icir > 0.0)
+        ):
+            quality_ok = True
+        if not quality_ok:
+            return False, "research_keep quality bar not met"
+
+    nearest_target_corr = _safe_float(row.get("corr_to_nearest_decorrelation_target"))
+    nearest_target_name = str(row.get("nearest_decorrelation_target", "") or "").strip()
+    if nearest_target_corr is not None and math.isfinite(nearest_target_corr):
+        if nearest_target_corr >= corr_threshold:
+            target_label = nearest_target_name or "decorrelation_target"
+            return (
+                False,
+                f"decorrelation target corr with {target_label} = {nearest_target_corr:.4f} >= {corr_threshold:.2f}",
+            )
+
     expression = str(row.get("expression", "")).strip()
-    if not expression:
-        return False, "empty expression"
+    if family_existing_refs and data and expression:
+        try:
+            from ...factors.llm_refined.common import evaluate_expression_factor
 
-    completeness = _safe_float(row.get("metrics_completeness"))
-    missing_core = _safe_int(row.get("missing_core_metrics_count"), default=99)
-    turnover = _safe_float(row.get("mean_turnover"))
-    winner_score = _safe_float(row.get("winner_score"))
-    net_ann = _safe_float(row.get("net_ann_return"))
-    net_sharpe = _safe_float(row.get("net_sharpe"))
-    rank_icir = _safe_float(row.get("quick_rank_icir"))
+            factor_name = str(row.get("factor_name", "")).strip() or "promotion_candidate"
+            candidate_series = evaluate_expression_factor(
+                data,
+                expression=expression,
+                factor_name=factor_name,
+            )
+            corr_map = factor_series_correlations(candidate_series, family_existing_refs)
+            best_name = ""
+            best_corr = float("nan")
+            for ref_name, corr_value in corr_map.items():
+                if corr_value is None or not math.isfinite(float(corr_value)):
+                    continue
+                abs_corr = abs(float(corr_value))
+                if not math.isfinite(best_corr) or abs_corr > best_corr:
+                    best_corr = abs_corr
+                    best_name = str(ref_name or "")
+            if math.isfinite(best_corr) and best_corr >= corr_threshold:
+                matched = best_name or "existing_family_factor"
+                return (
+                    False,
+                    f"existing family corr with {matched} = {best_corr:.4f} >= {corr_threshold:.2f}",
+                )
+        except Exception:
+            pass
 
-    if completeness is not None and completeness < 0.95:
-        return False, "research_keep incomplete metrics"
-    if missing_core > 0:
-        return False, "research_keep missing core metrics"
-    if turnover is not None and turnover > RESEARCH_KEEP_MAX_TURNOVER:
-        return False, "research_keep turnover too high"
-
-    quality_ok = False
-    if winner_score is not None and winner_score >= RESEARCH_KEEP_WINNER_SCORE_THRESHOLD:
-        quality_ok = True
-    elif (
-        (net_ann is not None and net_ann > 0.0)
-        and (net_sharpe is not None and net_sharpe > 0.0)
-        and (rank_icir is not None and rank_icir > 0.0)
-    ):
-        quality_ok = True
-    if not quality_ok:
-        return False, "research_keep quality bar not met"
-
-    return True, "high-quality research_keep pending-curation gate"
+    if decision == "research_winner":
+        return True, "research_winner passed pending-curation gate"
+    return True, "high-quality research_keep passed pending-curation gate"
 
 
 def _promotion_priority(row: dict[str, Any]) -> tuple[float, float, float, float, float]:
@@ -252,11 +312,13 @@ def _ensure_common_import(module_text: str) -> str:
 def _extract_existing_module_index(module_text: str) -> dict[str, Any]:
     registry_names: set[str] = set()
     expression_index: dict[str, dict[str, str]] = {}
+    expression_entries: list[dict[str, str]] = []
     text = str(module_text or "").strip()
     if not text:
         return {
             "registry_names": registry_names,
             "expression_index": expression_index,
+            "expression_entries": expression_entries,
         }
     try:
         tree = ast.parse(text)
@@ -264,6 +326,7 @@ def _extract_existing_module_index(module_text: str) -> dict[str, Any]:
         return {
             "registry_names": registry_names,
             "expression_index": expression_index,
+            "expression_entries": expression_entries,
         }
 
     for node in tree.body:
@@ -290,10 +353,52 @@ def _extract_existing_module_index(module_text: str) -> dict[str, Any]:
                     "factor_name": factor_name or node.name,
                     "expression": expression,
                 }
+            expression_entries.append(
+                {
+                    "factor_name": factor_name or node.name,
+                    "expression": expression,
+                }
+            )
     return {
         "registry_names": registry_names,
         "expression_index": expression_index,
+        "expression_entries": expression_entries,
     }
+
+
+def _build_existing_family_refs(
+    *,
+    module_text: str,
+    data: dict[str, pd.Series] | None,
+) -> list[tuple[str, pd.Series]]:
+    if not module_text or not data:
+        return []
+    try:
+        from ...factors.llm_refined.common import evaluate_expression_factor
+    except Exception:
+        return []
+
+    existing = _extract_existing_module_index(module_text)
+    refs: list[tuple[str, pd.Series]] = []
+    seen_names: set[str] = set()
+    for item in list(existing.get("expression_entries") or []):
+        factor_name = str(dict(item).get("factor_name", "") or "").strip()
+        expression = str(dict(item).get("expression", "") or "").strip()
+        if not factor_name or not expression or factor_name in seen_names:
+            continue
+        try:
+            series = evaluate_expression_factor(
+                data,
+                expression=expression,
+                factor_name=factor_name,
+            )
+        except Exception:
+            continue
+        if not isinstance(series, pd.Series):
+            continue
+        refs.append((factor_name, series))
+        seen_names.add(factor_name)
+    return refs
 
 
 def _filter_entries_against_module(
@@ -590,12 +695,23 @@ def write_pending_curated_manifest(
     metadata_dir: str | Path,
     pending_dir: str | Path = DEFAULT_PENDING_CURATED_DIR,
     auto_apply: bool = False,
+    data: dict[str, pd.Series] | None = None,
 ) -> dict[str, Path] | None:
     records = summary_df.to_dict(orient="records")
     selected_winners: list[dict[str, Any]] = []
     selected_keeps: list[tuple[tuple[float, float, float, float, float], dict[str, Any]]] = []
+    module_path = Path(
+        "/root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/"
+        f"{family.family}_family.py"
+    )
+    module_text = module_path.read_text(encoding="utf-8") if module_path.exists() else ""
+    family_existing_refs = _build_existing_family_refs(module_text=module_text, data=data)
     for row in records:
-        ok, reason = _promotion_gate(row)
+        ok, reason = _promotion_gate(
+            row,
+            family_existing_refs=family_existing_refs,
+            data=data,
+        )
         if not ok:
             continue
         entry = _entry_from_row(
