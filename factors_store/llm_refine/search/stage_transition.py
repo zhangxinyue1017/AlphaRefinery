@@ -227,17 +227,19 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
             termination_bias="normal",
         )
 
-    if evidence.budget_exhausted or evidence.frontier_exhausted:
-        tags.append("budget_or_frontier_exhausted")
+    if evidence.frontier_exhausted:
+        tags.append("frontier_exhausted")
         return StageTransitionDecision(
             current_stage=stage,
             next_stage="terminate",
             action="freeze_or_switch_family",
             confidence="high",
-            reason="search budget or frontier is exhausted",
+            reason="search frontier is exhausted",
             rationale_tags=tuple(tags),
             termination_bias="stop",
         )
+    if evidence.budget_exhausted:
+        tags.append("budget_exhausted")
 
     if stage in {"auto", "new_family_broad", "broad_followup", "family_loop"}:
         if anchor or evidence.passed_anchor_count > 0:
