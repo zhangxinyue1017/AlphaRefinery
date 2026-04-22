@@ -16,6 +16,7 @@ from ..config import (
     DEFAULT_FAMILY_EXPLORE_RECENT_REFERENCE_LIMIT,
     DEFAULT_FAMILY_EXPLORE_RUNS_DIR,
     DEFAULT_FAMILY_EXPLORE_SLEEP_BETWEEN_SEEDS,
+    PROJECT_ROOT,
 )
 from ..core.archive import (
     DEFAULT_ARCHIVE_DB,
@@ -404,7 +405,7 @@ def main() -> int:
         with log_path.open("w", encoding="utf-8") as log_fp:
             proc = subprocess.run(
                 cmd,
-                cwd="/root/workspace/zxy_workspace/AlphaRefinery",
+                cwd=str(PROJECT_ROOT),
                 env=os.environ.copy(),
                 stdout=log_fp,
                 stderr=subprocess.STDOUT,

@@ -16,6 +16,7 @@ from ..config import (
     DEFAULT_MULTI_SCHEDULER_RUNS_DIR,
     DEFAULT_MULTI_SCHEDULER_SLEEP_BETWEEN_ROUNDS,
     DEFAULT_MULTI_SCHEDULER_STOP_IF_NO_NEW_WINNER,
+    PROJECT_ROOT,
 )
 from ..core.archive import (
     DEFAULT_ARCHIVE_DB,
@@ -938,7 +939,7 @@ def main() -> int:
                     log_fp.flush()
                     proc = subprocess.Popen(
                         cmd,
-                        cwd="/root/workspace/zxy_workspace/AlphaRefinery",
+                        cwd=str(PROJECT_ROOT),
                         env=os.environ.copy(),
                         stdout=log_fp,
                         stderr=subprocess.STDOUT,

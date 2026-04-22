@@ -211,7 +211,7 @@ graph LR
 For any `llm_refine` CLI workflow, the default convention is:
 
 ```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
+cd AlphaRefinery
 cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
@@ -597,7 +597,7 @@ Interfaces currently reserved:
 All examples assume you have already run:
 
 ```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
+cd AlphaRefinery
 cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```
@@ -605,7 +605,6 @@ source ./llm_refine_provider_env.sh
 ### Single-round smoke test
 
 ```bash
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_refine_loop \
   --family salience_panic_score \
   --n-candidates 3 \
@@ -615,7 +614,6 @@ python -m factors_store.llm_refine.cli.run_refine_loop \
 ### Focused multi-model round
 
 ```bash
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_refine_multi_model \
   --family weighted_upper_shadow_distribution \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \

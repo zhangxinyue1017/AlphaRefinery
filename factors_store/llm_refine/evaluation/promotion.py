@@ -12,7 +12,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
-from ..config import DEFAULT_LLM_REFINED_INIT_PATH, DEFAULT_PENDING_CURATED_DIR
+from ..config import DEFAULT_LLM_REFINED_INIT_PATH, DEFAULT_PENDING_CURATED_DIR, LLM_REFINED_DIR
 from ..core.archive import utc_now_iso
 from .redundancy import factor_series_correlations
 from ..parsing.expression_engine import guess_required_fields
@@ -214,10 +214,7 @@ def _entry_from_row(
             "run_dir": str(run_dir),
             "decision_stage": decision_stage,
             "name_prefix": name_prefix,
-            "target_family_module": (
-                "/root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/"
-                f"{family.family}_family.py"
-            ),
+            "target_family_module": str(LLM_REFINED_DIR / f"{family.family}_family.py"),
         },
     }
 
@@ -700,10 +697,7 @@ def write_pending_curated_manifest(
     records = summary_df.to_dict(orient="records")
     selected_winners: list[dict[str, Any]] = []
     selected_keeps: list[tuple[tuple[float, float, float, float, float], dict[str, Any]]] = []
-    module_path = Path(
-        "/root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/"
-        f"{family.family}_family.py"
-    )
+    module_path = LLM_REFINED_DIR / f"{family.family}_family.py"
     module_text = module_path.read_text(encoding="utf-8") if module_path.exists() else ""
     family_existing_refs = _build_existing_family_refs(module_text=module_text, data=data)
     for row in records:

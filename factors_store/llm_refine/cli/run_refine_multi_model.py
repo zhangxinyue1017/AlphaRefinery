@@ -16,6 +16,7 @@ from ..config import (
     DEFAULT_MULTI_RUNS_DIR,
     DEFAULT_POLICY_PRESET,
     DEFAULT_TARGET_PROFILE,
+    PROJECT_ROOT,
 )
 from ..core.archive import (
     DEFAULT_ARCHIVE_DB,
@@ -741,7 +742,7 @@ def main() -> int:
                 list(item["cmd"]),
                 stdout=log_fp,
                 stderr=subprocess.STDOUT,
-                cwd="/root/workspace/zxy_workspace/AlphaRefinery",
+                cwd=str(PROJECT_ROOT),
                 env=os.environ.copy(),
                 text=True,
             )

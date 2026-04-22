@@ -12,7 +12,7 @@
 所有 `llm_refine` 入口在运行前，都默认先执行：
 
 ```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
+cd AlphaRefinery
 cp -n ./llm_refine_provider_env.example.sh ./llm_refine_provider_env.sh
 source ./llm_refine_provider_env.sh
 ```

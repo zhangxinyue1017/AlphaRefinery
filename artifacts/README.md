@@ -4,23 +4,20 @@
 
 当前建议按下面几类理解：
 
-- [backtests/](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/backtests)
+- [backtests/](./backtests)
   - 稳定 summary / 回测结果归档
-- [runs/](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/runs)
+- [runs/](./runs)
   - 新的 canonical run 根目录
-- [llm_refine_promotions/](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/llm_refine_promotions)
+- [llm_refine_promotions/](./llm_refine_promotions)
   - promotion pending / auto-apply 中间层
-- [autofactorset_ingest/](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/autofactorset_ingest)
-  - registry factor admission 配置、manifests、validated 清单
-  - 实际 bridge 运行结果默认写入 `runs/autofactorset_ingest/`
-- [reports/](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/reports)
+- [reports/](./reports)
   - 面向阅读的报告
-- [logs/](/root/workspace/zxy_workspace/AlphaRefinery/artifacts/logs)
+- [logs/](./logs)
   - 原始日志
 
 和 `artifacts/` 平级的共享静态配置现在统一放在：
 
-- [config/](/root/workspace/zxy_workspace/AlphaRefinery/config)
+- [config/](../config)
   - 受版本控制的运行前配置，例如 `refinement_seed_pool.yaml`
 
 路径口径：
@@ -28,6 +25,7 @@
 - 新 run：统一默认写入 `artifacts/runs/...`
 - 报告：统一写入 `artifacts/reports/...`
 - promotion 中间产物：统一写入 `artifacts/llm_refine_promotions/...`
+- 本地可选下游检查：不属于核心 LLM workflow，默认作为 ignored 本地产物处理
 
 不要混淆这两个边界：
 

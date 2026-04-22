@@ -21,7 +21,7 @@
 - 🎯 **Target-conditioned search** for `raw_alpha`, `deployability`, and `complementarity`
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
 - 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
-- 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and optional external admission tracking**
+- 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and local optional downstream hooks**
 
 ## 📌 Start Here
 
@@ -58,7 +58,7 @@ Around this engine, AlphaRefinery provides the surrounding infrastructure needed
 - formal factor implementation and registration,
 - evaluation, archives, and reports,
 - formal factor promotion,
-- and optional external admission-oriented result tracking.
+- and local optional downstream result tracking.
 
 In short, AlphaRefinery combines a flagship LLM-driven refinement engine with the supporting infrastructure required for continuous factor research.
 
@@ -140,7 +140,7 @@ AlphaRefinery serves as the unified workspace for three major layers of work:
 
 - **formal factors and registry**
 - **family-level research loops driven by `llm_refine`**
-- **artifacts, reports, and optional external admission-oriented evaluation**
+- **artifacts, reports, and local optional downstream hooks**
 
 In practice:
 
@@ -186,12 +186,6 @@ graph TD
         C3["artifacts/llm_refine_promotions/*"]
     end
 
-    subgraph Admission["Optional External Admission Layer"]
-        D1["external admission workflow"]
-        D2["artifacts/autofactorset_ingest/*"]
-        D3["artifacts/runs/autofactorset_ingest/*"]
-    end
-
     A1 --> A2
     A2 --> A3
     B1 --> B2
@@ -205,9 +199,6 @@ graph TD
     C1 --> C2
     C1 --> C3
     C3 --> A4
-    A4 --> D1
-    D1 --> D2
-    D1 --> D3
 ```
 
 ---
@@ -257,12 +248,12 @@ This allows it to preserve:
 
 while keeping the formal factor layer cleaner and more maintainable.
 
-### 4. Optional external admission workflows
+### 4. Optional local downstream workflows
 
-Promoted factors can optionally be evaluated by external admission workflows or private factor-library pipelines.
+Promoted factors can optionally be evaluated by private factor-library pipelines outside the main repository.
 
-This layer is intentionally optional.
-The main AlphaRefinery research workflow does **not** depend on it.
+This layer is intentionally local and optional.
+The main AlphaRefinery research workflow does **not** depend on admission or AutoFactorSet code.
 
 ---
 
@@ -290,7 +281,7 @@ The current architecture is already functional, but several modules are still be
 * richer evaluation criteria,
 * more robust archive and promotion tooling,
 * improved reporting and workflow automation,
-* and further extensions to intraday evaluation and external admission logic.
+* and further extensions to intraday evaluation and optional local integrations.
 
 So while the system is already usable, it should still be viewed as an evolving research platform rather than a finalized product.
 
@@ -303,7 +294,7 @@ So while the system is already usable, it should still be viewed as an evolving 
 | `factors_store/`            | formal factor computation and registry  |
 | `factors_store/llm_refine/` | flagship family-level refinement engine |
 | `artifacts/`                | runs, reports, promotion artifacts      |
-| optional admission outputs  | external admission results and summaries |
+| local optional integrations | private downstream checks outside core LLM refinement |
 
 For a more detailed structural walkthrough, see:
 
@@ -323,7 +314,7 @@ graph LR
     C --> E[Promotion / Manual Selection]
     E --> F[llm_refined/*.py]
     F --> G[registry]
-    G --> H[external admission]
+    G --> H[optional local downstream checks]
 ```
 
 Typical repository destinations:
@@ -334,7 +325,7 @@ Typical repository destinations:
 | Family-level summaries      | `artifacts/reports/family/...`            |
 | Promotion / curated patches | `artifacts/llm_refine_promotions/...`     |
 | Formal promoted factors     | `factors_store/factors/llm_refined/...`   |
-| Admission evaluation        | `artifacts/runs/autofactorset_ingest/...` |
+| Optional downstream checks  | local ignored artifacts outside the core workflow |
 
 ---
 
@@ -370,8 +361,8 @@ This remains an auxiliary capability and is still under active refinement.
 ## Quick Start
 
 ```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
-python -m pip install -r requirements.txt
+cd AlphaRefinery
+python -m pip install -e .
 ```
 
 If your data paths differ from the local defaults, set them before running:
@@ -426,7 +417,6 @@ print(factor.dropna().head())
 ```bash
 source ./llm_refine_provider_env.sh
 
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_refine_family_loop \
   --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
@@ -454,7 +444,6 @@ Use `run_refine_family_loop` when you want the system to run:
 under the current default family controller.
 
 ```bash
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_refine_family_loop \
   --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
@@ -468,7 +457,6 @@ python -m factors_store.llm_refine.cli.run_refine_family_loop \
 Use `run_refine_multi_model` when you already have a strong parent and want to continue the main line with multi-model proposals.
 
 ```bash
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_refine_multi_model \
   --family weighted_upper_shadow_distribution \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
@@ -488,9 +476,8 @@ Use `run_research_funnel.py` when you want to inspect whether recent framework c
 * or profile-specific outcomes.
 
 ```bash
-cd /root/workspace/zxy_workspace/AlphaRefinery
+cd AlphaRefinery
 
-PYTHONPATH=/root/workspace/zxy_workspace/AlphaRefinery \
 python -m factors_store.llm_refine.cli.run_research_funnel
 ```
 
@@ -522,7 +509,7 @@ AlphaRefinery/
     ├── reports/
     ├── logs/
     ├── llm_refine_promotions/
-    └── autofactorset_ingest/
+    └── optional_local_integrations/
 ```
 
 ---
@@ -559,11 +546,11 @@ Near-term directions may include:
 * more target-conditioned search objectives,
 * stronger robustness-aware evaluation,
 * more automated promotion and reporting pipelines,
-* cleaner integration between family research and optional external admission workflows,
+* cleaner boundaries between family research and optional local downstream workflows,
 * and broader support for intraday and cross-frequency evaluation.
 
 ---
 
 ## One-Sentence Summary
 
-> **AlphaRefinery is an LLM-augmented research platform for A-share alpha factors, centered on the `llm_refine` family-level refinement engine and supported by formal factor infrastructure, research artifact management, and optional external admission workflows.**
+> **AlphaRefinery is an LLM-augmented research platform for A-share alpha factors, centered on the `llm_refine` family-level refinement engine and supported by formal factor infrastructure and research artifact management.**
