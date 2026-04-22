@@ -405,19 +405,161 @@ The transition should update:
 * promotion state,
 * and remaining budget.
 
-Current implementation pieces already perform parts of this transition:
+Stage progression is part of the transition, not only part of the policy:
+
+```text
+S_{t+1}.stage = g_stage(S_t, A_t, R_t)
+```
+
+`g_stage` should make the following decisions explicit.
+
+### Stage Transition Logic
+
+#### Broad termination
+
+Broad exploration ends when at least one of the following is true:
+
+* the broad-stage budget is exhausted,
+* the broad frontier is exhausted,
+* the broad loop reaches its no-new-winner patience,
+* a candidate passes the anchor graduation gate,
+* or the broad run fails and no recoverable frontier remains.
+
+Broad does not end just because a single candidate is best by raw metrics. It
+ends when there is enough evidence to either graduate an anchor or conclude
+that the current broad budget did not find one.
+
+#### Broad -> Anchor
+
+A broad candidate becomes an anchor candidate when it passes a graduation gate:
+
+```text
+status in {research_winner, winner, research_keep, keep}
+and eligible_for_best_node
+and metrics_completeness >= threshold
+and quick_rank_icir >= threshold
+and net_sharpe >= threshold
+and mean_turnover <= threshold
+and not blocked by parent/sibling correlation guard without material gain
+```
+
+The selected anchor is the passing candidate with the highest anchor quality
+score under the active target profile.
+
+#### Anchor -> Focused
+
+The process enters focused refinement when a best anchor exists. The focused
+stage uses that anchor as the current parent and switches the action space from
+motif exploration to local deepening, simplification, confirmation, or
+decorrelation around the anchor.
+
+If no anchor passes, the next state should be `broad_followup` or
+`new_family_broad`, depending on whether the family still has recoverable broad
+frontier.
+
+#### Focused continuation
+
+Focused refinement continues when the focused best node improves the anchor or
+previous focused best node with material gain and without materially worsening
+deployability:
+
+```text
+improved_metric = any(IC, ICIR, return, excess_return, Sharpe improves)
+turnover_not_much_worse = focused_turnover <= baseline_turnover + tolerance
+material_gain = excess_gain >= threshold
+             or icir_gain >= threshold
+             or sharpe_gain >= threshold
+continue_focused = improved_metric
+                and turnover_not_much_worse
+                and material_gain
+                and focused_budget_remains
+```
+
+If improvement exists but material gain is small, the next state should move to
+`confirmation`.
+
+#### Branch reopen
+
+A retired or deprioritized branch should be reopened when its continuation
+value rises again. Typical triggers are:
+
+* another broad candidate passed the anchor gate but was not selected,
+* the focused branch went flat and broad still has multiple viable anchors,
+* a branch has lower redundancy or turnover than the current best branch,
+* a branch has high expandability / branch value despite weaker current quality,
+* a new target profile such as `complementarity` makes that branch more valuable,
+* or new evaluation feedback reduces a previous failure reason.
+
+Branch reopen is different from ordinary frontier reranking: it changes a
+branch from inactive / saturated back into the eligible frontier.
+
+#### Terminate / freeze
+
+The family search should terminate or freeze when:
+
+* no broad anchor passes and broad budget is exhausted,
+* focused refinement fails to improve and no alternative broad anchor remains,
+* the frontier is exhausted by depth, branch, or family budget limits,
+* repeated no-improvement rounds hit patience,
+* failure modes dominate the remaining budget,
+* or the best available node should be kept as the family result without more
+  generation.
+
+This state can be represented as `freeze_anchor`, `terminate_family`, or
+`return_later`, depending on whether a usable anchor exists.
+
+#### Promote / confirmation / donor validation
+
+Promotion is a downstream transition from search state to formalized factor
+state. A candidate should move toward promotion or confirmation when it passes
+the research keep/winner gate and the target profile's deployability and
+redundancy checks are acceptable.
+
+If the anchor is already strong but focused refinement is flat, the next state
+can become `donor_validation`: the factor is useful as a donor or canonical
+reference even if it is not worth spending more local search budget.
+
+Current implementation pieces already perform parts of this transition, but
+the logic is distributed rather than owned by a single transition controller:
 
 ```text
 archive ingestion          -> candidate history
 SearchEngine               -> frontier / parent selection state
 SearchPolicy               -> scoring semantics
 DecisionContext            -> action context
+ContextResolver            -> stage/context recommendation
+DecisionEngine             -> anchor and post-focused recommendation
 promotion.py               -> py formalization and keep/winner gate
 research_funnel.py         -> family-level outcome summaries
 ```
 
+Current code coverage is partial:
+
+* `SearchEngine.can_continue()` implements budget/frontier/no-improvement stop
+  conditions inside one scheduler run.
+* `SearchFrontier` implements branch and motif caps for active frontier
+  selection, but not a first-class branch reopen state.
+* `DecisionEngine.select_anchor()` implements the broad-to-anchor graduation
+  gate.
+* `DecisionEngine.recommend_next_action()` implements a v1 post-focused
+  recommendation among `continue_focused`, `confirmation`, `donor_mode`,
+  `return_to_broad`, and `freeze_anchor`.
+* `resolve_orchestration_profile()` implements a lightweight next-stage
+  recommendation from runtime evidence and last-round status.
+* `run_refine_family_loop.py` wires a deterministic v1 sequence:
+  `broad -> anchor selection -> focused -> summary`.
+* `run_refine_multi_model_scheduler.py` records orchestration hints in run
+  summaries, but it does not yet call a centralized `g_stage` function to own
+  stage progression across runs.
+
 The missing abstraction is a single explicit `FamilyState` view that gathers
-these pieces before a decision is made.
+these pieces before a decision is made, plus a single stage-transition
+controller that owns `g_stage`.
+
+In other words, stage logic exists in code, but it is not yet systematized as a
+first-class transition policy. Today it is a combination of hard-coded family
+loop wiring, context heuristics, search-engine stop rules, anchor selection,
+and manual run configuration.
 
 ---
 
@@ -579,15 +721,45 @@ class FamilyState:
     budget_state: BudgetState
 ```
 
+Recommended transition decision object:
+
+```python
+@dataclass
+class StageTransitionDecision:
+    current_stage: str
+    next_stage: str
+    action: str
+    confidence: str
+    reason: str
+    rationale_tags: list[str]
+    parent_selection_bias: str
+    target_profile_bias: str
+    termination_bias: str
+    branch_reopen_candidates: list[str]
+```
+
+Recommended resolver:
+
+```python
+def resolve_stage_transition(
+    state: FamilyState,
+    action: RefinementAction,
+    feedback: EvaluationFeedback,
+) -> StageTransitionDecision:
+    ...
+```
+
 Initial rule:
 
 * `FamilyState` should be derived from existing archive/run artifacts.
 * It should not own execution.
 * It should not change current behavior.
 * It should only make the scheduler's implicit context inspectable.
+* `StageTransitionDecision` should first be written into `summary.json` and
+  `summary.md` as an audit artifact before it controls any automatic launch.
 
-Once this is stable, `V(S_t, A_t)` and `pi(S_t)` can be implemented as explicit
-scoring and recommendation layers.
+Once this is stable, `V(S_t, A_t)`, `pi(S_t)`, and `g_stage(S_t, A_t, R_t)` can
+be implemented as explicit scoring and recommendation layers.
 
 ---
 
