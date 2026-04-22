@@ -212,6 +212,48 @@ def resolve_stage_transition_from_state(
     return resolve_stage_transition(build_stage_transition_evidence(state, action, feedback))
 
 
+def build_stage_transition_shadow(
+    *,
+    legacy_decision: dict[str, Any],
+    family_state_decision: StageTransitionDecision | dict[str, Any],
+) -> dict[str, Any]:
+    legacy = dict(legacy_decision or {})
+    family_decision = (
+        family_state_decision.to_dict()
+        if isinstance(family_state_decision, StageTransitionDecision)
+        else dict(family_state_decision or {})
+    )
+    legacy_stage = str(
+        legacy.get("recommended_stage_mode")
+        or legacy.get("recommended_next_stage_preset")
+        or legacy.get("next_stage")
+        or ""
+    )
+    legacy_action = str(
+        legacy.get("round_strategy")
+        or legacy.get("recommended_next_step")
+        or legacy.get("action")
+        or ""
+    )
+    family_stage = str(family_decision.get("next_stage") or "")
+    family_action = str(family_decision.get("action") or "")
+    return {
+        "mode": "shadow",
+        "legacy_next_stage": legacy_stage,
+        "legacy_action": legacy_action,
+        "legacy_confidence": str(legacy.get("confidence") or ""),
+        "legacy_reason": str(legacy.get("recommended_reason") or legacy.get("reason") or ""),
+        "family_state_next_stage": family_stage,
+        "family_state_action": family_action,
+        "family_state_confidence": str(family_decision.get("confidence") or ""),
+        "family_state_reason": str(family_decision.get("reason") or ""),
+        "stage_agrees": bool(legacy_stage and family_stage and legacy_stage == family_stage),
+        "action_agrees": bool(legacy_action and family_action and legacy_action == family_action),
+        "legacy_tags": tuple(legacy.get("rationale_tags") or ()),
+        "family_state_tags": tuple(family_decision.get("rationale_tags") or ()),
+    }
+
+
 def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransitionDecision:
     """Return an advisory stage transition decision without changing execution.
 

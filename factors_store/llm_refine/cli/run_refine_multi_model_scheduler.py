@@ -35,6 +35,7 @@ from ..search import (
     SearchEngine,
     SearchPolicy,
     build_stage_transition_evidence,
+    build_stage_transition_shadow,
     build_search_normalizer,
 )
 from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
@@ -377,6 +378,10 @@ def _build_orchestration_trace(
         refinement_action,
         evaluation_feedback,
     )
+    stage_transition_shadow = build_stage_transition_shadow(
+        legacy_decision=orchestration_profile.to_dict(),
+        family_state_decision=stage_transition,
+    )
     return {
         "context_evidence": evidence.to_dict(),
         "context_profile": context_profile.to_dict(),
@@ -386,6 +391,9 @@ def _build_orchestration_trace(
         "evaluation_feedback": evaluation_feedback.to_dict(),
         "stage_transition_evidence": stage_transition_evidence.to_dict(),
         "stage_transition": stage_transition.to_dict(),
+        "family_state_decision": stage_transition.to_dict(),
+        "legacy_orchestration_decision": orchestration_profile.to_dict(),
+        "stage_transition_shadow": stage_transition_shadow,
     }
 
 
@@ -459,6 +467,7 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
     context_profile = dict(summary.get("orchestration_context_profile") or {})
     orchestration_profile = dict(summary.get("orchestration_profile") or {})
     stage_transition = dict(summary.get("stage_transition") or {})
+    stage_transition_shadow = dict(summary.get("stage_transition_shadow") or {})
     rounds = list(summary.get("rounds") or [])
     last_round = dict(rounds[-1] or {}) if rounds else {}
     rationale_tags = list(orchestration_profile.get("rationale_tags") or [])
@@ -513,6 +522,14 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- target_profile_bias: `{stage_transition.get('target_profile_bias', '')}`",
         f"- rationale_tags: `{', '.join(str(item) for item in stage_transition_tags)}`",
         f"- reason: {stage_transition.get('reason', '')}",
+        "",
+        "## Stage Transition Shadow",
+        f"- legacy_next_stage: `{stage_transition_shadow.get('legacy_next_stage', '')}`",
+        f"- legacy_action: `{stage_transition_shadow.get('legacy_action', '')}`",
+        f"- family_state_next_stage: `{stage_transition_shadow.get('family_state_next_stage', '')}`",
+        f"- family_state_action: `{stage_transition_shadow.get('family_state_action', '')}`",
+        f"- stage_agrees: `{stage_transition_shadow.get('stage_agrees', '')}`",
+        f"- action_agrees: `{stage_transition_shadow.get('action_agrees', '')}`",
         "",
         "## Runtime Evidence",
         f"- selected_parent_kind: `{context_evidence.get('selected_parent_kind', '')}`",
@@ -785,6 +802,9 @@ def _build_scheduler_summary_payload(
         "evaluation_feedback": dict(last_round.get("evaluation_feedback") or {}),
         "stage_transition_evidence": dict(last_round.get("stage_transition_evidence") or {}),
         "stage_transition": dict(last_round.get("stage_transition") or {}),
+        "family_state_decision": dict(last_round.get("family_state_decision") or {}),
+        "legacy_orchestration_decision": dict(last_round.get("legacy_orchestration_decision") or {}),
+        "stage_transition_shadow": dict(last_round.get("stage_transition_shadow") or {}),
         "best_node": final_best,
         "best_node_name": str(final_best.get("candidate_name", "") or final_best.get("factor_name", "") or ""),
         "best_node_expression": str(final_best.get("expression", "") or ""),

@@ -30,6 +30,7 @@ from .stage_transition import (
     StageTransitionDecision,
     StageTransitionEvidence,
     build_stage_transition_evidence,
+    build_stage_transition_shadow,
     resolve_stage_transition,
     resolve_stage_transition_from_state,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "StageTransitionDecision",
     "StageTransitionEvidence",
     "build_stage_transition_evidence",
+    "build_stage_transition_shadow",
     "build_search_normalizer",
     "compute_base_score",
     "compute_frontier_score",

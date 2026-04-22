@@ -843,6 +843,12 @@ Then the rule quality can be checked by comparing `expected_label` with
 `predicted_label`. This keeps stage-transition tuning grounded in actual run
 history instead of isolated examples.
 
+Before enforcement, live runs should use shadow mode: keep the legacy
+orchestration decision unchanged, compute the `FamilyState` decision in
+parallel, and write both into `stage_transition_shadow`. This makes disagreement
+between the old scheduler recommendation and the new family-state policy visible
+without changing execution behavior.
+
 ---
 
 ## 11. Design Boundary
