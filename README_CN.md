@@ -477,19 +477,32 @@ AlphaRefinery/
 ├── README.md
 ├── README_CN.md
 ├── PROJECT_MAP.md
+├── pyproject.toml
 ├── requirements.txt
 ├── llm_refine_provider_env.example.sh
+├── run_refine.sh
 ├── config/
 │   ├── factor_manifests/
 │   └── refinement_seed_pool.yaml
 ├── docs/
 │   └── assets/
 ├── factors_store/
+│   ├── contract.py
+│   ├── data.py
+│   ├── operators.py
+│   ├── registry.py
 │   ├── _vendor/
+│   │   └── gpqlib_runtime/
 │   ├── factors/
-│   ├── llm_refine/
+│   └── llm_refine/
+├── scripts/
+│   ├── organize_runs_by_family.py
+│   └── refresh_run_indexes.py
 └── artifacts/
+    └── README.md
 ```
+
+`artifacts/**` 下的运行产物、私有 family 因子、provider secrets、本地可选下游集成都默认不进入 git。
 
 ---
 

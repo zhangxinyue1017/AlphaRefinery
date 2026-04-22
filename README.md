@@ -492,25 +492,34 @@ For more detailed execution patterns, read:
 ```text
 AlphaRefinery/
 ├── README.md
+├── README_CN.md
 ├── PROJECT_MAP.md
+├── pyproject.toml
 ├── requirements.txt
 ├── llm_refine_provider_env.example.sh
 ├── run_refine.sh
 ├── config/
 │   ├── factor_manifests/
 │   └── refinement_seed_pool.yaml
+├── docs/
+│   └── assets/
 ├── factors_store/
+│   ├── contract.py
+│   ├── data.py
+│   ├── operators.py
+│   ├── registry.py
 │   ├── _vendor/
 │   │   └── gpqlib_runtime/
 │   ├── factors/
 │   └── llm_refine/
+├── scripts/
+│   ├── organize_runs_by_family.py
+│   └── refresh_run_indexes.py
 └── artifacts/
-    ├── runs/
-    ├── reports/
-    ├── logs/
-    ├── llm_refine_promotions/
-    └── optional_local_integrations/
+    └── README.md
 ```
+
+Runtime outputs under `artifacts/**`, private factor families, provider secrets, and optional local downstream integrations are intentionally ignored by git.
 
 ---
 

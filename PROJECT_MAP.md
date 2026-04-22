@@ -30,11 +30,15 @@ AlphaRefinery/
 ├── README.md
 ├── README_CN.md
 ├── PROJECT_MAP.md
+├── pyproject.toml
 ├── requirements.txt
 ├── llm_refine_provider_env.example.sh
+├── run_refine.sh
 ├── config/
 ├── docs/
-└── factors_store/
+├── factors_store/
+├── scripts/
+└── artifacts/
 ```
 
 ### Top-level files
@@ -50,10 +54,16 @@ AlphaRefinery/
   * repository navigation guide
 * [`requirements.txt`](./requirements.txt)
 
-  * Python dependencies for the public workflows
+  * flat dependency list for environments that do not use editable installs
+* [`pyproject.toml`](./pyproject.toml)
+
+  * packaging metadata for standalone editable installs with `pip install -e .`
 * [`llm_refine_provider_env.example.sh`](./llm_refine_provider_env.example.sh)
 
   * template for local provider configuration
+* [`run_refine.sh`](./run_refine.sh)
+
+  * convenience shell entrypoint for local refinement runs
 
 ---
 
@@ -181,6 +191,11 @@ This directory represents the **formal promotion target** for refinement results
 In the public repository, it keeps only shared scaffolding and helper utilities.
 Local/private `*_family.py` results are intentionally excluded from version control.
 
+### Local ignored integrations
+
+Local optional downstream adapters, such as private admission or factor-library bridge code, may exist under the working tree for internal workflows.
+They are intentionally ignored by git and are not part of the public/core `llm_refine` repository surface.
+
 ---
 
 ## `factors_store/llm_refine/`: flagship research engine
@@ -240,6 +255,39 @@ For subsystem-level usage and design details, see:
 * `docs/`
 
   * subsystem-specific design and tuning notes
+
+---
+
+## `scripts/`: local maintenance helpers
+
+```text
+scripts/
+├── organize_runs_by_family.py
+└── refresh_run_indexes.py
+```
+
+These scripts support local artifact organization and run-index refresh tasks.
+They are not required by the core `llm_refine` loop, but are useful for maintaining long-running research workspaces.
+
+---
+
+## `artifacts/`: runtime output root
+
+```text
+artifacts/
+└── README.md
+```
+
+The repository keeps only the top-level artifact README under version control.
+Runtime outputs are ignored by git, including:
+
+* `artifacts/runs/**`
+* `artifacts/reports/**`
+* `artifacts/logs/**`
+* `artifacts/llm_refine_promotions/**`
+* optional local downstream integration outputs
+
+This keeps the standalone repository lightweight while preserving a stable default output layout for local research runs.
 
 ---
 
