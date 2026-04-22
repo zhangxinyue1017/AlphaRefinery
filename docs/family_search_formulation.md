@@ -799,6 +799,50 @@ Initial rule:
 Once this is stable, `V(S_t, A_t)`, `pi(S_t)`, and `g_stage(S_t, A_t, R_t)` can
 be implemented as explicit scoring and recommendation layers.
 
+### Advisory Quality Evaluation
+
+The key validation question is not whether `StageTransitionDecision` can be
+written to artifacts. The key question is whether its recommendation matches an
+experienced researcher's next-step judgment.
+
+A practical evaluation set can be built from historical scheduler summaries:
+
+```bash
+python scripts/build_stage_transition_eval_set.py --limit 30
+```
+
+The output CSV contains:
+
+```text
+expected_label
+predicted_label
+decision_action
+decision_next_stage
+decision_reason
+case_bucket
+family
+run_dir
+stage_mode
+target_profile
+winner metrics
+human_notes
+```
+
+The human reviewer fills `expected_label` with one of:
+
+```text
+continue_focused
+return_to_broad
+switch_to_complementarity
+confirmation
+terminate
+reopen_branch
+```
+
+Then the rule quality can be checked by comparing `expected_label` with
+`predicted_label`. This keeps stage-transition tuning grounded in actual run
+history instead of isolated examples.
+
 ---
 
 ## 11. Design Boundary
