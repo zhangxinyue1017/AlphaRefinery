@@ -300,6 +300,8 @@ def _build_orchestration_trace(
     high_corr_count: int = 0,
     high_turnover_count: int = 0,
     validation_fail_count: int = 0,
+    children_collected: int = 0,
+    children_added_to_search: int = 0,
     budget_exhausted: bool = False,
     frontier_exhausted: bool = False,
 ) -> dict[str, Any]:
@@ -337,6 +339,8 @@ def _build_orchestration_trace(
         },
         budget_state={
             "consecutive_no_improve": int(consecutive_no_improve),
+            "children_collected": int(children_collected),
+            "children_added_to_search": int(children_added_to_search),
             "budget_exhausted": bool(budget_exhausted),
             "frontier_exhausted": bool(frontier_exhausted),
         },
@@ -355,6 +359,8 @@ def _build_orchestration_trace(
         winner=dict(winner or {}),
         keep=dict(keep or {}),
         consecutive_no_improve=int(consecutive_no_improve),
+        children_collected=int(children_collected),
+        children_added_to_search=int(children_added_to_search),
         high_corr_count=int(high_corr_count),
         high_turnover_count=int(high_turnover_count),
         validation_fail_count=int(validation_fail_count),
@@ -1200,6 +1206,8 @@ def main() -> int:
                     winner=dict(round_best_candidate or round_winner or {}),
                     keep=dict(round_best_keep or {}),
                     consecutive_no_improve=int(engine.consecutive_no_improve),
+                    children_collected=int(record.get("children_collected") or 0),
+                    children_added_to_search=int(record.get("children_added_to_search") or 0),
                 )
             )
             round_records.append(record)

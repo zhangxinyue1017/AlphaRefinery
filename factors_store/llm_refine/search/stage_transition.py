@@ -58,6 +58,8 @@ class EvaluationFeedback:
     passed_anchor_count: int = 0
     focused_best_node: dict[str, Any] | None = None
     consecutive_no_improve: int = 0
+    children_collected: int = 0
+    children_added_to_search: int = 0
     high_corr_count: int = 0
     high_turnover_count: int = 0
     validation_fail_count: int = 0
@@ -82,6 +84,8 @@ class StageTransitionEvidence:
     passed_anchor_count: int = 0
     focused_best_node: dict[str, Any] | None = None
     consecutive_no_improve: int = 0
+    children_collected: int = 0
+    children_added_to_search: int = 0
     high_corr_count: int = 0
     high_turnover_count: int = 0
     validation_fail_count: int = 0
@@ -122,6 +126,17 @@ def _is_strong(payload: dict[str, Any]) -> bool:
             or (_finite(excess) and excess > 0.0 and _finite(sharpe) and sharpe >= 2.0)
         )
     )
+
+
+def _is_usable(payload: dict[str, Any]) -> bool:
+    icir = _safe_float(payload.get("quick_rank_icir"))
+    sharpe = _safe_float(payload.get("net_sharpe"))
+    return bool(payload and _finite(icir) and icir >= 0.45 and _finite(sharpe) and sharpe >= 2.0)
+
+
+def _is_high_turnover(payload: dict[str, Any], threshold: float = 0.40) -> bool:
+    turnover = _safe_float(payload.get("mean_turnover"))
+    return bool(_finite(turnover) and turnover >= float(threshold))
 
 
 def _material_gain(candidate: dict[str, Any], baseline: dict[str, Any]) -> bool:
@@ -167,6 +182,10 @@ def build_stage_transition_evidence(
             feedback.consecutive_no_improve
             or budget_state.get("consecutive_no_improve")
             or 0
+        ),
+        children_collected=int(feedback.children_collected or budget_state.get("children_collected") or 0),
+        children_added_to_search=int(
+            feedback.children_added_to_search or budget_state.get("children_added_to_search") or 0
         ),
         high_corr_count=int(feedback.high_corr_count or failure_state.get("high_corr_count") or 0),
         high_turnover_count=int(
@@ -227,6 +246,60 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
             termination_bias="normal",
         )
 
+    empty_flat = bool(
+        not winner
+        and not keep
+        and int(evidence.children_collected or 0) <= 0
+        and not evidence.last_round_search_improved
+    )
+    if empty_flat and status in {"", "ok", "partial_success"}:
+        tags.append("empty_flat_round")
+        if stage == "focused_refine":
+            if target_profile == "complementarity":
+                tags.append("complementarity_flat")
+                return StageTransitionDecision(
+                    current_stage=stage,
+                    next_stage="focused_refine",
+                    action="reopen_broad",
+                    confidence="medium",
+                    reason="complementarity focused round was flat; reopen another low-corr branch",
+                    rationale_tags=tuple(tags),
+                    parent_selection_bias="low_corr_parent",
+                    target_profile_bias="complementarity",
+                    branch_reopen_candidates=tuple(branch_reopen),
+                )
+            if evidence.has_decorrelation_targets:
+                tags.append("decorrelation_flat")
+                return StageTransitionDecision(
+                    current_stage=stage,
+                    next_stage="focused_refine",
+                    action="decorrelate_or_reopen_branch",
+                    confidence="medium",
+                    reason="focused decorrelation round was flat; switch toward complementarity targets",
+                    rationale_tags=tuple(tags),
+                    parent_selection_bias="low_corr_parent",
+                    target_profile_bias="complementarity",
+                )
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="broad_followup",
+                action="reopen_broad",
+                confidence="medium",
+                reason="focused round produced no children or usable candidate; reopen a different branch",
+                rationale_tags=tuple(tags),
+                parent_selection_bias="diversify_branch",
+                branch_reopen_candidates=tuple(branch_reopen),
+            )
+        return StageTransitionDecision(
+            current_stage=stage,
+            next_stage="terminate",
+            action="freeze_or_switch_family",
+            confidence="medium",
+            reason="round produced no children, no improvement, and no usable candidate",
+            rationale_tags=tuple(tags),
+            termination_bias="stop",
+        )
+
     if evidence.frontier_exhausted:
         tags.append("frontier_exhausted")
         return StageTransitionDecision(
@@ -264,6 +337,66 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
                 rationale_tags=tuple(tags),
                 parent_selection_bias="best_node",
             )
+        if evidence.last_round_search_improved and _is_usable(winner):
+            tags.extend(["search_improved", "usable_winner"])
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="focused_refine",
+                action="exploit_mainline",
+                confidence="medium",
+                reason="broad search improved and produced a usable winner",
+                rationale_tags=tuple(tags),
+                parent_selection_bias="best_node",
+            )
+        if evidence.last_round_search_improved and int(evidence.children_added_to_search or 0) > 0:
+            tags.extend(["search_improved", "children_added"])
+            if target_profile == "complementarity" and not winner and not keep:
+                tags.append("complementarity_without_visible_winner")
+                return StageTransitionDecision(
+                    current_stage=stage,
+                    next_stage="terminate",
+                    action="freeze_or_switch_family",
+                    confidence="medium",
+                    reason="complementarity run spent budget without a visible usable winner",
+                    rationale_tags=tuple(tags),
+                    termination_bias="stop",
+                )
+            if evidence.budget_exhausted:
+                tags.append("budget_exhausted_without_visible_winner")
+                return StageTransitionDecision(
+                    current_stage=stage,
+                    next_stage="broad_followup",
+                    action="continue_broad_search",
+                    confidence="low",
+                    reason="broad search improved but no visible winner is available; continue broad or inspect artifacts",
+                    rationale_tags=tuple(tags),
+                    parent_selection_bias="diversify_branch",
+                )
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="focused_refine",
+                action="exploit_mainline",
+                confidence="low",
+                reason="broad search improved and added candidates, but winner evidence is incomplete",
+                rationale_tags=tuple(tags),
+                parent_selection_bias="best_node",
+            )
+        if (
+            not evidence.last_round_search_improved
+            and int(evidence.children_collected or 0) >= 20
+            and not winner
+            and not keep
+        ):
+            tags.append("broad_saturation")
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="terminate",
+                action="freeze_or_switch_family",
+                confidence="medium",
+                reason="broad search spent substantial candidate budget without improvement or usable candidates",
+                rationale_tags=tuple(tags),
+                termination_bias="stop",
+            )
         tags.append("continue_broad")
         return StageTransitionDecision(
             current_stage=stage,
@@ -278,6 +411,40 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
     if stage == "focused_refine":
         baseline = anchor or winner
         best_focused = focused or winner
+        if best_focused and target_profile == "complementarity" and _is_usable(best_focused):
+            tags.append("complementarity_usable_winner")
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="confirmation",
+                action="confirm_and_freeze",
+                confidence="medium",
+                reason="complementarity focused round produced a usable winner; confirm/freeze before more mining",
+                rationale_tags=tuple(tags),
+                termination_bias="stop_early_if_flat",
+            )
+        if best_focused and _is_high_turnover(best_focused) and target_profile != "complementarity":
+            tags.append("high_turnover_winner")
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="focused_refine",
+                action="decorrelate_or_reopen_branch",
+                confidence="medium",
+                reason="focused winner is strong but high-turnover; switch toward complementarity/deployability constraints",
+                rationale_tags=tuple(tags),
+                parent_selection_bias="low_corr_parent",
+                target_profile_bias="complementarity",
+            )
+        if best_focused and _is_strong(best_focused):
+            tags.append("focused_strong_winner")
+            return StageTransitionDecision(
+                current_stage=stage,
+                next_stage="focused_refine",
+                action="continue_focused",
+                confidence="medium",
+                reason="focused round produced a strong winner; continue this mainline before freezing",
+                rationale_tags=tuple(tags),
+                parent_selection_bias="best_node",
+            )
         if best_focused and baseline and _material_gain(best_focused, baseline):
             tags.append("focused_material_gain")
             return StageTransitionDecision(

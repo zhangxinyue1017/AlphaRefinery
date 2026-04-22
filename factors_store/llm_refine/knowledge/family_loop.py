@@ -986,7 +986,12 @@ def build_family_loop_summary(
         best_node=dict(state.focused_best_node or state.broad_best_node or {}),
         redundancy_state={},
         failure_state={},
-        budget_state={"budget_exhausted": False, "frontier_exhausted": False},
+        budget_state={
+            "budget_exhausted": False,
+            "frontier_exhausted": False,
+            "children_collected": int(dict(broad_snapshot or {}).get("total_candidates") or 0),
+            "children_added_to_search": int(dict(broad_snapshot or {}).get("evaluated_candidate_count") or 0),
+        },
     )
     refinement_action = RefinementAction(
         stage_mode=family_state.stage,
@@ -1001,6 +1006,8 @@ def build_family_loop_summary(
         best_anchor=dict((anchor_selection or {}).get("best_anchor") or {}),
         passed_anchor_count=len((anchor_selection or {}).get("passed_candidates") or []),
         focused_best_node=dict(state.focused_best_node or {}),
+        children_collected=int(dict(broad_snapshot or {}).get("total_candidates") or 0),
+        children_added_to_search=int(dict(broad_snapshot or {}).get("evaluated_candidate_count") or 0),
     )
     stage_transition_evidence = build_stage_transition_evidence(
         family_state,

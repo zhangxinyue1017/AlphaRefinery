@@ -64,9 +64,12 @@ def _decision_to_label(decision: dict[str, Any]) -> str:
     next_stage = str(decision.get("next_stage", "") or "")
     target_bias = str(decision.get("target_profile_bias", "") or "")
     branch_reopen = list(decision.get("branch_reopen_candidates") or [])
+    parent_bias = str(decision.get("parent_selection_bias", "") or "")
     if next_stage == "terminate" or action in {"freeze_or_switch_family", "freeze_or_promote"}:
         return "terminate"
     if branch_reopen:
+        return "reopen_branch"
+    if action == "reopen_broad" and parent_bias in {"diversify_branch", "low_corr_parent"}:
         return "reopen_branch"
     if target_bias == "complementarity" or action == "decorrelate_or_reopen_branch":
         return "switch_to_complementarity"
@@ -132,6 +135,8 @@ def _build_state_action_feedback(summary: dict[str, Any]) -> tuple[FamilyState, 
         },
         budget_state={
             "consecutive_no_improve": int(dict(search.get("budget") or {}).get("consecutive_no_improve") or 0),
+            "children_collected": int(last_round.get("children_collected") or 0),
+            "children_added_to_search": int(last_round.get("children_added_to_search") or 0),
             "budget_exhausted": str(summary.get("stop_reason") or "") == "max_rounds",
             "frontier_exhausted": str(summary.get("stop_reason") or "") == "frontier_exhausted",
         },
@@ -155,6 +160,8 @@ def _build_state_action_feedback(summary: dict[str, Any]) -> tuple[FamilyState, 
         passed_anchor_count=len(summary.get("anchor_selection", {}).get("passed_candidates") or []),
         focused_best_node=best_node,
         consecutive_no_improve=int(dict(search.get("budget") or {}).get("consecutive_no_improve") or 0),
+        children_collected=int(last_round.get("children_collected") or 0),
+        children_added_to_search=int(last_round.get("children_added_to_search") or 0),
         budget_exhausted=str(summary.get("stop_reason") or "") == "max_rounds",
         frontier_exhausted=str(summary.get("stop_reason") or "") == "frontier_exhausted",
     )
