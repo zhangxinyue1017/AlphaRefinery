@@ -115,6 +115,144 @@ class StageTransitionDecision:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class PhasePolicyRule:
+    rule_id: str
+    phase: str
+    input_signals: tuple[str, ...]
+    output_action: str
+    next_stage: str
+    parent_selection_bias: str = "best_node"
+    target_profile_bias: str = "keep_current"
+    termination_bias: str = "normal"
+    description: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+PHASE_POLICY_TABLE: tuple[PhasePolicyRule, ...] = (
+    PhasePolicyRule(
+        rule_id="failed_round_repair",
+        phase="any",
+        input_signals=("last_round_status=failed", "validation_fail_count?"),
+        output_action="repair_or_retry",
+        next_stage="broad_followup_or_current",
+        parent_selection_bias="diversify_branch",
+        description="A failed run should not advance phase automatically; repair the failure first.",
+    ),
+    PhasePolicyRule(
+        rule_id="empty_flat_stop_or_reopen",
+        phase="any",
+        input_signals=("no winner", "no keep", "children_collected<=0", "search_improved=false"),
+        output_action="reopen_broad_or_freeze",
+        next_stage="broad_followup_or_terminate",
+        parent_selection_bias="diversify_branch",
+        termination_bias="stop_if_not_focused",
+        description="A flat round without usable children should either reopen another branch or stop the family.",
+    ),
+    PhasePolicyRule(
+        rule_id="broad_anchor_graduation",
+        phase="new_family_broad|broad_followup|family_loop",
+        input_signals=("anchor_strength=passed", "passed_anchor_count>0"),
+        output_action="graduate_anchor",
+        next_stage="focused_refine",
+        parent_selection_bias="best_anchor",
+        description="A broad candidate that passes the anchor gate becomes the focused parent.",
+    ),
+    PhasePolicyRule(
+        rule_id="broad_strong_winner",
+        phase="new_family_broad|broad_followup|family_loop",
+        input_signals=("search_improved=true", "winner_quality=strong_or_usable"),
+        output_action="continue_focused",
+        next_stage="focused_refine",
+        parent_selection_bias="best_node",
+        description="A broad winner with usable quality should be exploited as the mainline.",
+    ),
+    PhasePolicyRule(
+        rule_id="broad_saturation",
+        phase="new_family_broad|broad_followup|family_loop",
+        input_signals=("children_collected>=20", "search_improved=false", "no winner", "no keep"),
+        output_action="terminate",
+        next_stage="terminate",
+        termination_bias="stop",
+        description="A broad phase that spends material candidate budget without usable output is saturated.",
+    ),
+    PhasePolicyRule(
+        rule_id="focused_complementarity_confirm",
+        phase="focused_refine",
+        input_signals=("target_profile=complementarity", "winner_quality=usable"),
+        output_action="confirmation",
+        next_stage="confirmation",
+        termination_bias="stop_early_if_flat",
+        description="A usable complementarity winner should be confirmed rather than over-mined.",
+    ),
+    PhasePolicyRule(
+        rule_id="focused_high_turnover_switch",
+        phase="focused_refine",
+        input_signals=("winner_quality=usable_or_strong", "turnover_pressure=true"),
+        output_action="switch_to_complementarity",
+        next_stage="focused_refine",
+        parent_selection_bias="low_corr_parent",
+        target_profile_bias="complementarity",
+        description="A high-turnover focused winner should move into deployability/complementarity pressure.",
+    ),
+    PhasePolicyRule(
+        rule_id="focused_material_gain_continue",
+        phase="focused_refine",
+        input_signals=("winner_quality=strong_or_material_gain", "material_gain=true"),
+        output_action="continue_focused",
+        next_stage="focused_refine",
+        parent_selection_bias="best_node",
+        description="A focused branch with material incremental value should continue.",
+    ),
+    PhasePolicyRule(
+        rule_id="focused_corr_pressure_reopen",
+        phase="focused_refine",
+        input_signals=("corr_pressure=true", "decorrelation_targets?"),
+        output_action="switch_to_complementarity",
+        next_stage="focused_refine",
+        parent_selection_bias="low_corr_parent",
+        target_profile_bias="complementarity",
+        description="A redundant focused branch should reopen a lower-corr branch or target complementarity.",
+    ),
+    PhasePolicyRule(
+        rule_id="focused_turnover_confirmation",
+        phase="focused_refine",
+        input_signals=("turnover_pressure=true", "no stronger material gain"),
+        output_action="confirmation",
+        next_stage="confirmation",
+        target_profile_bias="deployability",
+        termination_bias="stop_early_if_flat",
+        description="Turnover pressure without material gain should trigger deployability confirmation.",
+    ),
+    PhasePolicyRule(
+        rule_id="focused_usable_no_gain_confirm",
+        phase="focused_refine",
+        input_signals=("winner_or_keep=true", "material_gain=false"),
+        output_action="confirmation",
+        next_stage="confirmation",
+        termination_bias="stop_early_if_flat",
+        description="A usable candidate without material incremental gain should be confirmed/frozen.",
+    ),
+    PhasePolicyRule(
+        rule_id="confirmation_terminal",
+        phase="confirmation|donor_validation",
+        input_signals=("confirmation_context=true",),
+        output_action="freeze_or_promote",
+        next_stage="terminate",
+        termination_bias="stop",
+        description="Confirmation and donor validation are terminal advisory phases unless manually reopened.",
+    ),
+)
+
+
+def get_phase_policy_table() -> tuple[dict[str, Any], ...]:
+    """Return the explicit phase-policy table used to audit transition rules."""
+
+    return tuple(rule.to_dict() for rule in PHASE_POLICY_TABLE)
+
+
 def _is_strong(payload: dict[str, Any]) -> bool:
     icir = _safe_float(payload.get("quick_rank_icir"))
     sharpe = _safe_float(payload.get("net_sharpe"))
@@ -315,7 +453,7 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
                 return StageTransitionDecision(
                     current_stage=stage,
                     next_stage="focused_refine",
-                    action="decorrelate_or_reopen_branch",
+                    action="switch_to_complementarity",
                     confidence="medium",
                     reason="focused decorrelation round was flat; switch toward complementarity targets",
                     rationale_tags=tuple(tags),
@@ -469,7 +607,7 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
             return StageTransitionDecision(
                 current_stage=stage,
                 next_stage="focused_refine",
-                action="decorrelate_or_reopen_branch",
+                action="switch_to_complementarity",
                 confidence="medium",
                 reason="focused winner is strong but high-turnover; switch toward complementarity/deployability constraints",
                 rationale_tags=tuple(tags),
@@ -505,7 +643,7 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
             return StageTransitionDecision(
                 current_stage=stage,
                 next_stage="focused_refine",
-                action="decorrelate_or_reopen_branch",
+                action="switch_to_complementarity",
                 confidence="medium",
                 reason="focused branch is constrained by redundancy pressure; prefer low-corr branch reopening",
                 rationale_tags=tuple(tags),

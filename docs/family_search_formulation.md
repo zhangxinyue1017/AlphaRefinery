@@ -787,6 +787,31 @@ def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransiti
     ...
 ```
 
+The resolver is backed by an explicit phase-policy table. The table is not a
+learned model and does not call an LLM; it is a deterministic mapping from
+observed family-state signals to the next advisory action.
+
+| Phase | Input Signals | Output Action | Next Stage | Bias |
+| --- | --- | --- | --- | --- |
+| any | `last_round_status=failed`, optional validation failures | `repair_or_retry` | broad follow-up or current stage | diversify branch |
+| any | no winner, no keep, no children, no improvement | `reopen_broad_or_freeze` | broad follow-up or terminate | diversify or stop |
+| broad | anchor passes or `passed_anchor_count>0` | `graduate_anchor` | `focused_refine` | best anchor |
+| broad | search improved and winner is usable/strong | `continue_focused` | `focused_refine` | best node |
+| broad | large candidate budget spent, no improvement, no winner/keep | `terminate` | `terminate` | stop |
+| focused | complementarity target and usable winner | `confirmation` | `confirmation` | stop early if flat |
+| focused | usable/strong winner with high turnover | `switch_to_complementarity` | `focused_refine` | low-corr parent |
+| focused | strong winner or material gain versus baseline | `continue_focused` | `focused_refine` | best node |
+| focused | corr pressure or explicit decorrelation targets | `switch_to_complementarity` | `focused_refine` | low-corr parent |
+| focused | turnover pressure without material gain | `confirmation` | `confirmation` | deployability |
+| focused | usable candidate but no material gain | `confirmation` | `confirmation` | freeze/confirm |
+| confirmation / donor validation | confirmation context | `freeze_or_promote` | `terminate` | stop |
+
+The code version of this table lives in:
+
+```text
+factors_store/llm_refine/search/stage_transition.py
+```
+
 Initial rule:
 
 * `FamilyState` should be derived from existing archive/run artifacts.
