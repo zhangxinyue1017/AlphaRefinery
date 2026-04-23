@@ -4,95 +4,6 @@ from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 
-POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
-    # Basic policy identity and global interpretation mode.
-    "identity": (
-        "name",
-        "target_profile",
-        "selection_strategy",
-        "metric_normalization",
-    ),
-    # Main alpha-quality objective and normalization scales.
-    "performance_objective": (
-        "rank_ic_weight",
-        "rank_icir_weight",
-        "ann_return_weight",
-        "excess_return_weight",
-        "sharpe_weight",
-        "rank_ic_scale",
-        "rank_icir_scale",
-        "ann_return_scale",
-        "excess_return_scale",
-        "sharpe_scale",
-    ),
-    # Costs that make candidates harder to deploy or maintain.
-    "risk_penalty": (
-        "turnover_penalty_weight",
-        "complexity_penalty_weight",
-        "depth_penalty_weight",
-        "turnover_scale",
-        "complexity_scale",
-        "depth_scale",
-    ),
-    # Redundancy controls that push search away from repeated motifs/branches.
-    "redundancy_diversity": (
-        "mmr_rerank",
-        "mmr_lambda",
-        "branch_penalty_weight",
-        "redundancy_penalty_weight",
-        "family_motif_saturation_weight",
-        "correlation_redundancy_weight",
-        "novelty_bonus_weight",
-        "motif_novelty_weight",
-    ),
-    # Frontier-selection mechanics and caps.
-    "frontier_control": (
-        "frontier_rerank",
-        "prefer_unexpanded",
-        "allow_keep_nodes",
-        "require_novel_expression",
-        "branch_frontier_cap",
-        "motif_frontier_cap",
-        "selection_pool_size",
-        "mmr_candidate_pool_size",
-    ),
-    # Feature weights used to estimate similarity between candidate nodes.
-    "similarity_model": (
-        "similarity_branch_weight",
-        "similarity_motif_weight",
-        "similarity_mutation_weight",
-        "similarity_skeleton_weight",
-        "similarity_economic_weight",
-        "similarity_operator_weight",
-        "similarity_token_weight",
-    ),
-    # Extra objective terms activated by raw_alpha/deployability/complementarity/robustness profiles.
-    "target_profile_conditioning": (
-        "target_conditioned_weight",
-        "constraint_weight",
-        "portfolio_weight",
-        "regime_weight",
-        "transfer_weight",
-    ),
-    # Continuation-value bonuses for promising branches and expandable parents.
-    "continuation_value": (
-        "exploration_weight",
-        "expandability_weight",
-        "branch_value_weight",
-        "winner_status_bonus",
-        "keep_status_bonus",
-    ),
-    # Optional two-parent expansion policy.
-    "dual_parent": (
-        "dual_parent_enabled",
-        "dual_parent_max_parents",
-        "dual_parent_delta_threshold",
-        "dual_parent_similarity_threshold",
-        "dual_parent_min_expandability_advantage",
-    ),
-}
-
-
 @dataclass(frozen=True)
 class SearchPolicy:
     # Basic policy identity and global interpretation mode.
@@ -173,21 +84,6 @@ class SearchPolicy:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-    def grouped_dict(self) -> dict[str, dict[str, Any]]:
-        payload = self.to_dict()
-        grouped: dict[str, dict[str, Any]] = {}
-        assigned: set[str] = set()
-        for group_name, fields in POLICY_FIELD_GROUPS.items():
-            grouped[group_name] = {field: payload[field] for field in fields if field in payload}
-            assigned.update(grouped[group_name])
-        remaining = {key: value for key, value in payload.items() if key not in assigned}
-        if remaining:
-            grouped["other"] = remaining
-        return grouped
-
-    def grouped_summary(self) -> dict[str, tuple[str, ...]]:
-        return {group_name: tuple(values.keys()) for group_name, values in self.grouped_dict().items()}
 
     def with_mmr_rerank(self, enabled: bool) -> "SearchPolicy":
         return replace(self, mmr_rerank=bool(enabled))
