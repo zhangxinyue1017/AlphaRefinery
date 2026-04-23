@@ -5,12 +5,14 @@ from typing import Any
 
 
 POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
+    # Basic policy identity and global interpretation mode.
     "identity": (
         "name",
         "target_profile",
         "selection_strategy",
         "metric_normalization",
     ),
+    # Main alpha-quality objective and normalization scales.
     "performance_objective": (
         "rank_ic_weight",
         "rank_icir_weight",
@@ -23,6 +25,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "excess_return_scale",
         "sharpe_scale",
     ),
+    # Costs that make candidates harder to deploy or maintain.
     "risk_penalty": (
         "turnover_penalty_weight",
         "complexity_penalty_weight",
@@ -31,6 +34,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "complexity_scale",
         "depth_scale",
     ),
+    # Redundancy controls that push search away from repeated motifs/branches.
     "redundancy_diversity": (
         "mmr_rerank",
         "mmr_lambda",
@@ -41,6 +45,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "novelty_bonus_weight",
         "motif_novelty_weight",
     ),
+    # Frontier-selection mechanics and caps.
     "frontier_control": (
         "frontier_rerank",
         "prefer_unexpanded",
@@ -51,6 +56,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "selection_pool_size",
         "mmr_candidate_pool_size",
     ),
+    # Feature weights used to estimate similarity between candidate nodes.
     "similarity_model": (
         "similarity_branch_weight",
         "similarity_motif_weight",
@@ -60,6 +66,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "similarity_operator_weight",
         "similarity_token_weight",
     ),
+    # Extra objective terms activated by raw_alpha/deployability/complementarity/robustness profiles.
     "target_profile_conditioning": (
         "target_conditioned_weight",
         "constraint_weight",
@@ -67,6 +74,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "regime_weight",
         "transfer_weight",
     ),
+    # Continuation-value bonuses for promising branches and expandable parents.
     "continuation_value": (
         "exploration_weight",
         "expandability_weight",
@@ -74,6 +82,7 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
         "winner_status_bonus",
         "keep_status_bonus",
     ),
+    # Optional two-parent expansion policy.
     "dual_parent": (
         "dual_parent_enabled",
         "dual_parent_max_parents",
