@@ -95,64 +95,81 @@ POLICY_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
 
 @dataclass(frozen=True)
 class SearchPolicy:
-    name: str  # Policy name for logging/selection presets.
-    target_profile: str = "raw_alpha"  # Optimization profile (raw_alpha/deployability/complementarity/robustness).
-    selection_strategy: str = "ucb_lite"  # Parent selection strategy.
-    mmr_rerank: bool = True  # Whether to run MMR reranking for diversity.
-    mmr_lambda: float = 0.72  # MMR trade-off: larger -> quality, smaller -> diversity.
-    exploration_weight: float = 0.18  # Exploration bonus strength in parent selection.
-    rank_ic_weight: float = 1.8  # Weight of RankIC in objective score.
-    rank_icir_weight: float = 0.6  # Weight of RankICIR in objective score.
-    ann_return_weight: float = 0.7  # Weight of annualized return in objective score.
-    excess_return_weight: float = 0.6  # Weight of excess return in objective score.
-    sharpe_weight: float = 0.8  # Weight of Sharpe in objective score.
-    rank_ic_scale: float = 0.08  # Normalization scale for RankIC contribution.
-    rank_icir_scale: float = 0.6  # Normalization scale for RankICIR contribution.
-    ann_return_scale: float = 1.8  # Normalization scale for annualized return contribution.
-    excess_return_scale: float = 1.2  # Normalization scale for excess return contribution.
-    sharpe_scale: float = 2.0  # Normalization scale for Sharpe contribution.
-    turnover_penalty_weight: float = 0.35  # Penalty weight for high turnover.
-    complexity_penalty_weight: float = 0.025  # Penalty weight for expression complexity.
-    depth_penalty_weight: float = 0.05  # Penalty weight for expression tree depth.
-    branch_penalty_weight: float = 0.14  # Penalty weight for overusing same branch lineage.
-    redundancy_penalty_weight: float = 0.10  # Penalty weight for candidate redundancy.
-    family_motif_saturation_weight: float = 0.06  # Penalty for over-saturated motifs within family.
-    correlation_redundancy_weight: float = 0.20  # Penalty for high correlation to existing winners/targets.
-    expandability_weight: float = 0.08  # Bonus for candidates with good downstream expandability.
-    branch_value_weight: float = 0.12  # Bonus for historically valuable branch lineages.
-    target_conditioned_weight: float = 0.0  # Extra weight from target-profile conditioned term.
-    constraint_weight: float = 0.0  # Global weight for deployability constraints.
-    portfolio_weight: float = 0.0  # Global weight for portfolio complementarity term.
-    regime_weight: float = 0.0  # Global weight for regime robustness term.
-    transfer_weight: float = 0.0  # Global weight for transfer/generalization term.
-    turnover_scale: float = 0.45  # Scale used when converting turnover to penalty.
-    complexity_scale: float = 8.0  # Scale used when converting complexity to penalty.
-    depth_scale: float = 3.0  # Scale used when converting depth to penalty.
-    novelty_bonus_weight: float = 0.10  # Bonus for overall novelty.
-    motif_novelty_weight: float = 0.08  # Bonus for motif-level novelty.
-    winner_status_bonus: float = 0.05  # Bonus if parent has winner status.
-    keep_status_bonus: float = 0.02  # Bonus if parent has keep status.
-    frontier_rerank: bool = True  # Whether to rerank candidates in frontier stage.
-    prefer_unexpanded: bool = True  # Prefer nodes with less expansion history.
-    allow_keep_nodes: bool = True  # Whether keep-status nodes can be selected as parents.
-    require_novel_expression: bool = True  # Reject exact/replay expressions.
-    branch_frontier_cap: int = 2  # Max selected candidates per branch family in frontier.
-    motif_frontier_cap: int = 3  # Max selected candidates per motif in frontier.
-    selection_pool_size: int = 5  # Number of parents pulled into selection pool.
-    mmr_candidate_pool_size: int = 8  # Candidate pool size used by MMR rerank.
-    similarity_branch_weight: float = 0.4  # Branch similarity component weight.
-    similarity_motif_weight: float = 0.25  # Motif similarity component weight.
-    similarity_mutation_weight: float = 0.15  # Mutation-type similarity component weight.
-    similarity_skeleton_weight: float = 0.2  # Expression skeleton similarity component weight.
-    similarity_economic_weight: float = 0.15  # Economic-intuition similarity component weight.
-    similarity_operator_weight: float = 0.2  # Operator-usage similarity component weight.
-    similarity_token_weight: float = 0.1  # Token-level similarity component weight.
-    metric_normalization: str = "percentile"  # Metric normalization method before weighted sum.
-    dual_parent_enabled: bool = False  # Enable dual-parent synthesis mode.
-    dual_parent_max_parents: int = 2  # Max parents used in one dual-parent synthesis.
-    dual_parent_delta_threshold: float = 0.12  # Minimum expected gain threshold to enable dual-parent.
-    dual_parent_similarity_threshold: float = 0.65  # Similarity ceiling between dual parents.
-    dual_parent_min_expandability_advantage: float = 0.02  # Min expandability advantage for dual-parent usage.
+    # Basic policy identity and global interpretation mode.
+    name: str
+    target_profile: str = "raw_alpha"
+    selection_strategy: str = "ucb_lite"
+    metric_normalization: str = "percentile"
+
+    # Main alpha-quality objective and normalization scales.
+    rank_ic_weight: float = 1.8
+    rank_icir_weight: float = 0.6
+    ann_return_weight: float = 0.7
+    excess_return_weight: float = 0.6
+    sharpe_weight: float = 0.8
+    rank_ic_scale: float = 0.08
+    rank_icir_scale: float = 0.6
+    ann_return_scale: float = 1.8
+    excess_return_scale: float = 1.2
+    sharpe_scale: float = 2.0
+
+    # Costs that make candidates harder to deploy or maintain.
+    turnover_penalty_weight: float = 0.35
+    complexity_penalty_weight: float = 0.025
+    depth_penalty_weight: float = 0.05
+    turnover_scale: float = 0.45
+    complexity_scale: float = 8.0
+    depth_scale: float = 3.0
+
+    # Redundancy controls that push search away from repeated motifs/branches.
+    mmr_rerank: bool = True
+    mmr_lambda: float = 0.72
+    branch_penalty_weight: float = 0.14
+    redundancy_penalty_weight: float = 0.10
+    family_motif_saturation_weight: float = 0.06
+    correlation_redundancy_weight: float = 0.20
+    novelty_bonus_weight: float = 0.10
+    motif_novelty_weight: float = 0.08
+
+    # Frontier-selection mechanics and caps.
+    frontier_rerank: bool = True
+    prefer_unexpanded: bool = True
+    allow_keep_nodes: bool = True
+    require_novel_expression: bool = True
+    branch_frontier_cap: int = 2
+    motif_frontier_cap: int = 3
+    selection_pool_size: int = 5
+    mmr_candidate_pool_size: int = 8
+
+    # Feature weights used to estimate similarity between candidate nodes.
+    similarity_branch_weight: float = 0.4
+    similarity_motif_weight: float = 0.25
+    similarity_mutation_weight: float = 0.15
+    similarity_skeleton_weight: float = 0.2
+    similarity_economic_weight: float = 0.15
+    similarity_operator_weight: float = 0.2
+    similarity_token_weight: float = 0.1
+
+    # Extra objective terms activated by raw_alpha/deployability/complementarity/robustness profiles.
+    target_conditioned_weight: float = 0.0
+    constraint_weight: float = 0.0
+    portfolio_weight: float = 0.0
+    regime_weight: float = 0.0
+    transfer_weight: float = 0.0
+
+    # Continuation-value bonuses for promising branches and expandable parents.
+    exploration_weight: float = 0.18
+    expandability_weight: float = 0.08
+    branch_value_weight: float = 0.12
+    winner_status_bonus: float = 0.05
+    keep_status_bonus: float = 0.02
+
+    # Optional two-parent expansion policy.
+    dual_parent_enabled: bool = False
+    dual_parent_max_parents: int = 2
+    dual_parent_delta_threshold: float = 0.12
+    dual_parent_similarity_threshold: float = 0.65
+    dual_parent_min_expandability_advantage: float = 0.02
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
