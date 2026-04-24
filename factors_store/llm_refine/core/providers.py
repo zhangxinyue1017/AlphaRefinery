@@ -1,3 +1,8 @@
+'''Provider adapters for OpenAI-compatible LLM calls.
+
+Wraps chat completion generation using configured base URL, API key, model, and timeout.
+'''
+
 from __future__ import annotations
 
 import json

@@ -1,3 +1,8 @@
+'''Best-first search engine for refinement frontier management.
+
+Selects parents, records expansions, tracks branch value, and updates searchable family state.
+'''
+
 from __future__ import annotations
 
 from collections import Counter, defaultdict

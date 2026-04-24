@@ -1,3 +1,8 @@
+'''LLM proposal parser and candidate normalizer.
+
+Extracts structured candidate JSON, assigns IDs, normalizes expressions, and reports parse warnings.
+'''
+
 from __future__ import annotations
 
 import ast

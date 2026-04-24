@@ -1,3 +1,8 @@
+'''Search policy presets and target-profile weights.
+
+Defines balanced, exploratory, and conservative settings plus raw-alpha, deployability, complementarity, and robustness modes.
+'''
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace

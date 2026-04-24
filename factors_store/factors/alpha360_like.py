@@ -1,3 +1,8 @@
+'''Alpha360-style feature family definitions.
+
+Builds broad rolling OHLCV features for registry and evaluation workflows.
+'''
+
 from __future__ import annotations
 
 from pathlib import Path

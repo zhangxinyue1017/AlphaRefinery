@@ -1,3 +1,8 @@
+'''Target-profile objective components for search scoring.
+
+Computes deployability constraints, portfolio complementarity, and profile-conditioned bonuses.
+'''
+
 from __future__ import annotations
 
 import math

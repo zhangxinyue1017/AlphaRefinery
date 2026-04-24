@@ -1,3 +1,8 @@
+'''Common runtime helpers for LLM-refined expression factors.
+
+Wraps expression evaluation, field preparation, and series naming used by generated family modules.
+'''
+
 from __future__ import annotations
 
 from dataclasses import dataclass

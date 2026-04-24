@@ -1,3 +1,8 @@
+'''Prompt planning structures and mode resolver integration.
+
+Chooses memory, constraint, example, and decorrelation guidance blocks for each run context.
+'''
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass

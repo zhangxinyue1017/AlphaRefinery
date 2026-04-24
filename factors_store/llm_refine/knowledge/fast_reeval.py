@@ -1,3 +1,8 @@
+'''Fast re-evaluation helpers for selected refinement candidates.
+
+Reloads family-loop outputs and recomputes lightweight metrics for focused verification.
+'''
+
 from __future__ import annotations
 
 import csv

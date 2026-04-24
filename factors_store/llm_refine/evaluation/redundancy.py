@@ -1,3 +1,8 @@
+'''Structural and series-correlation redundancy utilities.
+
+Provides expression signatures, near-duplicate filters, and sampled factor correlation helpers.
+'''
+
 from __future__ import annotations
 
 import re

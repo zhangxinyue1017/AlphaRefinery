@@ -1,3 +1,8 @@
+'''Command line entry point for running and evaluating factor_store factors.
+
+Parses factor selection, data loading, panel filtering, quick evaluation, and full backtest options.
+'''
+
 from __future__ import annotations
 
 import argparse

@@ -1,3 +1,8 @@
+'''Dataclasses and typed records for refinement inputs and outputs.
+
+Defines seed families, proposals, candidates, validation records, and run metadata.
+'''
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field

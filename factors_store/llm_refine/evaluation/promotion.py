@@ -1,3 +1,8 @@
+'''Pending promotion manifest generation for refined candidates.
+
+Applies quality, turnover, completeness, and correlation gates before preparing registry patches.
+'''
+
 from __future__ import annotations
 
 import ast

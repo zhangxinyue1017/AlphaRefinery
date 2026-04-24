@@ -1,3 +1,8 @@
+'''Decision context records for reranking and family-state advice.
+
+Carries stage, target profile, policy preset, decorrelation targets, and admission intent.
+'''
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,3 +1,8 @@
+'''CLI for proposing next refinement experiments from archive history.
+
+Reads seed and archive context and prints prioritized family or run suggestions.
+'''
+
 from __future__ import annotations
 
 import argparse

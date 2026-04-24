@@ -1,3 +1,8 @@
+'''Shared field contracts for factor families and data inputs.
+
+Defines canonical data columns and required field groups used by registry and evaluation code.
+'''
+
 from __future__ import annotations
 
 from collections.abc import Mapping

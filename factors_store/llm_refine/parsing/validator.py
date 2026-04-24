@@ -1,3 +1,8 @@
+'''Candidate validation rules for refinement proposals.
+
+Checks names, expressions, fields, operator whitelist usage, and candidate metadata consistency.
+'''
+
 from __future__ import annotations
 
 import re

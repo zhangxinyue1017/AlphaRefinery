@@ -1,3 +1,8 @@
+'''Alpha101-style factor implementations.
+
+Provides formula-backed factors and registration specs derived from Alpha101-like definitions.
+'''
+
 # !/usr/bin/env python3
 # We refer to https://github.com/yli188/WorldQuant_alpha101_code regarding the implementation of this module. 
 # We modify implementation of some functions, such as rank, alpha1, etc.

@@ -1,3 +1,8 @@
+'''Frontier ranking and MMR selection helpers.
+
+Maintains candidate pools, branch and motif caps, and diversity-aware frontier ordering.
+'''
+
 from __future__ import annotations
 
 from collections import Counter

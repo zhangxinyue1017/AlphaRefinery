@@ -1,3 +1,8 @@
+'''AlphaRefinery factor store package.
+
+Exposes registry, data, evaluation, and factor modules used by the command line tools.
+'''
+
 from __future__ import annotations
 
 from .contract import (

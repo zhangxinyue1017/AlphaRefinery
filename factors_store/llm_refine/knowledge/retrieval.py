@@ -1,3 +1,8 @@
+'''Family memory retrieval for prompt construction.
+
+Selects relevant historical winners, keeps, failures, and lineage context for a refinement run.
+'''
+
 from __future__ import annotations
 
 import json

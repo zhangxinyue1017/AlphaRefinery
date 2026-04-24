@@ -1,3 +1,8 @@
+'''Alpha158-style feature family definitions.
+
+Implements rolling price, volume, and return features used as baseline factor candidates.
+'''
+
 from __future__ import annotations
 
 from pathlib import Path

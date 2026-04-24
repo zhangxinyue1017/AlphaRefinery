@@ -1,3 +1,8 @@
+'''Alpha191-style factor implementations.
+
+Defines selected Alpha191-like formulas and their registry metadata.
+'''
+
 import numpy as np
 import pandas as pd
 from numpy import log

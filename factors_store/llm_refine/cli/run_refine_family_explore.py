@@ -1,3 +1,8 @@
+'''CLI for broad multi-model exploration over a seed family.
+
+Dispatches family seeds through the multi-model runner and writes exploration summaries.
+'''
+
 from __future__ import annotations
 
 import argparse

@@ -1,3 +1,8 @@
+'''Best-first multi-round scheduler for multi-model refinement.
+
+Maintains a search frontier, selects parents, dispatches rounds, and writes stage-transition artifacts.
+'''
+
 from __future__ import annotations
 
 import argparse

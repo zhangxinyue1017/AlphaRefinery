@@ -1,3 +1,8 @@
+'''Family-level candidate evaluation and keep/drop decision logic.
+
+Builds factor series, applies redundancy checks, runs raw and neutralized backtests, and writes reports.
+'''
+
 from __future__ import annotations
 
 import json
@@ -28,8 +33,8 @@ from ..core.seed_loader import resolve_family_formula, resolve_preferred_refine_
 from .promotion import write_pending_curated_manifest
 from .redundancy import factor_series_correlation, factor_series_correlations
 
-PARENT_CORR_THRESHOLD = 0.995
-FAMILY_CORR_THRESHOLD = 0.98
+PARENT_CORR_THRESHOLD = 0.95
+FAMILY_CORR_THRESHOLD = 0.92
 WINNER_SCORE_WEIGHTS: dict[str, float] = {
     "quick_rank_ic_mean": 0.14,
     "quick_rank_icir": 0.16,

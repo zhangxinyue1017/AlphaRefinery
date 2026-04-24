@@ -1,3 +1,8 @@
+'''Typed feature extraction for candidate decision records.
+
+Normalizes evaluation metrics and decorrelation diagnostics for decision-engine scoring.
+'''
+
 from __future__ import annotations
 
 import math

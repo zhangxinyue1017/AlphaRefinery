@@ -1,3 +1,8 @@
+'''Stage-transition advisory rules for family-state search.
+
+Maps runtime evidence into continue, confirmation, complementarity, reopen, terminate, or repair recommendations.
+'''
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field

@@ -1,3 +1,8 @@
+'''Built-in factor module namespace.
+
+Collects alpha-like, QuantsPlaybook, GP-mined, seed baseline, and llm-refined factor modules.
+'''
+
 from .alpha101_like import alpha101_source_info, register_alpha101
 from .alpha158_like import register_alpha158
 from .alpha191_like import alpha191_source_info, register_alpha191

@@ -1,3 +1,8 @@
+'''Search node scoring, similarity, and branch-value utilities.
+
+Calculates base quality, frontier retrieval score, structural similarity, material gains, and expandability.
+'''
+
 from __future__ import annotations
 
 import math

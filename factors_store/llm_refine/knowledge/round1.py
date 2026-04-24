@@ -1,3 +1,8 @@
+'''Round-one bootstrap parent selection helpers.
+
+Builds initial frontier candidates and seed-stage parent context for new family exploration.
+'''
+
 from __future__ import annotations
 
 from dataclasses import dataclass

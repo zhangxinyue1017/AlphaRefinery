@@ -1,3 +1,8 @@
+'''Winner and keep selection engine for evaluated candidates.
+
+Ranks child records using quality metrics, optional decorrelation adjustments, and stage-aware sort keys.
+'''
+
 from __future__ import annotations
 
 import math

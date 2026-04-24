@@ -1,3 +1,8 @@
+'''Default local paths for panel data and benchmark artifacts.
+
+Centralizes environment-aware path resolution used by loaders and CLI commands.
+'''
+
 from __future__ import annotations
 
 import os

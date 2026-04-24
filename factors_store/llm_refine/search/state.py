@@ -1,3 +1,8 @@
+'''Dataclasses for search nodes, budgets, actions, and feedback.
+
+Stores family frontier state, node metrics, parent-child relationships, and evaluation outcomes.
+'''
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field

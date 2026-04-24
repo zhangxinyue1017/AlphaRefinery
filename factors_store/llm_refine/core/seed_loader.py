@@ -1,3 +1,8 @@
+'''Seed pool loading and formula resolution helpers.
+
+Reads refinement seed YAML, normalizes family metadata, and expands known formula aliases.
+'''
+
 from __future__ import annotations
 
 from functools import lru_cache

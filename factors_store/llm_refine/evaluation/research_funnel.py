@@ -1,3 +1,8 @@
+'''Research funnel aggregation for refinement outcomes.
+
+Combines archive, scheduler, and admission artifacts into family-level progress summaries.
+'''
+
 from __future__ import annotations
 
 import json

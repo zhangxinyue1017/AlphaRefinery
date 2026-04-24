@@ -1,3 +1,8 @@
+'''Runtime path bootstrap helpers for local script execution.
+
+Ensures the project root is importable when modules are launched from nested paths.
+'''
+
 from __future__ import annotations
 
 import sys

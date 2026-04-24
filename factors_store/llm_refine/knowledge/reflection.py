@@ -1,3 +1,8 @@
+'''Reflection cards and post-run learning summaries.
+
+Builds compact notes about winners, failures, lineage, and suggested next actions.
+'''
+
 from __future__ import annotations
 
 from collections import Counter

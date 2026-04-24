@@ -1,3 +1,8 @@
+'''Seed baseline factor specifications.
+
+Registers canonical seed formulas used as parents and comparison baselines for refinement runs.
+'''
+
 from __future__ import annotations
 
 """Unified baseline registry for seed-family factors.

@@ -134,18 +134,32 @@ The refinement loop is already structured to support different downstream prefer
 
 This allows the same research engine to serve different goals, from stronger standalone alpha to better library complementarity and promotion quality.
 
-### 5. Search plans, not only run commands
+### 5. Explicit continuation planning, not just run commands
 
-AlphaRefinery also treats family refinement as a sequential decision problem:
+AlphaRefinery treats family refinement not as a loose sequence of run scripts, but as an **explicit search-and-control process** over family states.
 
-- `FamilyState`: what is known about the current family,
-- `RefinementAction`: what the next run is trying to do,
-- `EvaluationFeedback`: what the last run actually produced,
-- `StageTransitionDecision`: whether to continue focused search, reopen a branch, switch to complementarity, confirm, or terminate.
+At the core of this layer are four objects:
 
-Formally, each family can be viewed as a search state `S_t`. The system chooses a refinement action `A_t`, receives evaluation feedback `R_t`, and updates the family through a transition `T(S_t, A_t, R_t) -> S_{t+1}`. The advisory policy `π(S_t)` is not just a prompt choice; it is a continuation plan over stages, parents, objectives, and branch budgets.
+- `FamilyState`: what is currently known about the family,
+- `RefinementAction`: what the next refinement step is trying to do,
+- `EvaluationFeedback`: what the last action actually produced,
+- `StageTransitionDecision`: whether the family should continue focused search, reopen exploration, switch objectives, confirm, or terminate.
 
-This gives the framework a research-plan layer above individual prompts. The goal is to make continuation decisions explicit, inspectable, and comparable against expert judgment rather than hidden inside ad hoc run scripts.
+Formally, each family can be viewed as a stateful search process:
+
+```text
+S_t --choose A_t--> evaluate R_t --transition--> S_{t+1}
+```
+
+Here, the policy `π(S_t)` is not merely a prompt choice. It is a continuation policy over:
+
+- search stage,
+- parent selection,
+- target profile,
+- branch retention,
+- and budget allocation.
+
+This gives llm_refine a layer that sits above individual prompts and individual runs: a research-planning layer that makes continuation decisions explicit, inspectable, and comparable against expert judgment, rather than leaving them scattered across ad hoc scheduler logic and manual operator intuition.
 
 ---
 

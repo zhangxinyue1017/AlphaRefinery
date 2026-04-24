@@ -1,3 +1,8 @@
+'''Factor registry construction and lookup utilities.
+
+Registers built-in, seed, and refined factors and exposes compute helpers by factor name.
+'''
+
 from __future__ import annotations
 
 from dataclasses import dataclass

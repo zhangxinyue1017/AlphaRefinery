@@ -1,3 +1,8 @@
+'''Expression operator implementations for alpha-like factor definitions.
+
+Contains cross-sectional, time-series, arithmetic, and helper operators used by factor formulas.
+'''
+
 from __future__ import annotations
 
 """Shared operators for factors_store.

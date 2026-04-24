@@ -1,3 +1,8 @@
+'''Knowledge and memory utilities for LLM refinement.
+
+Groups archive retrieval, empirical summaries, family-loop state, reflection, and next-step helpers.
+'''
+
 from __future__ import annotations
 
 from .archive_queries import *

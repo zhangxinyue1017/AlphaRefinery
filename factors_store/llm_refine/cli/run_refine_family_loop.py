@@ -1,3 +1,8 @@
+'''CLI for staged broad-to-focused family refinement loops.
+
+Coordinates anchor graduation, focused runs, correlation guards, and family-loop reports.
+'''
+
 from __future__ import annotations
 
 import argparse

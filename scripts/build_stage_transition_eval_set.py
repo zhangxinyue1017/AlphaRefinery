@@ -1,3 +1,8 @@
+'''Build a manual evaluation CSV for stage-transition advisory quality.
+
+Samples scheduler summaries and emits labels, decisions, metrics, and review fields for human audit.
+'''
+
 from __future__ import annotations
 
 import argparse

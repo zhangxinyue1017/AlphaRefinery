@@ -1,3 +1,8 @@
+'''Expression normalization and repair helpers.
+
+Fixes common LLM formula syntax issues before validation and evaluation.
+'''
+
 from __future__ import annotations
 
 import ast

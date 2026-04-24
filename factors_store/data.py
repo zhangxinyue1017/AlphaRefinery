@@ -1,3 +1,8 @@
+'''Panel data loading and preparation utilities.
+
+Handles BaoStock/Qlib-style panels, benchmark columns, filtering, and liquidity-derived fields.
+'''
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping

@@ -1,3 +1,8 @@
+'''Archive query helpers for family memory and prompt context.
+
+Fetches winners, keeps, failures, lineage, and historical summaries from the refinement database.
+'''
+
 from __future__ import annotations
 
 import json

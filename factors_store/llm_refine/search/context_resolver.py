@@ -1,3 +1,8 @@
+'''Runtime context resolver for prompt and orchestration profiles.
+
+Maps stage, policy, target profile, and evidence signals into memory and next-stage hints.
+'''
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass

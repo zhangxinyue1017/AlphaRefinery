@@ -1,3 +1,8 @@
+'''Next-experiment recommendation logic.
+
+Ranks families and candidate branches using archive state, recent outcomes, and search priorities.
+'''
+
 from __future__ import annotations
 
 import json

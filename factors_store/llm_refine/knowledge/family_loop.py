@@ -1,3 +1,8 @@
+'''Family-loop orchestration helpers and state collection.
+
+Implements anchor candidate collection, true-correlation guards, focused run dispatch, and reports.
+'''
+
 from __future__ import annotations
 
 import csv

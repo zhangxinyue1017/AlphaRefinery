@@ -1,3 +1,8 @@
+'''Allowed operator contract for generated expressions.
+
+Defines operator names, signatures, arity rules, and validation metadata used in prompts and parsing.
+'''
+
 from __future__ import annotations
 
 

@@ -1,3 +1,8 @@
+'''Single-model refinement round runner.
+
+Builds prompts, calls the provider, parses candidates, filters structures, evaluates, and archives results.
+'''
+
 from __future__ import annotations
 
 import argparse

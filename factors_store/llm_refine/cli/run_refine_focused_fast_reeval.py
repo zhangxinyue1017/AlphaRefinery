@@ -1,3 +1,8 @@
+'''CLI for fast re-evaluation of focused family-loop candidates.
+
+Rechecks selected focused results and writes compact verification artifacts.
+'''
+
 from __future__ import annotations
 
 import argparse

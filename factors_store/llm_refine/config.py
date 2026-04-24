@@ -1,3 +1,8 @@
+'''Configuration constants for LLM refinement workflows.
+
+Defines artifact paths, default models, stage presets, gating thresholds, and promotion settings.
+'''
+
 from __future__ import annotations
 
 from pathlib import Path

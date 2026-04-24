@@ -1,3 +1,8 @@
+'''Expression evaluation engine for formula-backed factors.
+
+Parses expression ASTs, dispatches supported operators, infers fields, and evaluates panel series.
+'''
+
 from __future__ import annotations
 
 import ast

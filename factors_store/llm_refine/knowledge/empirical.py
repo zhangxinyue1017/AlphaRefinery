@@ -1,3 +1,8 @@
+'''Empirical family snapshot generation.
+
+Summarizes observed strengths, weaknesses, and historical outcomes for prompt memory.
+'''
+
 from __future__ import annotations
 
 import sqlite3

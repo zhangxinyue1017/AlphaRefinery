@@ -1,3 +1,8 @@
+'''CLI for building research funnel reports from refinement artifacts.
+
+Aggregates single, scheduler, and admission outputs into evaluation summaries.
+'''
+
 from __future__ import annotations
 
 import argparse

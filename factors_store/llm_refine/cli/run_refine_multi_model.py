@@ -1,3 +1,8 @@
+'''Multi-model refinement orchestrator for one parent and one round.
+
+Launches child model runs, collects evaluated candidates, reranks winners, and writes aggregate summaries.
+'''
+
 from __future__ import annotations
 
 import argparse

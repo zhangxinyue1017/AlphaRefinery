@@ -1,3 +1,8 @@
+'''SQLite archive access for refinement runs and candidates.
+
+Stores evaluated candidates, fetches family history, and resolves best or latest parent nodes.
+'''
+
 from __future__ import annotations
 
 import hashlib

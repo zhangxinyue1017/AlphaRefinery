@@ -1,3 +1,8 @@
+'''Search metric normalization and historical profile statistics.
+
+Builds percentile or scaled normalizers from archive rows, motif counts, and correlation-risk profiles.
+'''
+
 from __future__ import annotations
 
 import bisect

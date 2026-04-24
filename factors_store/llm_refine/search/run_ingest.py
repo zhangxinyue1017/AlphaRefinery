@@ -1,3 +1,8 @@
+'''Artifact ingestion for evaluated multi-model runs.
+
+Loads child summaries, resolved run directories, candidate records, and evaluation metrics into search nodes.
+'''
+
 from __future__ import annotations
 
 import json

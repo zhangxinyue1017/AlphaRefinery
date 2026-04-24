@@ -1,3 +1,8 @@
+'''LLM-guided factor refinement package.
+
+Contains prompt generation, parsing, evaluation, search, archive, and orchestration components.
+'''
+
 from __future__ import annotations
 
 from .core.archive import create_run_dir, write_run_artifacts

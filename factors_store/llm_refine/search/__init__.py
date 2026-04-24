@@ -1,3 +1,8 @@
+'''Search package for family-state refinement.
+
+Exports policy, state, engine, scoring, normalization, stage-transition, and run-ingest helpers.
+'''
+
 from __future__ import annotations
 
 from .decision_context import DecisionContext, FamilyDecisionState

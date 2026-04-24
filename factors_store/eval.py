@@ -1,3 +1,8 @@
+'''Factor evaluation helpers shared outside the llm_refine package.
+
+Provides quick IC, style diagnostics, and summary calculations for registry factors.
+'''
+
 from __future__ import annotations
 
 from pathlib import Path

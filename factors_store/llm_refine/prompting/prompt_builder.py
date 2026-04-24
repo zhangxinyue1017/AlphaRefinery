@@ -1,3 +1,8 @@
+'''Prompt assembly logic for LLM refinement candidates.
+
+Combines family metadata, memory, constraints, examples, roles, and output schema instructions.
+'''
+
 from __future__ import annotations
 
 import json
@@ -1026,45 +1031,3 @@ def build_refinement_prompt(
         """
     ).strip()
     return PromptBundle(system_prompt=system_prompt, user_prompt=user_prompt)
-
-
-def render_full_prompt_text(bundle: PromptBundle) -> str:
-    return dedent(
-        f"""
-        系统提示词：
-        {bundle.system_prompt}
-
-        用户提示词：
-        {bundle.user_prompt}
-        """
-    ).strip() + "\n"
-
-
-def export_manual_full_prompt(
-    *,
-    seed_pool: SeedPool,
-    family: SeedFamily,
-    output_path: str | Path,
-    n_candidates: int = 3,
-    additional_notes: str = "",
-    current_parent_name: str | None = None,
-    current_parent_expression: str | None = None,
-    current_parent_row: dict[str, object] | None = None,
-    current_model_name: str = "",
-    prompt_template_version: str = "current_compact",
-) -> Path:
-    bundle = build_refinement_prompt(
-        seed_pool=seed_pool,
-        family=family,
-        n_candidates=n_candidates,
-        additional_notes=additional_notes,
-        current_parent_name=current_parent_name,
-        current_parent_expression=current_parent_expression,
-        current_parent_row=current_parent_row,
-        current_model_name=current_model_name,
-        prompt_template_version=prompt_template_version,
-    )
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_full_prompt_text(bundle), encoding="utf-8")
-    return path
