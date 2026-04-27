@@ -150,24 +150,26 @@ def _iter_leaf_nodes(node):
 
 
 def create_default_registry() -> FactorRegistry:
-    from .factors.alpha101_like import register_alpha101
-    from .factors.alpha158_like import register_alpha158
-    from .factors.alpha191_like import register_alpha191
-    from .factors.alpha360_like import register_alpha360
-    from .factors.cicc_daily import register_cicc_daily
-    from .factors.factor365_daily import register_factor365_daily
-    from .factors.factor365_pattern import register_factor365_pattern
-    from .factors.gp_mined import register_gp_mined
-    from .factors.llm_refined import register_llm_refined
-    from .factors.qp_behavior import register_qp_behavior
-    from .factors.qp_chip import register_qp_chip
-    from .factors.qp_kline import register_qp_kline
-    from .factors.qp_momentum import register_qp_momentum
-    from .factors.qp_path_convexity import register_qp_path_convexity
-    from .factors.qp_pressure import register_qp_pressure
-    from .factors.qp_volatility import register_qp_volatility
-    from .factors.qp_salience import register_qp_salience
-    from .factors.seed_baselines import register_seed_baselines
+    from .factors import (
+        register_alpha101,
+        register_alpha158,
+        register_alpha191,
+        register_alpha360,
+        register_cicc_daily,
+        register_factor365_daily,
+        register_factor365_pattern,
+        register_gp_mined,
+        register_llm_refined,
+        register_qp_behavior,
+        register_qp_chip,
+        register_qp_kline,
+        register_qp_momentum,
+        register_qp_path_convexity,
+        register_qp_pressure,
+        register_qp_salience,
+        register_qp_volatility,
+        register_seed_baselines,
+    )
 
     registry = FactorRegistry()
     register_alpha101(registry)

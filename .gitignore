@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
+*.egg-info/
+.matplotlib_cache/
 
 # Python tooling caches
 .pytest_cache/
