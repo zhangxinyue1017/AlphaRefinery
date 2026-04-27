@@ -633,6 +633,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--additional-notes", default="", help="extra run-specific notes appended to the prompt")
     parser.add_argument(
+        "--primary-objective",
+        default="",
+        help="override family primary objective in the prompt",
+    )
+    parser.add_argument(
+        "--secondary-objective",
+        default="",
+        help="override family secondary objective in the prompt",
+    )
+    parser.add_argument(
         "--decorrelation-target",
         action="append",
         default=[],
@@ -700,6 +710,10 @@ def main() -> int:
 
     seed_pool = load_seed_pool(args.seed_pool)
     family = seed_pool.get_family(args.family)
+    if str(args.primary_objective or "").strip():
+        object.__setattr__(family, "primary_objective", str(args.primary_objective).strip())
+    if str(args.secondary_objective or "").strip():
+        object.__setattr__(family, "secondary_objective", str(args.secondary_objective).strip())
     archive_db = init_archive_db(args.archive_db)
     latest_winner = get_latest_family_winner(db_path=archive_db, family=family.family) if args.auto_parent else None
     effective_round_id = (
@@ -1304,7 +1318,7 @@ def main() -> int:
             child_records = load_run_candidate_records(
                 db_path=archive_db,
                 run_id=run_id,
-                statuses=("research_winner", "winner", "research_keep", "keep"),
+                statuses=("research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"),
             )
         else:
             runtime_status("evaluation_skipped", "skip_eval enabled")

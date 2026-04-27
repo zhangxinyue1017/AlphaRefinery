@@ -40,7 +40,7 @@ from ..search import (
     build_stage_transition_shadow,
     resolve_stage_transition_from_state,
 )
-from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
+from ..search.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
 from ..search.scoring import pairwise_similarity, safe_float
 from ..search.state import SearchNode
@@ -260,7 +260,7 @@ def _snapshot_broad_results(scheduler_dir: Path) -> dict[str, Any]:
                 total_candidates += 1
                 decision = str(row.get("decision", "") or "").strip() or "EMPTY"
                 decision_counts[decision] = int(decision_counts.get(decision, 0)) + 1
-                if decision in {"research_keep", "research_winner", "keep", "winner"}:
+                if decision in {"research_keep", "research_winner", "keep", "winner", "research_keep_exploratory"}:
                     promotable_candidates += 1
                 if decision == "research_drop":
                     research_drop_count += 1
@@ -976,15 +976,6 @@ def build_family_loop_summary(
         selected_parent_kind="family_loop_anchor",
     )
     orchestration_context_profile = resolve_context_profile(orchestration_evidence)
-    orchestration_profile = resolve_orchestration_profile(
-        evidence=orchestration_evidence,
-        context_profile=orchestration_context_profile,
-        last_round_status="ok" if int(focused_returncode) == 0 else "failed",
-        last_round_search_improved=bool(next_action.get("recommended_next_step") == "continue_focused"),
-        last_round_winner=dict(state.focused_best_candidate or state.broad_best_candidate or {}),
-        last_round_keep=dict(state.focused_best_keep or state.broad_best_keep or {}),
-        recommended_stage_mode_hint=str(next_action.get("recommended_next_stage_preset", "") or ""),
-    )
     family_state = FamilyState(
         family_id=family,
         stage="focused_refine" if focused_run_dir is not None else "family_loop",
@@ -1025,12 +1016,17 @@ def build_family_loop_summary(
         refinement_action,
         evaluation_feedback,
     )
-    legacy_decision = {
-        **orchestration_profile.to_dict(),
-        "recommended_next_step": next_action.get("recommended_next_step", ""),
-        "recommended_next_stage_preset": next_action.get("recommended_next_stage_preset", ""),
-        "recommended_reason": next_action.get("recommended_reason", ""),
-    }
+    # Advisory stage_transition is now the primary execution driver.
+    orchestration_profile = OrchestrationProfile(
+        recommended_stage_mode=stage_transition.next_stage,
+        round_strategy=stage_transition.action,
+        promotion_bias="normal",
+        parent_selection_bias=stage_transition.parent_selection_bias,
+        termination_bias=stage_transition.termination_bias,
+        confidence=stage_transition.confidence,
+        rationale_tags=stage_transition.rationale_tags,
+    )
+    legacy_decision = orchestration_profile.to_dict()
     stage_transition_shadow = build_stage_transition_shadow(
         legacy_decision=legacy_decision,
         family_state_decision=stage_transition,
@@ -1140,13 +1136,15 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- focused_bootstrap_frontier_count: `{focused_trace.get('bootstrap_frontier_count', '')}`",
         f"- focused_donor_motifs_count: `{focused_trace.get('donor_motifs_count', '')}`",
         "",
-        "## Orchestration Trace",
+        "## Orchestration Trace (Advisory-driven)",
         f"- recommended_stage_mode: `{orchestration_profile.get('recommended_stage_mode', '')}`",
         f"- round_strategy: `{orchestration_profile.get('round_strategy', '')}`",
         f"- promotion_bias: `{orchestration_profile.get('promotion_bias', '')}`",
         f"- parent_selection_bias: `{orchestration_profile.get('parent_selection_bias', '')}`",
         f"- termination_bias: `{orchestration_profile.get('termination_bias', '')}`",
         f"- confidence: `{orchestration_profile.get('confidence', '')}`",
+        "",
+        "*Note: Legacy orchestration resolver has been retired. The trace above is derived from the advisory StageTransitionDecision.*",
         "",
         "## Stage Transition Advisory",
         f"- current_stage: `{stage_transition.get('current_stage', '')}`",

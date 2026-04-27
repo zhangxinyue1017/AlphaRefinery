@@ -329,7 +329,8 @@ def load_family_reference_candidates(
     placeholders = ",".join("?" for _ in statuses)
     params: list[Any] = [family, *statuses]
     sql = f"""
-        SELECT c.candidate_id, c.factor_name, c.expression, c.status, c.run_id
+        SELECT c.candidate_id, c.factor_name, c.expression, c.status, c.run_id,
+               c.source_model
         FROM candidates c
         WHERE c.family = ?
           AND c.status IN ({placeholders})
@@ -350,6 +351,7 @@ def load_family_reference_candidates(
             "expression": row[2],
             "status": row[3],
             "run_id": row[4],
+            "source_model": row[5],
         }
         for row in rows
     ]

@@ -50,7 +50,7 @@ def _model_contribution(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     relevant = [
         record
         for record in records
-        if str(record.get("status", "")) in {"research_winner", "winner", "research_keep", "keep"}
+        if str(record.get("status", "")) in {"research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"}
     ]
     if not relevant:
         return []
@@ -95,12 +95,12 @@ def build_reflection_card(
     current_records = load_run_candidates(db_path=db_path, run_id=run_id)
     current_winner = _pick_best(current_records, ("research_winner", "winner"))
     current_keeps = [
-        item for item in current_records if str(item.get("status", "")) in {"research_keep", "keep"}
+        item for item in current_records if str(item.get("status", "")) in {"research_keep", "keep", "research_keep_exploratory"}
     ][: int(recent_limit)]
     current_failures = [
         item
         for item in current_records
-        if str(item.get("status", "")) not in {"research_winner", "winner", "research_keep", "keep", "proposed"}
+        if str(item.get("status", "")) not in {"research_winner", "winner", "research_keep", "keep", "research_keep_exploratory", "proposed"}
     ][: int(recent_limit)]
 
     recent_winners = load_recent_winners(

@@ -43,7 +43,7 @@ from ..search import (
     build_stage_transition_shadow,
     build_search_normalizer,
 )
-from ..search.context_resolver import ContextEvidence, resolve_context_profile, resolve_orchestration_profile
+from ..search.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
 from ..search.scoring import pairwise_similarity
 from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
 from ..search.stage_transition import resolve_stage_transition_from_state
@@ -136,6 +136,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-parallel": multi.get_default("max_parallel"),
         "--multi-runs-dir": str(multi.get_default("multi_runs_dir")),
         "--prompt-template-version": str(multi.get_default("prompt_template_version")),
+        "--primary-objective": "",
+        "--secondary-objective": "",
     }
     for arg, default in passthrough_defaults.items():
         parser.add_argument(arg, default=default)
@@ -256,6 +258,10 @@ def _build_round_cmd(
         cmd.extend(["--stage-mode", str(child_stage_mode)])
     if str(args.prompt_template_version).strip():
         cmd.extend(["--prompt-template-version", str(args.prompt_template_version)])
+    if str(args.primary_objective or "").strip():
+        cmd.extend(["--primary-objective", str(args.primary_objective).strip()])
+    if str(args.secondary_objective or "").strip():
+        cmd.extend(["--secondary-objective", str(args.secondary_objective).strip()])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
@@ -269,8 +275,9 @@ def _resolve_child_stage_mode(stage_mode: str, *, round_idx: int, last_round: di
     if stage == "auto":
         if int(round_idx) == 1:
             return "new_family_broad"
-        profile = dict((last_round or {}).get("orchestration_profile") or {})
-        recommended = str(profile.get("recommended_stage_mode", "") or "").strip()
+        # Advisory StageTransitionDecision is now the sole source of truth.
+        stage_transition = dict((last_round or {}).get("stage_transition") or {})
+        recommended = str(stage_transition.get("next_stage", "") or "").strip()
         if recommended in _STAGE_MODE_CHOICES and recommended != "auto":
             return recommended
         return "broad_followup"
@@ -325,15 +332,6 @@ def _build_orchestration_trace(
         final_candidate_target=final_candidate_target,
     )
     context_profile = resolve_context_profile(evidence)
-    orchestration_profile = resolve_orchestration_profile(
-        evidence=evidence,
-        context_profile=context_profile,
-        last_round_status=round_status,
-        last_round_search_improved=search_improved,
-        last_round_winner=winner,
-        last_round_keep=keep,
-        recommended_stage_mode_hint=recommended_stage_mode_hint,
-    )
     family_state = FamilyState(
         family_id=family,
         stage=stage_mode,
@@ -382,6 +380,17 @@ def _build_orchestration_trace(
         family_state,
         refinement_action,
         evaluation_feedback,
+    )
+    # Advisory stage_transition is now the primary execution driver.
+    # orchestration_profile is derived from it for backward-compatible naming.
+    orchestration_profile = OrchestrationProfile(
+        recommended_stage_mode=stage_transition.next_stage,
+        round_strategy=stage_transition.action,
+        promotion_bias="normal",
+        parent_selection_bias=stage_transition.parent_selection_bias,
+        termination_bias=stage_transition.termination_bias,
+        confidence=stage_transition.confidence,
+        rationale_tags=stage_transition.rationale_tags,
     )
     stage_transition_shadow = build_stage_transition_shadow(
         legacy_decision=orchestration_profile.to_dict(),
@@ -508,7 +517,7 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- branching_bias: `{context_profile.get('branching_bias', '')}`",
         f"- next_action_bias: `{context_profile.get('next_action_bias', '')}`",
         "",
-        "## Orchestration Trace",
+        "## Orchestration Trace (Advisory-driven)",
         f"- recommended_stage_mode: `{orchestration_profile.get('recommended_stage_mode', '')}`",
         f"- round_strategy: `{orchestration_profile.get('round_strategy', '')}`",
         f"- promotion_bias: `{orchestration_profile.get('promotion_bias', '')}`",
@@ -516,6 +525,8 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- termination_bias: `{orchestration_profile.get('termination_bias', '')}`",
         f"- confidence: `{orchestration_profile.get('confidence', '')}`",
         f"- rationale_tags: `{', '.join(str(item) for item in rationale_tags)}`",
+        "",
+        "*Note: Legacy orchestration resolver has been retired. The trace above is derived from the advisory StageTransitionDecision.*",
         "",
         "## Stage Transition Advisory",
         f"- current_stage: `{stage_transition.get('current_stage', '')}`",
@@ -749,7 +760,7 @@ def _pick_best_keep_payload(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     keep_candidates = [
         dict(item)
         for item in payloads
-        if dict(item or {}) and str(dict(item).get("status", "")).strip().lower() in {"research_keep", "keep"}
+        if dict(item or {}) and str(dict(item).get("status", "")).strip().lower() in {"research_keep", "keep", "research_keep_exploratory"}
     ]
     if not keep_candidates:
         return {}

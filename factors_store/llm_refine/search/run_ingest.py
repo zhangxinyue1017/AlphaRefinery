@@ -39,7 +39,7 @@ def load_multi_run_candidate_records(
     archive_db: str,
     multi_run_dir: Path,
     family: str,
-    statuses: tuple[str, ...] = ("research_winner", "winner", "research_keep", "keep"),
+    statuses: tuple[str, ...] = ("research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"),
 ) -> list[dict[str, Any]]:
     summary_path = multi_run_dir / "summary.json"
     if not summary_path.exists():
@@ -59,7 +59,7 @@ def load_candidate_records_from_completed_runs(
     archive_db: str,
     completed: list[dict[str, Any]],
     family: str,
-    statuses: tuple[str, ...] = ("research_winner", "winner", "research_keep", "keep"),
+    statuses: tuple[str, ...] = ("research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"),
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -90,7 +90,7 @@ def load_single_run_candidate_records(
     archive_db: str,
     run_dir: Path,
     family: str,
-    statuses: tuple[str, ...] = ("research_winner", "winner", "research_keep", "keep"),
+    statuses: tuple[str, ...] = ("research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"),
 ) -> list[dict[str, Any]]:
     run_record = get_run_record_by_dir(db_path=archive_db, run_dir=run_dir)
     if run_record is None or str(run_record.get("family", "")) != family:

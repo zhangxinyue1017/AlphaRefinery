@@ -13,7 +13,7 @@ from .context_resolver import (
     ContextProfile,
     OrchestrationProfile,
     resolve_context_profile,
-    resolve_orchestration_profile,
+    resolve_orchestration_profile,  # deprecated: use resolve_stage_transition / resolve_stage_transition_from_state
 )
 from .engine import SearchEngine
 from .frontier import SearchFrontier

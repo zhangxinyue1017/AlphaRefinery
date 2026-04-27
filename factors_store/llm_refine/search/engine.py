@@ -478,7 +478,7 @@ class SearchEngine:
                     parent.successful_expansions += 1
 
             gains = [compute_parent_child_gain(parent, child) for child in child_nodes]
-            keep_like_statuses = ("research_keep", "keep", "research_winner", "winner")
+            keep_like_statuses = ("research_keep", "keep", "research_winner", "winner", "research_keep_exploratory")
             winner_like_statuses = ("research_winner", "winner")
             parent.children_total += len(child_nodes)
             parent.children_kept += sum(

@@ -441,6 +441,39 @@ This makes it easier to inspect:
 * how constraints were structured,
 * without inferring all of that only from the final prompt text.
 
+### Per-run objective override
+
+In addition to the static `primary_objective` and `secondary_objective` stored in `config/refinement_seed_pool.yaml`, all three main CLI entry points (`run_refine_loop`, `run_refine_multi_model`, `run_refine_multi_model_scheduler`) accept:
+
+* `--primary-objective TEXT`
+* `--secondary-objective TEXT`
+
+When provided, these values **override** the seed-pool defaults and are injected directly into the prompt block:
+
+```text
+本轮优化优先级：
+- 主目标：{primary_objective}
+- 次目标：{secondary_objective}
+```
+
+This is useful when:
+
+* you want to run the same family with a different emphasis on a given day (e.g., "lower turnover first" vs. "boost ICIR first"),
+* you are experimenting with prompt framing without editing the tracked seed pool file,
+* or you want scheduler rounds to vary objectives across stages.
+
+Example:
+
+```bash
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
+  --family open_volume_correlation \
+  --primary-objective "降低换手，提升因子稳定性" \
+  --secondary-objective "在不明显增加换手的前提下提升 RankICIR" \
+  --stage-mode new_family_broad \
+  --policy-preset exploratory \
+  --n-candidates 8
+```
+
 ---
 
 ## 1. `stage_mode`
@@ -624,6 +657,23 @@ python -m factors_store.llm_refine.cli.run_refine_multi_model \
   --policy-preset balanced \
   --target-profile complementarity \
   --n-candidates 6
+```
+
+### Multi-model scheduler with objective override
+
+```bash
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
+  --family open_volume_correlation \
+  --models gpt-5.4,deepseek-v3.1,qwen3.5-plus,kimi-k2,claude-sonnet-4-6 \
+  --stage-mode new_family_broad \
+  --policy-preset exploratory \
+  --target-profile raw_alpha \
+  --n-candidates 8 \
+  --max-rounds 4 \
+  --max-parallel 5 \
+  --primary-objective "降低换手，提升因子稳定性" \
+  --secondary-objective "在不明显增加换手的前提下提升 RankICIR" \
+  --auto-apply-promotion
 ```
 
 ---

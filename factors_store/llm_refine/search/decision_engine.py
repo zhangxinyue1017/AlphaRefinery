@@ -110,7 +110,7 @@ class DecisionEngine:
 
     def _base_rerank_quality_score(self, item: dict[str, object]) -> float:
         status = str(item.get("status", "")).strip().lower()
-        status_bonus = 0.05 if status in {"research_winner", "winner"} else 0.02 if status in {"research_keep", "keep"} else 0.0
+        status_bonus = 0.05 if status in {"research_winner", "winner"} else 0.02 if status in {"research_keep", "keep"} else 0.01 if status in {"research_keep_exploratory"} else 0.0
         return (
             0.34 * _signed_tanh_metric(item.get("quick_rank_icir"), scale=0.35)
             + 0.26 * _signed_tanh_metric(item.get("net_sharpe"), scale=3.0)
@@ -218,7 +218,7 @@ class DecisionEngine:
         keep_records = [
             item
             for item in records
-            if str(item.get("status", "")).strip().lower() in {"research_keep", "keep"}
+            if str(item.get("status", "")).strip().lower() in {"research_keep", "keep", "research_keep_exploratory"}
         ]
         ranked = self.rank_records(keep_records)
         return ranked[0] if ranked else None
@@ -303,7 +303,7 @@ class DecisionEngine:
             item = dict(raw)
             gate_reasons: list[str] = []
             status = str(item.get("status", "") or item.get("decision", "")).strip().lower()
-            if status not in {"research_winner", "winner", "research_keep", "keep"}:
+            if status not in {"research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"}:
                 gate_reasons.append("status_not_promotable")
             anchor_eligible = ("winner" in status) or _flag_value(item, "eligible_for_best_node", default=True) > 0.5
             if not anchor_eligible:

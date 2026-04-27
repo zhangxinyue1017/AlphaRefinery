@@ -26,6 +26,7 @@ from .ideal_amplitude_structure_family import *  # noqa: F401,F403
 from .abnormal_volume_attention_family import *  # noqa: F401,F403
 from .qp_apb_price_bias_family import *  # noqa: F401,F403
 from .close_volume_covariance_family import *  # noqa: F401,F403
+from .open_volume_correlation_family import *  # noqa: F401,F403
 from .common import LLM_REFINED_SOURCE
 
 _EXPRESSION_RE = re.compile(r'expression\s*=\s*"(?P<expr>(?:[^"\\]|\\.)*)"')

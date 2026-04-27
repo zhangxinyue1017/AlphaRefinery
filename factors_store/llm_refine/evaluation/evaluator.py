@@ -32,6 +32,11 @@ from ..core.models import LLMProposal, RefinementCandidate, SeedFamily, SeedPool
 from ..core.seed_loader import resolve_family_formula, resolve_preferred_refine_seed
 from .promotion import write_pending_curated_manifest
 from .redundancy import factor_series_correlation, factor_series_correlations
+from ..search.scoring import (
+    expression_motif_signature,
+    expression_mutation_class,
+    expression_operator_skeleton,
+)
 
 PARENT_CORR_THRESHOLD = 0.95
 FAMILY_CORR_THRESHOLD = 0.92
@@ -56,6 +61,24 @@ NEW_FAMILY_BROAD_MATERIAL_THRESHOLDS: dict[str, float] = {
     "net_excess_ann_return": 0.05,
 }
 _BENCHMARK_REQUIRED_FIELDS = {"market_return", "benchmark_open", "benchmark_close"}
+
+# --- Exploratory keep configuration ---
+EXPLORATION_QUALITY_FLOOR_ICIR = 0.30
+EXPLORATION_QUALITY_FLOOR_IC_MEAN = 0.03
+EXPLORATION_BONUS_THRESHOLD = 0.50
+MAX_EXPLORATORY_KEEPS_PER_ROUND = 2
+
+# Correlation thresholds (exact vs soft redundancy)
+PARENT_CORR_THRESHOLD_HARD = 0.98
+FAMILY_CORR_THRESHOLD_HARD = 0.98
+PARENT_CORR_THRESHOLD_SOFT = 0.95
+FAMILY_CORR_THRESHOLD_SOFT = 0.92
+
+# Exploration bonus component weights
+EXPLORATION_MUTATION_NOVELTY_WEIGHT = 0.35
+EXPLORATION_MOTIF_NOVELTY_WEIGHT = 0.30
+EXPLORATION_CROSS_MODEL_WEIGHT = 0.25
+EXPLORATION_DECORRELATION_WEIGHT = 0.10
 
 
 def _expression_needs_benchmark(expression: str) -> bool:
@@ -248,6 +271,7 @@ def _augment_summary(
     *,
     item: dict[str, Any],
     family: SeedFamily,
+    parent_expression: str = "",
 ) -> dict[str, Any]:
     row = dict(summary)
     row["family"] = family.family
@@ -260,6 +284,18 @@ def _augment_summary(
     row["candidate_id"] = item.get("candidate_id", "")
     row["round_id"] = item.get("round_id", 0)
     row["parent_candidate_id"] = item.get("parent_candidate_id", "")
+    # Extract proposal metadata for exploration scoring
+    expr = str(item.get("expression", "")).strip()
+    parent_expr = str(parent_expression).strip()
+    candidate_meta = item.get("candidate_meta")
+    if candidate_meta is not None:
+        row["mutation_class"] = getattr(candidate_meta, "mutation_class", "") or expression_mutation_class(expr, parent_expr)
+        row["motif_signature"] = getattr(candidate_meta, "motif_signature", "") or expression_motif_signature(expr)
+        row["operator_skeleton"] = getattr(candidate_meta, "operator_skeleton", "") or expression_operator_skeleton(expr)
+    else:
+        row["mutation_class"] = expression_mutation_class(expr, parent_expr)
+        row["motif_signature"] = expression_motif_signature(expr)
+        row["operator_skeleton"] = expression_operator_skeleton(expr)
     return row
 
 
@@ -378,12 +414,16 @@ def _load_archive_reference_series(
             series = None
         if series is None:
             continue
+        expr = str(ref.get("expression", "")).strip()
         out.append(
             {
                 "candidate_id": ref["candidate_id"],
                 "factor_name": ref["factor_name"],
                 "status": ref["status"],
                 "series": series,
+                "model": str(ref.get("source_model", "")).strip(),
+                "motif_signature": expression_motif_signature(expr),
+                "mutation_class": expression_mutation_class(expr, ""),
             }
         )
     return out
@@ -679,16 +719,79 @@ def _new_family_broad_winner_guard(
     )
 
 
+
+
+def _passes_quality_floor(row: pd.Series) -> bool:
+    """Minimum quality bar for exploratory keep rescue."""
+    icir = _num(row, "quick_rank_icir")
+    ic_mean = _num(row, "quick_rank_ic_mean")
+    net_sharpe = _num(row, "net_sharpe")
+    if not np.isnan(icir) and icir >= EXPLORATION_QUALITY_FLOOR_ICIR:
+        return True
+    if (
+        not np.isnan(ic_mean)
+        and ic_mean >= EXPLORATION_QUALITY_FLOOR_IC_MEAN
+        and not np.isnan(net_sharpe)
+        and net_sharpe >= 0.0
+    ):
+        return True
+    return False
+
+
+def _compute_exploration_score(
+    row: pd.Series,
+    *,
+    family_motif_set: set[str],
+    family_mutation_set: set[str],
+    seen_models: set[str],
+) -> float:
+    """Compute exploration bonus [0, 1] for a candidate."""
+    mutation_class = str(row.get("mutation_class", "")).strip()
+    motif_signature = str(row.get("motif_signature", "")).strip()
+    model = str(row.get("model", "")).strip()
+
+    mutation_novelty = 1.0 if mutation_class and mutation_class not in family_mutation_set else 0.0
+    motif_novelty = 1.0 if motif_signature and motif_signature not in family_motif_set else 0.0
+    cross_model = 1.0 if model and model not in seen_models else 0.0
+
+    # Decorrelation: use corr_to_nearest_decorrelation_target if available,
+    # otherwise fall back to parent_corr (stored by redundancy check)
+    corr_target = _num(row, "corr_to_nearest_decorrelation_target")
+    if np.isnan(corr_target):
+        parent_corr = _num(row, "parent_corr")
+        if not np.isnan(parent_corr):
+            corr_target = parent_corr
+        else:
+            corr_target = 0.0
+    decorrelation = max(0.0, 1.0 - abs(corr_target))
+
+    score = (
+        EXPLORATION_MUTATION_NOVELTY_WEIGHT * mutation_novelty
+        + EXPLORATION_MOTIF_NOVELTY_WEIGHT * motif_novelty
+        + EXPLORATION_CROSS_MODEL_WEIGHT * cross_model
+        + EXPLORATION_DECORRELATION_WEIGHT * decorrelation
+    )
+    return float(score)
+
+
 def _candidate_decision(
     row: pd.Series,
     parent: pd.Series | None,
     *,
     stage_mode: str = "auto",
+    family_motif_set: set[str] | None = None,
+    family_mutation_set: set[str] | None = None,
+    seen_models: set[str] | None = None,
+    exploration_budget: dict[str, int] | None = None,
 ) -> tuple[str, str]:
     existing_decision = str(row.get("decision", "")).strip()
     existing_reason = str(row.get("decision_reason", "")).strip()
-    if existing_decision.startswith("drop_redundant"):
+    # Absolute drops (exact duplicate) are never overridden
+    if existing_decision == "drop_redundant_family_exact":
         return existing_decision, existing_reason
+    # Soft redundancy drops can be overridden by exploration bonus
+    was_soft_redundant = existing_decision.startswith("drop_redundant")
+
     if str(row.get("role")) != "candidate":
         return str(row.get("role", "")), "baseline row"
     if parent is None or not _has_reference_metrics(parent):
@@ -742,6 +845,28 @@ def _candidate_decision(
             reason += f"; material_gain={', '.join(material_gain_labels)}"
         reason += f"; full_metrics={len(CORE_FULL_METRICS) - missing_count}/{len(CORE_FULL_METRICS)}"
         return "research_keep", reason
+
+    # --- Exploration rescue (second-stage gate) ---
+    budget = exploration_budget or {"remaining": 0}
+    if budget.get("remaining", 0) > 0 and _passes_quality_floor(row):
+        exploration_score = _compute_exploration_score(
+            row,
+            family_motif_set=family_motif_set or set(),
+            family_mutation_set=family_mutation_set or set(),
+            seen_models=seen_models or set(),
+        )
+        if exploration_score >= EXPLORATION_BONUS_THRESHOLD:
+            budget["remaining"] -= 1
+            reason = (
+                f"exploration rescue (score={exploration_score:.2f}): "
+                f"does not beat parent on main metrics but passes quality floor with novel structure"
+            )
+            if was_soft_redundant:
+                reason += f"; overrides {existing_decision}"
+            return "research_keep_exploratory", reason
+
+    if was_soft_redundant:
+        return existing_decision, existing_reason
     if improved:
         return "research_drop", f"partially improves {', '.join(improved)} but trade-off is too large"
     return "research_drop", "does not beat parent on the main metrics"
@@ -775,7 +900,7 @@ def _winner_percentile_score(values: pd.Series, *, higher_is_better: bool) -> pd
 def _attach_winner_scores(summary_df: pd.DataFrame) -> pd.DataFrame:
     work = summary_df.copy()
     candidate_mask = work["role"] == "candidate"
-    keep_mask = candidate_mask & work["decision"].isin(["research_keep", "research_winner"])
+    keep_mask = candidate_mask & work["decision"].isin(["research_keep", "research_winner", "research_keep_exploratory"])
     work["winner_score"] = np.nan
     for key in WINNER_SCORE_WEIGHTS:
         work[f"winner_component_{key}"] = np.nan
@@ -831,7 +956,7 @@ def _ensure_keep_floor(
     candidate_mask = work["role"] == "candidate"
     if not candidate_mask.any():
         return work
-    if work.loc[candidate_mask, "decision"].isin(["research_keep", "research_winner"]).any():
+    if work.loc[candidate_mask, "decision"].isin(["research_keep", "research_winner", "research_keep_exploratory"]).any():
         return work
 
     error_text = work.get("error", pd.Series(index=work.index, dtype=object)).fillna("").astype(str).str.strip()
@@ -879,7 +1004,7 @@ def _assign_winners(
     candidate_mask = work["role"] == "candidate"
     existing_winner_mask = candidate_mask & (work["decision"] == "research_winner")
     work.loc[existing_winner_mask, "decision"] = "research_keep"
-    keep_mask = candidate_mask & (work["decision"] == "research_keep")
+    keep_mask = candidate_mask & (work["decision"].isin(["research_keep", "research_keep_exploratory"]))
     if not keep_mask.any():
         return work
     if stage_mode == "new_family_broad":
@@ -891,15 +1016,31 @@ def _assign_winners(
         work["stage_winner_guard_passed"] = stage_guard[0]
         work["stage_winner_guard_reason"] = stage_guard[1]
     else:
-        work["stage_winner_guard_passed"] = True
-        work["stage_winner_guard_reason"] = ""
-    winner_eligible_mask = keep_mask & (
+        # Absolute quality floor for non-broad modes (focused_refine, confirmation, etc.)
+        icir_ok = pd.to_numeric(work.get("quick_rank_icir"), errors="coerce").fillna(float("-inf")) >= 0.30
+        sharpe_ok = pd.to_numeric(work.get("net_sharpe"), errors="coerce").fillna(float("-inf")) >= 1.5
+        turnover_ok = pd.to_numeric(work.get("mean_turnover"), errors="coerce").fillna(float("inf")) <= 0.70
+        quality_gate_passed = icir_ok & sharpe_ok & turnover_ok
+        work["stage_winner_guard_passed"] = quality_gate_passed
+        work["stage_winner_guard_reason"] = work.apply(
+            lambda row: (
+                "winner quality gate passed"
+                if row.get("stage_winner_guard_passed")
+                else (
+                    f"winner quality gate failed: "
+                    f"ICIR={_num(row, 'quick_rank_icir'):.3f} (need>=0.30), "
+                    f"Sharpe={_num(row, 'net_sharpe'):.2f} (need>=1.5), "
+                    f"TO={_num(row, 'mean_turnover'):.3f} (need<=0.70)"
+                )
+            ),
+            axis=1,
+        )
+    winner_eligible_mask = keep_mask & (work["decision"] == "research_keep") & (
         pd.to_numeric(work.get("missing_core_metrics_count"), errors="coerce").fillna(99).astype(int) <= 0
     )
     if "neutral_winner_guard_passed" in work.columns:
         winner_eligible_mask = winner_eligible_mask & work["neutral_winner_guard_passed"].fillna(True).astype(bool)
-    if stage_mode == "new_family_broad":
-        winner_eligible_mask = winner_eligible_mask & work["stage_winner_guard_passed"].fillna(False).astype(bool)
+    winner_eligible_mask = winner_eligible_mask & work["stage_winner_guard_passed"].fillna(False).astype(bool)
     keep_df = work.loc[winner_eligible_mask].copy()
     if keep_df.empty:
         return work
@@ -1209,6 +1350,11 @@ def _evaluate_one_window(
                 factor = _compute_item_series(item=item, registry=registry, data=data)
                 series_cache[item["factor_name"]] = factor
 
+            # Redundancy checks: exact is absolute; soft redundancy is recorded
+            # but candidate still backtested so exploration rescue can override.
+            redundancy_decision: str | None = None
+            redundancy_reason: str = ""
+            parent_corr = np.nan
             if item["role"] == "candidate" and parent_series is not None:
                 corr_refs: list[tuple[str, pd.Series]] = [("__parent__", parent_series)]
                 corr_refs.extend(
@@ -1223,43 +1369,30 @@ def _evaluate_one_window(
                 )
                 corr_map = factor_series_correlations(factor, corr_refs)
                 parent_corr = abs(corr_map.get("__parent__", np.nan))
-                if not np.isnan(parent_corr) and parent_corr >= PARENT_CORR_THRESHOLD:
-                    rows.append(
-                        _filtered_row(
-                            item=item,
-                            family=family,
-                            decision="drop_redundant_parent",
-                            reason=f"corr with parent {parent_factor_name} = {parent_corr:.4f} >= {PARENT_CORR_THRESHOLD:.3f}",
-                        )
-                    )
-                    continue
+                if not np.isnan(parent_corr) and parent_corr >= PARENT_CORR_THRESHOLD_SOFT:
+                    redundancy_decision = "drop_redundant_parent"
+                    redundancy_reason = f"corr with parent {parent_factor_name} = {parent_corr:.4f} >= {PARENT_CORR_THRESHOLD_SOFT:.3f}"
 
-                matched_family_ref: tuple[str, float, str] | None = None
-                for idx, ref in enumerate(archive_refs):
-                    corr = abs(corr_map.get(f"archive::{idx}", np.nan))
-                    if not np.isnan(corr) and corr >= FAMILY_CORR_THRESHOLD:
-                        matched_family_ref = (ref["factor_name"], corr, str(ref.get("status", "")))
-                        break
-                if matched_family_ref is None:
-                    for idx, ref in enumerate(accepted_candidate_refs):
-                        corr = abs(corr_map.get(f"accepted::{idx}", np.nan))
-                        if not np.isnan(corr) and corr >= FAMILY_CORR_THRESHOLD:
-                            matched_family_ref = (ref["factor_name"], corr, "same_run_candidate")
+                if redundancy_decision is None:
+                    matched_family_ref: tuple[str, float, str] | None = None
+                    for idx, ref in enumerate(archive_refs):
+                        corr = abs(corr_map.get(f"archive::{idx}", np.nan))
+                        if not np.isnan(corr) and corr >= FAMILY_CORR_THRESHOLD_SOFT:
+                            matched_family_ref = (ref["factor_name"], corr, str(ref.get("status", "")))
                             break
-                if matched_family_ref is not None:
-                    matched_name, corr_value, matched_status = matched_family_ref
-                    rows.append(
-                        _filtered_row(
-                            item=item,
-                            family=family,
-                            decision="drop_redundant_family",
-                            reason=(
-                                f"family corr with {matched_name} = {corr_value:.4f} >= {FAMILY_CORR_THRESHOLD:.2f}"
-                                f" ({matched_status})"
-                            ),
+                    if matched_family_ref is None:
+                        for idx, ref in enumerate(accepted_candidate_refs):
+                            corr = abs(corr_map.get(f"accepted::{idx}", np.nan))
+                            if not np.isnan(corr) and corr >= FAMILY_CORR_THRESHOLD_SOFT:
+                                matched_family_ref = (ref["factor_name"], corr, "same_run_candidate")
+                                break
+                    if matched_family_ref is not None:
+                        matched_name, corr_value, matched_status = matched_family_ref
+                        redundancy_decision = "drop_redundant_family"
+                        redundancy_reason = (
+                            f"family corr with {matched_name} = {corr_value:.4f} >= {FAMILY_CORR_THRESHOLD_SOFT:.2f}"
+                            f" ({matched_status})"
                         )
-                    )
-                    continue
 
             dual_result = run_factor_backtest_dual(
                 factor,
@@ -1292,7 +1425,13 @@ def _evaluate_one_window(
             summary["neutralization_status"] = dual_result.get("neutralization_status", "")
             summary["neutralized_factor_nonnull"] = dual_result.get("neutralized_factor_nonnull", 0)
             summary["neutralized_factor_std"] = dual_result.get("neutralized_factor_std", np.nan)
-            rows.append(_augment_summary(summary, item=item, family=family))
+            parent_expr = str(parent_item.get("expression", "")) if parent_item is not None else ""
+            aug = _augment_summary(summary, item=item, family=family, parent_expression=parent_expr)
+            aug["parent_corr"] = parent_corr
+            if redundancy_decision is not None:
+                aug["decision"] = redundancy_decision
+                aug["decision_reason"] = redundancy_reason
+            rows.append(aug)
             if item["role"] == "candidate":
                 accepted_candidate_refs.append(
                     {
@@ -1335,8 +1474,33 @@ def _evaluate_one_window(
             axis=1,
         )
     parent = _parent_reference(summary_df, family, parent_factor_name=parent_factor_name)
+
+    # Build family novelty context from accepted archive + this run's kept candidates
+    family_motif_set: set[str] = set()
+    family_mutation_set: set[str] = set()
+    seen_models: set[str] = set()
+    for ref in archive_refs:
+        family_motif_set.add(str(ref.get("motif_signature", "")).strip())
+        family_mutation_set.add(str(ref.get("mutation_class", "")).strip())
+        seen_models.add(str(ref.get("model", "")).strip())
+    # Also include parent info
+    if parent is not None:
+        seen_models.add(str(parent.get("model", "")).strip())
+        family_motif_set.add(str(parent.get("motif_signature", "")).strip())
+        family_mutation_set.add(str(parent.get("mutation_class", "")).strip())
+
+    exploration_budget = {"remaining": MAX_EXPLORATORY_KEEPS_PER_ROUND}
+
     decisions = summary_df.apply(
-        lambda row: _candidate_decision(row, parent, stage_mode=stage_mode),
+        lambda row: _candidate_decision(
+            row,
+            parent,
+            stage_mode=stage_mode,
+            family_motif_set=family_motif_set,
+            family_mutation_set=family_mutation_set,
+            seen_models=seen_models,
+            exploration_budget=exploration_budget,
+        ),
         axis=1,
         result_type="expand",
     )

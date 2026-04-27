@@ -146,7 +146,7 @@ def _decorrelation_quality_gate_passed(item: dict[str, object]) -> bool:
 
 def _base_rerank_quality_score(item: dict[str, object]) -> float:
     status = str(item.get("status", "")).strip().lower()
-    status_bonus = 0.05 if status in {"research_winner", "winner"} else 0.02 if status in {"research_keep", "keep"} else 0.0
+    status_bonus = 0.05 if status in {"research_winner", "winner"} else 0.02 if status in {"research_keep", "keep"} else 0.01 if status in {"research_keep_exploratory"} else 0.0
     return (
         0.34 * _signed_tanh_metric(item.get("quick_rank_icir"), scale=0.35)
         + 0.26 * _signed_tanh_metric(item.get("net_sharpe"), scale=3.0)
@@ -334,7 +334,7 @@ def _pick_best_keep_record(
     keep_records = [
         item
         for item in records
-        if str(item.get("status", "")).strip().lower() in {"research_keep", "keep"}
+        if str(item.get("status", "")).strip().lower() in {"research_keep", "keep", "research_keep_exploratory"}
     ]
     if not keep_records:
         return None
@@ -448,6 +448,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--start": str(single.get_default("start")),
         "--end": str(single.get_default("end")),
         "--prompt-template-version": str(single.get_default("prompt_template_version")),
+        "--primary-objective": "",
+        "--secondary-objective": "",
     }
     for arg, default in passthrough_defaults.items():
         name = arg.lstrip("-").replace("-", "_")
@@ -558,6 +560,10 @@ def _build_child_cmd(args: argparse.Namespace, *, model: str, round_id: int, chi
         cmd.extend(["--stage-mode", str(args.stage_mode)])
     if str(args.prompt_template_version).strip():
         cmd.extend(["--prompt-template-version", str(args.prompt_template_version)])
+    if str(args.primary_objective or "").strip():
+        cmd.extend(["--primary-objective", str(args.primary_objective).strip()])
+    if str(args.secondary_objective or "").strip():
+        cmd.extend(["--secondary-objective", str(args.secondary_objective).strip()])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
@@ -814,7 +820,7 @@ def main() -> int:
             for item in completed
         ],
         family=args.family,
-        statuses=() if args.skip_eval else ("research_winner", "winner", "research_keep", "keep"),
+        statuses=() if args.skip_eval else ("research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"),
     )
     decision_context = DecisionContext.from_runtime(
         family=args.family,
@@ -920,7 +926,7 @@ def main() -> int:
     summary["winner_name"] = str(winner_record.get("factor_name", "") or "")
     summary["winner_expression"] = str(winner_record.get("expression", "") or "")
     summary["winner_status"] = str(winner_record.get("status", "") or "")
-    summary["winner_is_keep"] = str(winner_record.get("status", "") or "").strip().lower() in {"research_keep", "keep"}
+    summary["winner_is_keep"] = str(winner_record.get("status", "") or "").strip().lower() in {"research_keep", "keep", "research_keep_exploratory"}
     best_candidate = summary.get("global_best_candidate") or {}
     summary["global_best_candidate_name"] = str(best_candidate.get("factor_name", "") or "")
     summary["global_best_candidate_expression"] = str(best_candidate.get("expression", "") or "")

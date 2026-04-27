@@ -182,6 +182,12 @@ def resolve_orchestration_profile(
     last_round_keep: dict[str, Any] | None = None,
     recommended_stage_mode_hint: str = "",
 ) -> OrchestrationProfile:
+    """DEPRECATED: Legacy orchestration resolver.
+
+    StageTransitionDecision (via resolve_stage_transition / resolve_stage_transition_from_state)
+    is now the primary execution driver. This function is kept for backward-compatible imports
+    and audit trails but is no longer called by the scheduler or family loop.
+    """
     normalized_stage = str(evidence.stage_mode or "auto").strip() or "auto"
     hint = str(recommended_stage_mode_hint or "").strip()
     winner = dict(last_round_winner or {})
