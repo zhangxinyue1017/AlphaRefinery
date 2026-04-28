@@ -94,7 +94,7 @@ across models.
 | `no_improve_count` | integer consecutive no-improve count |
 | `budget_exhausted` | boolean budget exhaustion flag |
 | `frontier_exhausted` | boolean frontier exhaustion flag |
-| `validation_fail_count` | integer validation/evaluation failure count |
+| `validation_fail_count` | integer candidate-level evaluation failure count; one failed candidate does not mean the round failed |
 
 ## Shadow Actions
 
@@ -133,7 +133,7 @@ emits one shadow action.
 | Specificity | Rule | Phase | Conditions | Shadow action | Next stage | Intent |
 |---:|---|---|---|---|---|---|
 | 100 | `frontier_exhausted_terminal` | `any` | `frontier_exhausted=true` | `terminate` | `terminate` | Hard-stop exhausted frontier before empty-flat fallback. |
-| 95 | `validation_fail_reopen` | `any` | `validation_fail_count>0` | `reopen_broad` | `broad_followup` | Treat validation failures as repair/reopen, not phase advancement. |
+| 95 | `round_failed_reopen` | `any` | `last_round_status=failed` | `reopen_broad` | `broad_followup` | Treat failed rounds as repair/reopen, not phase advancement. |
 | 90 | `focused_turnover_no_gain_switch` | `focused_refine` | `turnover_pressure>=high`, `material_gain=false` | `switch_to_complementarity` | `focused_refine` | High turnover plus no material gain should not confirm by default. |
 | 85 | `focused_turnover_switch` | `focused_refine` | `turnover_pressure>=high` | `switch_to_complementarity` | `focused_refine` | Turnover pressure outranks strong-winner continuation. |
 | 80 | `focused_corr_critical_switch` | `focused_refine` | `corr_pressure>=high` | `switch_to_complementarity` | `focused_refine` | Redundant focused branches move toward complementarity. |
@@ -142,6 +142,7 @@ emits one shadow action.
 | 65 | `broad_usable_winner_continue` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | `winner_quality>=usable`, `turnover_pressure<=medium` | `continue_focused` | `focused_refine` | Usable broad winner with manageable turnover is exploited. |
 | 64 | `focused_complementarity_confirm` | `focused_refine` | `target_profile=complementarity`, `winner_quality>=usable`, `turnover_pressure<=medium` | `confirmation` | `confirmation` | Usable complementarity result should be confirmed before more mining. |
 | 60 | `focused_material_gain_continue` | `focused_refine` | `winner_quality>=usable`, `material_gain=true`, `turnover_pressure<=medium` | `continue_focused` | `focused_refine` | Usable focused winner with material gain can continue. |
+| 58 | `candidate_eval_fail_no_winner_reopen` | `any` | `validation_fail_count>=2`, `winner_quality<=weak` | `reopen_broad` | `broad_followup` | Multiple candidate-level eval failures with no usable winner should reopen/repair. |
 | 55 | `focused_usable_no_gain_confirm` | `focused_refine` | `winner_quality>=usable`, `material_gain=false`, `turnover_pressure<=medium`, `corr_pressure<=medium` | `confirmation` | `confirmation` | Usable focused result with no material gain and no major pressure enters confirmation. |
 | 50 | `no_improve_reopen` | `any` | `no_improve_count>=2`, `frontier_health>=medium` | `reopen_broad` | `broad_followup` | Repeated no-improve with live frontier should reopen broad search. |
 | 48 | `no_improve_terminate` | `any` | `no_improve_count>=2`, `frontier_health<=low` | `terminate` | `terminate` | Repeated no-improve with weak frontier should stop. |
@@ -156,7 +157,7 @@ The rule matcher supports a deliberately small condition grammar:
 
 - Equality: `field=value`, `field!=value`
 - Ordered levels: `anchor_strength>=passed`, `turnover_pressure<=medium`
-- Numeric comparisons: `no_improve_count>=2`, `validation_fail_count>0`
+- Numeric comparisons: `no_improve_count>=2`, `validation_fail_count>=2`
 - Phase sets: `phase in {new_family_broad,broad_followup}` when needed
 
 Ordered levels are defined in `table_policy.py`:
