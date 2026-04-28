@@ -1,0 +1,180 @@
+# Stage Transition Signals
+
+This note documents the shadow signal/table layer used to audit stage
+transition decisions. The legacy `resolve_stage_transition` if/else resolver
+remains the execution path. The table policy only writes a shadow decision into
+artifacts for comparison.
+
+## Signals
+
+### `anchor_strength`
+
+| Value | Condition |
+|---|---|
+| `strong` | `passed_anchor_count >= 2` and `best_anchor.anchor_quality_score >= 0.70` |
+| `passed` | `passed_anchor_count >= 1` |
+| `weak` | no passed anchor, but `best_anchor` exists and `anchor_quality_score >= 0.50` |
+| `none` | otherwise |
+
+### `winner_quality`
+
+Turnover is intentionally excluded here and modeled separately by
+`turnover_pressure`.
+
+| Value | Condition |
+|---|---|
+| `strong` | `quick_rank_icir >= 0.50` and `net_sharpe >= 3.0` |
+| `usable` | `quick_rank_icir >= 0.40` and `net_sharpe >= 2.0` |
+| `weak` | `quick_rank_icir >= 0.30` or `net_sharpe >= 1.5` |
+| `none` | otherwise |
+
+### `material_gain`
+
+`material_gain` keeps the legacy "any threshold passes" logic.
+
+| Field | Definition |
+|---|---|
+| `material_gain` | `true` if excess gain `>= 0.02`, ICIR gain `>= 0.05`, or Sharpe gain `>= 0.25` |
+| `material_gain_score` | `max(excess_gain / 0.02, icir_gain / 0.05, sharpe_gain / 0.25)` |
+
+Focused-stage baseline prefers the broad anchor; broad-stage baseline uses the
+available keep/anchor reference.
+
+### `corr_pressure`
+
+`has_decorrelation_targets` is reported in diagnostics but does not create
+pressure by itself.
+
+| Value | Condition |
+|---|---|
+| `critical` | `high_corr_count >= 3` and high family overlap |
+| `high` | `high_corr_count > 0` |
+| `medium` | motif saturation / family crowding is visible, but no high-corr trigger fired |
+| `low` | otherwise |
+
+Runtime diagnostics used here include `high_corr_count`,
+`portfolio_max_similarity`, `motif_usage_count`, `motif_counts`,
+`family_overlap`, and `family_motif_saturation_penalty`.
+
+### `turnover_pressure`
+
+| Value | Condition |
+|---|---|
+| `critical` | winner turnover `> 0.80`, or multiple high-turnover candidates are present |
+| `high` | winner turnover `> 0.65`, or `high_turnover_count > 0` |
+| `medium` | winner turnover in `[0.50, 0.65]` |
+| `low` | otherwise |
+
+### `frontier_health`
+
+This is the explicit replacement for the older branch-diversity intuition.
+
+| Value | Condition |
+|---|---|
+| `exhausted` | `frontier_exhausted = true` |
+| `high` | `children_added_to_search >= 5` and there is motif, branch, or cross-model diversity |
+| `medium` | `children_added_to_search >= 2` |
+| `low` | otherwise |
+
+### `model_consensus`
+
+This is currently a weak shadow signal based on repeated motif/skeleton support
+across models.
+
+| Value | Condition |
+|---|---|
+| `high` | the same motif/skeleton has support from at least three models |
+| `medium` | the same motif/skeleton has support from at least two models, or appears at least three times |
+| `low` | otherwise |
+
+### Direct Carry-Through Signals
+
+| Signal | Definition |
+|---|---|
+| `no_improve_count` | integer consecutive no-improve count |
+| `budget_exhausted` | boolean budget exhaustion flag |
+| `frontier_exhausted` | boolean frontier exhaustion flag |
+| `validation_fail_count` | integer validation/evaluation failure count |
+
+## Shadow Actions
+
+The shadow table emits only:
+
+- `continue_focused`
+- `reopen_broad`
+- `switch_to_complementarity`
+- `confirmation`
+- `terminate`
+
+Promotion and formalization are intentionally excluded from this table and stay
+in their own decision layer.
+
+## Rule Priority
+
+Rules are sorted by `specificity` descending, with table order breaking ties.
+The first matching rule wins; there is no voting.
+
+Important priority choices:
+
+- `frontier_exhausted` is handled before empty/flat fallback rules.
+- High or critical turnover outranks strong-winner continuation.
+- `material_gain=false` plus high turnover routes to complementarity rather
+  than confirmation.
+- Correlation pressure is derived from runtime overlap/crowding diagnostics, not
+  from `has_decorrelation_targets` alone.
+
+## Shadow Policy Table
+
+The table below mirrors `SHADOW_STAGE_POLICY_TABLE` in
+`search/transition/table_policy.py`. It is intentionally small and auditable: each
+row matches a phase, checks simple conditions against extracted signals, and
+emits one shadow action.
+
+| Specificity | Rule | Phase | Conditions | Shadow action | Next stage | Intent |
+|---:|---|---|---|---|---|---|
+| 100 | `frontier_exhausted_terminal` | `any` | `frontier_exhausted=true` | `terminate` | `terminate` | Hard-stop exhausted frontier before empty-flat fallback. |
+| 95 | `validation_fail_reopen` | `any` | `validation_fail_count>0` | `reopen_broad` | `broad_followup` | Treat validation failures as repair/reopen, not phase advancement. |
+| 90 | `focused_turnover_no_gain_switch` | `focused_refine` | `turnover_pressure>=high`, `material_gain=false` | `switch_to_complementarity` | `focused_refine` | High turnover plus no material gain should not confirm by default. |
+| 85 | `focused_turnover_switch` | `focused_refine` | `turnover_pressure>=high` | `switch_to_complementarity` | `focused_refine` | Turnover pressure outranks strong-winner continuation. |
+| 80 | `focused_corr_critical_switch` | `focused_refine` | `corr_pressure>=high` | `switch_to_complementarity` | `focused_refine` | Redundant focused branches move toward complementarity. |
+| 78 | `broad_corr_critical_reopen` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | `corr_pressure>=critical` | `reopen_broad` | `broad_followup` | Critical broad-stage crowding should diversify before graduation. |
+| 70 | `broad_anchor_continue` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | `anchor_strength>=passed`, `turnover_pressure<=medium` | `continue_focused` | `focused_refine` | Passed anchor with manageable turnover graduates to focused search. |
+| 65 | `broad_usable_winner_continue` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | `winner_quality>=usable`, `turnover_pressure<=medium` | `continue_focused` | `focused_refine` | Usable broad winner with manageable turnover is exploited. |
+| 64 | `focused_complementarity_confirm` | `focused_refine` | `target_profile=complementarity`, `winner_quality>=usable`, `turnover_pressure<=medium` | `confirmation` | `confirmation` | Usable complementarity result should be confirmed before more mining. |
+| 60 | `focused_material_gain_continue` | `focused_refine` | `winner_quality>=usable`, `material_gain=true`, `turnover_pressure<=medium` | `continue_focused` | `focused_refine` | Usable focused winner with material gain can continue. |
+| 55 | `focused_usable_no_gain_confirm` | `focused_refine` | `winner_quality>=usable`, `material_gain=false`, `turnover_pressure<=medium`, `corr_pressure<=medium` | `confirmation` | `confirmation` | Usable focused result with no material gain and no major pressure enters confirmation. |
+| 50 | `no_improve_reopen` | `any` | `no_improve_count>=2`, `frontier_health>=medium` | `reopen_broad` | `broad_followup` | Repeated no-improve with live frontier should reopen broad search. |
+| 48 | `no_improve_terminate` | `any` | `no_improve_count>=2`, `frontier_health<=low` | `terminate` | `terminate` | Repeated no-improve with weak frontier should stop. |
+| 40 | `empty_or_low_frontier_broad` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | `winner_quality=none`, `anchor_strength=none`, `frontier_health<=low` | `terminate` | `terminate` | Broad search has no usable signal and poor frontier health. |
+| 1 | `broad_default_reopen` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | none | `reopen_broad` | `broad_followup` | Default broad-stage shadow action keeps search open. |
+| 1 | `focused_default_reopen` | `focused_refine` | none | `reopen_broad` | `broad_followup` | Default focused-stage shadow action reopens broad search. |
+| 1 | `terminal_phase_terminate` | `confirmation`, `donor_validation` | none | `terminate` | `terminate` | Confirmation and donor-validation are terminal for stage transition. |
+
+### Rule Syntax
+
+The rule matcher supports a deliberately small condition grammar:
+
+- Equality: `field=value`, `field!=value`
+- Ordered levels: `anchor_strength>=passed`, `turnover_pressure<=medium`
+- Numeric comparisons: `no_improve_count>=2`, `validation_fail_count>0`
+- Phase sets: `phase in {new_family_broad,broad_followup}` when needed
+
+Ordered levels are defined in `table_policy.py`:
+
+| Signal | Order |
+|---|---|
+| `anchor_strength` | `none < weak < passed < strong` |
+| `winner_quality` | `none < weak < usable < strong` |
+| `corr_pressure` | `low < medium < high < critical` |
+| `turnover_pressure` | `low < medium < high < critical` |
+| `frontier_health` | `exhausted < low < medium < high` |
+| `model_consensus` | `low < medium < high` |
+
+## Artifact Fields
+
+Family-loop and scheduler artifacts include:
+
+- `stage_transition_legacy`: legacy if/else decision.
+- `stage_transition_signals`: extracted signal values and diagnostics.
+- `stage_transition_shadow_table`: shadow table decision.
+- `stage_transition_shadow_compare`: legacy-vs-shadow agreement flags.

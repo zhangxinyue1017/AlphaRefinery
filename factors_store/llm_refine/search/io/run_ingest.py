@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..core.archive import get_run_record_by_dir, load_run_candidate_records
+from ...core.archive import get_run_record_by_dir, load_run_candidate_records
 
 
 def resolve_materialized_single_run_dir(round_runs_root: Path) -> Path | None:

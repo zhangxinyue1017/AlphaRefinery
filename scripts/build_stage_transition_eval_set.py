@@ -20,7 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from factors_store.llm_refine.config import DEFAULT_MULTI_SCHEDULER_RUNS_DIR, PROJECT_ROOT
 from factors_store.llm_refine.search import EvaluationFeedback, FamilyState, RefinementAction
-from factors_store.llm_refine.search.stage_transition import resolve_stage_transition_from_state
+from factors_store.llm_refine.search.transition.stage_transition import resolve_stage_transition_from_state
 
 
 LABELS = (

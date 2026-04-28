@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from ..search.context_resolver import ContextEvidence, ContextProfile, resolve_context_profile
+from ..search.transition.context_resolver import ContextEvidence, ContextProfile, resolve_context_profile
 
 
 @dataclass(frozen=True)

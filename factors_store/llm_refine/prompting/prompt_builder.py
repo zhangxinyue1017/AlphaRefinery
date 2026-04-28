@@ -24,7 +24,7 @@ from ..core.seed_loader import (
 from ..knowledge.retrieval import build_family_memory_payload, render_family_memory_block
 from ..parsing.operator_contract import PROMPT_OPERATOR_DESCRIPTIONS
 from .prompt_plan import PromptConstraintPlan, PromptExamplesPlan, PromptMemoryPlan, PromptPlan, build_prompt_plan
-from ..search.context_resolver import ContextProfile
+from ..search.transition.context_resolver import ContextProfile
 
 DEFAULT_WINDOWS = (3, 5, 10, 14, 15, 20, 28, 40, 60, 100, 120, 180, 250, 375)
 DEFAULT_OPERATORS = PROMPT_OPERATOR_DESCRIPTIONS

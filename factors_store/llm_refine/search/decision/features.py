@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from .scoring import safe_float
+from ..core.scoring import safe_float
 
 
 @dataclass(frozen=True)

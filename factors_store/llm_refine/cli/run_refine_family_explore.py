@@ -33,7 +33,7 @@ from ..core.archive import (
 from .run_refine_multi_model import build_arg_parser as build_multi_model_arg_parser
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
-from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
+from ..search.io.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
 
 
 def _normalize_models(values: list[str]) -> list[str]:

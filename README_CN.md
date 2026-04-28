@@ -6,6 +6,7 @@
 [![LLM Refine](https://img.shields.io/badge/LLM_Refine-Family%20Loop%20%2B%20Round1%20Bootstrap-4C8BF5.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Target Search](https://img.shields.io/badge/Target--Conditioned_Search-v1-7B61FF.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Research Funnel](https://img.shields.io/badge/Research_Funnel-Uplift%20%2B%20Stability-0F766E.svg?style=flat)](./factors_store/llm_refine/README.md)
+[![Stage Policy](https://img.shields.io/badge/Stage_Policy-Signals%20%2B%20Shadow_Table-6D5DF6.svg?style=flat)](./factors_store/llm_refine/docs/stage_transition_signals.md)
 
 **🚩 旗舰子系统：** [`llm_refine`](./factors_store/llm_refine/README.md) —— 一个面向 family 级因子精炼的 LLM 驱动研究引擎，支持阶段化搜索推进、分支保留、目标条件化搜索，以及上下文感知决策。
 
@@ -16,7 +17,8 @@
 - 🌿 **双父分支保留** 与 **Path Evaluation**
 - 🎯 面向 `raw_alpha`、`deployability`、`complementarity` 的**目标条件化搜索**
 - 🧩 用于 rerank、anchor selection、next-step recommendation 的**上下文感知决策**
-- 🪄 面向低冗余候选生成的 **de-correlation-aware refinement**
+- 🪄 带统一评分、rerank 诊断和 complementarity gate 的 **de-correlation-aware refinement**
+- 🔍 同时记录 legacy 决策与 shadow table 建议的**可审计 stage policy signals**
 - 🏗 配套提供 **evaluation、reports、promotion，以及本地可选的下游检查钩子**
 
 ## 📌 从这里开始
@@ -173,7 +175,7 @@ graph TD
         B1["llm_refine/prompting"]
         B2["llm_refine/parsing"]
         B3["llm_refine/evaluation"]
-        B4["llm_refine/search"]
+        B4["llm_refine/search<br/>core / decision / transition / io"]
         B5["llm_refine/cli"]
     end
 
@@ -215,6 +217,8 @@ graph TD
 * dual-parent branch preservation
 * Path Evaluation
 * target-conditioned search
+* stage-transition signals 与 shadow table policy 对比
+* complementarity-oriented de-correlation assessment
 * context-aware rerank 与 anchor selection
 * archive、reporting、promotion 与 funnel evaluation workflows
 
@@ -521,6 +525,8 @@ AlphaRefinery/
 2. [docs/family_search_formulation.md](./docs/family_search_formulation.md)
 3. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
 4. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
+5. [factors_store/llm_refine/docs/stage_transition_signals.md](./factors_store/llm_refine/docs/stage_transition_signals.md)
+6. [factors_store/llm_refine/search/README.md](./factors_store/llm_refine/search/README.md)
 
 ### 如果你想看研究输出
 
@@ -540,6 +546,7 @@ AlphaRefinery/
 
 * 更多 target-conditioned search objectives
 * 更强的 robustness-aware evaluation
+* stage transition action 的 value/scoring layer
 * 更自动化的 promotion 与 reporting pipeline
 * 更清晰的 family research 与本地可选下游 workflow 边界
 * 更广泛的 intraday 与 cross-frequency support

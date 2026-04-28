@@ -78,8 +78,8 @@ from ..core.seed_loader import (
 )
 from ..parsing.validator import validate_expression
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
-from ..search.context_resolver import ContextEvidence, resolve_context_profile
-from ..search.scoring import safe_float
+from ..search.transition.context_resolver import ContextEvidence, resolve_context_profile
+from ..search.core.scoring import safe_float
 
 _STAGE_MODE_CHOICES = (
     "auto",
@@ -1308,6 +1308,7 @@ def main() -> int:
                 archive_db=archive_db,
                 auto_apply_promotion=args.auto_apply_promotion,
                 stage_mode=stage_mode,
+                target_profile=str(args.target_profile),
                 decorrelation_targets=decorrelation_targets,
             )
             print(f"[saved] family_backtest_summary={eval_paths['family_backtest_summary']}")

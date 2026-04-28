@@ -17,7 +17,7 @@ This file is intentionally scoped to:
 - CLI/run budget defaults
 
 This file intentionally does not contain the full SearchPolicy weight table.
-Those weights live in `search/policy.py`, because they are search semantics
+Those weights live in `search/core/policy.py`, because they are search semantics
 rather than generic runtime defaults.
 """
 

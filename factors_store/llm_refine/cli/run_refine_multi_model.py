@@ -33,11 +33,17 @@ from ..core.archive import (
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..knowledge.round1 import build_bootstrap_frontier, is_seed_stage_node_kind, select_bootstrap_parent
 from ..search import SearchBudget, SearchEngine, SearchPolicy, build_search_normalizer
-from ..search.context_resolver import ContextEvidence, resolve_context_profile
-from ..search.decision_context import DecisionContext
-from ..search.decision_engine import DecisionEngine
-from ..search.run_ingest import load_candidate_records_from_completed_runs
-from ..search.scoring import safe_float
+from ..search.transition.context_resolver import ContextEvidence, resolve_context_profile
+from ..search.decision.decorrelation_policy import (
+    DecorrelationPolicy,
+    assess_decorrelation,
+    decorate_with_decorrelation_assessment,
+    decorrelation_rerank_enabled,
+)
+from ..search.decision.context import DecisionContext
+from ..search.decision.engine import DecisionEngine
+from ..search.io.run_ingest import load_candidate_records_from_completed_runs
+from ..search.core.scoring import safe_float
 from .run_refine_loop import build_arg_parser as build_single_round_parser
 
 _STAGE_MODE_CHOICES = (
@@ -119,29 +125,12 @@ def _positive_tanh_metric(value: object, *, scale: float) -> float:
 
 
 def _decorrelation_rerank_enabled(records: list[dict[str, object]]) -> bool:
-    for item in records:
-        if str(item.get("nearest_decorrelation_target", "") or "").strip():
-            return True
-        nearest_corr = safe_float(item.get("corr_to_nearest_decorrelation_target"), default=float("nan"))
-        avg_corr = safe_float(item.get("avg_abs_decorrelation_target_corr"), default=float("nan"))
-        if math.isfinite(nearest_corr) or math.isfinite(avg_corr):
-            return True
-    return False
+    return decorrelation_rerank_enabled(records)
 
 
 def _decorrelation_quality_gate_passed(item: dict[str, object]) -> bool:
-    icir = safe_float(item.get("quick_rank_icir"), default=float("nan"))
-    sharpe = safe_float(item.get("net_sharpe"), default=float("nan"))
-    excess = safe_float(item.get("net_excess_ann_return"), default=float("nan"))
-    ann = safe_float(item.get("net_ann_return"), default=float("nan"))
-    neutral_icir = safe_float(item.get("neutral_quick_rank_icir"), default=float("nan"))
-    neutral_sharpe = safe_float(item.get("neutral_net_sharpe"), default=float("nan"))
-    return bool(
-        (math.isfinite(icir) and math.isfinite(sharpe) and icir >= 0.15 and sharpe >= 1.2)
-        or (math.isfinite(excess) and excess >= 0.05)
-        or (math.isfinite(ann) and ann >= 1.5)
-        or (math.isfinite(neutral_icir) and math.isfinite(neutral_sharpe) and neutral_icir >= 0.08 and neutral_sharpe >= 1.0)
-    )
+    policy = DecorrelationPolicy.from_search_policy(None)
+    return bool(assess_decorrelation(dict(item), policy).quality_gate_passed)
 
 
 def _base_rerank_quality_score(item: dict[str, object]) -> float:
@@ -160,54 +149,15 @@ def _base_rerank_quality_score(item: dict[str, object]) -> float:
 
 
 def _decorrelation_adjustment(item: dict[str, object]) -> float:
-    nearest_corr = abs(safe_float(item.get("corr_to_nearest_decorrelation_target"), default=float("nan")))
-    avg_corr = safe_float(item.get("avg_abs_decorrelation_target_corr"), default=float("nan"))
-    if not math.isfinite(nearest_corr) and not math.isfinite(avg_corr):
-        return 0.0
-
-    quality_gate_passed = _decorrelation_quality_gate_passed(item)
-    adjustment = 0.0
-
-    if math.isfinite(nearest_corr):
-        if quality_gate_passed:
-            if nearest_corr <= 0.35:
-                adjustment += 0.12
-            elif nearest_corr <= 0.60:
-                adjustment += 0.06
-            elif nearest_corr <= 0.80:
-                adjustment += 0.02
-            elif nearest_corr >= 0.95:
-                adjustment -= 0.08
-            elif nearest_corr >= 0.85:
-                adjustment -= 0.04
-        elif nearest_corr >= 0.90:
-            adjustment -= 0.03
-
-    if math.isfinite(avg_corr):
-        if quality_gate_passed:
-            if avg_corr <= 0.20:
-                adjustment += 0.05
-            elif avg_corr <= 0.40:
-                adjustment += 0.02
-            elif avg_corr >= 0.75:
-                adjustment -= 0.05
-            elif avg_corr >= 0.60:
-                adjustment -= 0.02
-        elif avg_corr >= 0.80:
-            adjustment -= 0.02
-
-    return adjustment
+    policy = DecorrelationPolicy.from_search_policy(None)
+    return safe_float(assess_decorrelation(dict(item), policy).rerank_adjustment, default=0.0)
 
 
 def _decorate_with_decorrelation_rerank(item: dict[str, object]) -> dict[str, object]:
     out = dict(item)
     quality_score = _base_rerank_quality_score(out)
-    adjustment = _decorrelation_adjustment(out)
-    out["decorrelation_quality_gate_passed"] = _decorrelation_quality_gate_passed(out)
-    out["decorrelation_quality_score"] = quality_score
-    out["decorrelation_adjustment"] = adjustment
-    out["decorrelation_adjusted_score"] = quality_score + adjustment
-    return out
+    policy = DecorrelationPolicy.from_search_policy(None)
+    return decorate_with_decorrelation_assessment(out, policy, base_quality_score=quality_score)
 
 
 def _decorrelation_rerank_sort_key(
@@ -297,6 +247,11 @@ def _build_global_rerank_preview(
                     item.get("avg_abs_decorrelation_target_corr"), default=float("nan")
                 ),
                 "decorrelation_quality_score": safe_float(item.get("decorrelation_quality_score"), default=float("nan")),
+                "decorrelation_grade": str(item.get("decorrelation_grade", "") or ""),
+                "decorrelation_score": safe_float(item.get("decorrelation_score"), default=float("nan")),
+                "decorrelation_gate_action": str(item.get("decorrelation_gate_action", "") or ""),
+                "decorrelation_gate_reason": str(item.get("decorrelation_gate_reason", "") or ""),
+                "decorrelation_winner_allowed": bool(item.get("decorrelation_winner_allowed", True)),
                 "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
                 "decorrelation_adjusted_score": safe_float(
                     item.get("decorrelation_adjusted_score"), default=float("nan")
@@ -360,6 +315,11 @@ def _metric_snapshot(item: dict[str, object] | None) -> dict[str, object] | None
             item.get("avg_abs_decorrelation_target_corr"), default=float("nan")
         ),
         "decorrelation_quality_gate_passed": bool(item.get("decorrelation_quality_gate_passed", False)),
+        "decorrelation_grade": str(item.get("decorrelation_grade", "") or ""),
+        "decorrelation_score": safe_float(item.get("decorrelation_score"), default=float("nan")),
+        "decorrelation_gate_action": str(item.get("decorrelation_gate_action", "") or ""),
+        "decorrelation_gate_reason": str(item.get("decorrelation_gate_reason", "") or ""),
+        "decorrelation_winner_allowed": bool(item.get("decorrelation_winner_allowed", True)),
         "decorrelation_quality_score": safe_float(item.get("decorrelation_quality_score"), default=float("nan")),
         "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
         "decorrelation_adjusted_score": safe_float(item.get("decorrelation_adjusted_score"), default=float("nan")),

@@ -39,14 +39,17 @@ from ..search import (
     SearchBudget,
     SearchEngine,
     SearchPolicy,
+    SignalExtractor,
     build_stage_transition_evidence,
     build_stage_transition_shadow,
     build_search_normalizer,
+    compare_stage_transition_decisions,
+    resolve_shadow_table_policy,
 )
-from ..search.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
-from ..search.scoring import pairwise_similarity
-from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
-from ..search.stage_transition import resolve_stage_transition_from_state
+from ..search.transition.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
+from ..search.core.scoring import pairwise_similarity
+from ..search.io.run_ingest import load_multi_run_candidate_records, resolve_materialized_multi_run_dir
+from ..search.transition.stage_transition import resolve_stage_transition_from_state
 from .run_refine_multi_model import build_arg_parser as build_multi_model_arg_parser
 
 _STAGE_MODE_CHOICES = (
@@ -381,8 +384,17 @@ def _build_orchestration_trace(
         refinement_action,
         evaluation_feedback,
     )
-    # Advisory stage_transition is now the primary execution driver.
-    # orchestration_profile is derived from it for backward-compatible naming.
+    stage_transition_signals = SignalExtractor.from_evidence(stage_transition_evidence)
+    stage_transition_shadow_table = resolve_shadow_table_policy(
+        stage_transition_evidence,
+        stage_transition_signals,
+    )
+    stage_transition_shadow_compare = compare_stage_transition_decisions(
+        legacy_decision=stage_transition,
+        shadow_decision=stage_transition_shadow_table,
+    )
+    # Legacy if/else transition remains the primary execution driver; the table
+    # policy only emits a shadow decision for artifact comparison.
     orchestration_profile = OrchestrationProfile(
         recommended_stage_mode=stage_transition.next_stage,
         round_strategy=stage_transition.action,
@@ -405,6 +417,10 @@ def _build_orchestration_trace(
         "evaluation_feedback": evaluation_feedback.to_dict(),
         "stage_transition_evidence": stage_transition_evidence.to_dict(),
         "stage_transition": stage_transition.to_dict(),
+        "stage_transition_legacy": stage_transition.to_dict(),
+        "stage_transition_signals": stage_transition_signals.to_dict(),
+        "stage_transition_shadow_table": stage_transition_shadow_table.to_dict(),
+        "stage_transition_shadow_compare": stage_transition_shadow_compare,
         "family_state_decision": stage_transition.to_dict(),
         "legacy_orchestration_decision": orchestration_profile.to_dict(),
         "stage_transition_shadow": stage_transition_shadow,

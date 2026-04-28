@@ -32,7 +32,9 @@ from ..core.models import LLMProposal, RefinementCandidate, SeedFamily, SeedPool
 from ..core.seed_loader import resolve_family_formula, resolve_preferred_refine_seed
 from .promotion import write_pending_curated_manifest
 from .redundancy import factor_series_correlation, factor_series_correlations
-from ..search.scoring import (
+from ..search.decision.decorrelation_policy import DecorrelationPolicy, assess_decorrelation
+from ..search.core.policy import SearchPolicy
+from ..search.core.scoring import (
     expression_motif_signature,
     expression_mutation_class,
     expression_operator_skeleton,
@@ -690,6 +692,62 @@ def _is_material_gain(
     return not np.isnan(delta) and delta >= threshold
 
 
+def _material_gain_vs_parent(row: pd.Series | dict[str, Any], parent: pd.Series | dict[str, Any] | None) -> bool:
+    if parent is None:
+        return False
+    excess_gain = _metric_delta(row, parent, key="net_excess_ann_return")
+    icir_gain = _metric_delta(row, parent, key="quick_rank_icir")
+    sharpe_gain = _metric_delta(row, parent, key="net_sharpe")
+    return bool(
+        (not np.isnan(excess_gain) and excess_gain >= 0.02)
+        or (not np.isnan(icir_gain) and icir_gain >= 0.05)
+        or (not np.isnan(sharpe_gain) and sharpe_gain >= 0.25)
+    )
+
+
+def _attach_decorrelation_assessment(
+    summary_df: pd.DataFrame,
+    parent: pd.Series | None,
+    *,
+    target_profile: str,
+    decorrelation_targets_present: bool,
+) -> pd.DataFrame:
+    if summary_df.empty:
+        return summary_df
+    search_policy = SearchPolicy.balanced().with_target_profile(target_profile)
+    policy = DecorrelationPolicy.from_search_policy(
+        search_policy,
+        target_profile=target_profile,
+        decorrelation_targets_present=decorrelation_targets_present,
+    )
+    work = summary_df.copy()
+    defaults = {
+        "decorrelation_grade": "",
+        "decorrelation_score": np.nan,
+        "decorrelation_gate_action": "pass",
+        "decorrelation_gate_reason": "",
+        "decorrelation_winner_allowed": True,
+        "decorrelation_quality_gate_passed": False,
+        "decorrelation_strong_quality_passed": False,
+    }
+    for key, value in defaults.items():
+        if key not in work.columns:
+            work[key] = value
+    for idx, row in work.iterrows():
+        if str(row.get("role", "") or "") != "candidate":
+            continue
+        material_gain = _material_gain_vs_parent(row, parent)
+        assessment = assess_decorrelation(dict(row), policy, material_gain=material_gain)
+        work.at[idx, "decorrelation_grade"] = assessment.grade
+        work.at[idx, "decorrelation_score"] = assessment.score
+        work.at[idx, "decorrelation_gate_action"] = assessment.gate_action
+        work.at[idx, "decorrelation_gate_reason"] = assessment.gate_reason
+        work.at[idx, "decorrelation_winner_allowed"] = assessment.winner_allowed
+        work.at[idx, "decorrelation_quality_gate_passed"] = assessment.quality_gate_passed
+        work.at[idx, "decorrelation_strong_quality_passed"] = assessment.strong_quality_passed
+    return work
+
+
 def _new_family_broad_winner_guard(
     row: pd.Series | dict[str, Any],
     parent: pd.Series | dict[str, Any] | None,
@@ -779,6 +837,8 @@ def _candidate_decision(
     parent: pd.Series | None,
     *,
     stage_mode: str = "auto",
+    target_profile: str = "raw_alpha",
+    decorrelation_targets_present: bool = False,
     family_motif_set: set[str] | None = None,
     family_mutation_set: set[str] | None = None,
     seen_models: set[str] | None = None,
@@ -824,6 +884,15 @@ def _candidate_decision(
     if not presence["net_sharpe"] and not presence["mean_turnover"]:
         return "research_drop", "missing both NetSharpe and Turnover"
 
+    decorrelation_gate_action = str(row.get("decorrelation_gate_action", "") or "pass").strip()
+    decorrelation_gate_reason = str(row.get("decorrelation_gate_reason", "") or "").strip()
+    decorrelation_strong_gate_active = bool(
+        str(target_profile or "").strip().lower() == "complementarity"
+        or decorrelation_targets_present
+    )
+    if decorrelation_strong_gate_active and decorrelation_gate_action == "drop":
+        return "research_drop", decorrelation_gate_reason or "decorrelation strong gate dropped candidate"
+
     turnover_parent = _num(parent, "mean_turnover")
     turnover_candidate = _num(row, "mean_turnover")
     turnover_cap = max(turnover_parent * 2.0, 0.50) if not np.isnan(turnover_parent) else np.nan
@@ -843,6 +912,8 @@ def _candidate_decision(
         reason = f"broad gate: beats parent on {', '.join(improved)}"
         if stage_mode == "new_family_broad" and material_gain_labels:
             reason += f"; material_gain={', '.join(material_gain_labels)}"
+        if decorrelation_strong_gate_active and decorrelation_gate_action == "suppress_winner":
+            reason += f"; {decorrelation_gate_reason}"
         reason += f"; full_metrics={len(CORE_FULL_METRICS) - missing_count}/{len(CORE_FULL_METRICS)}"
         return "research_keep", reason
 
@@ -961,7 +1032,13 @@ def _ensure_keep_floor(
 
     error_text = work.get("error", pd.Series(index=work.index, dtype=object)).fillna("").astype(str).str.strip()
     decision_text = work.get("decision", pd.Series(index=work.index, dtype=object)).fillna("").astype(str)
-    fallback_mask = candidate_mask & error_text.eq("") & ~decision_text.str.startswith("drop_redundant")
+    decorrelation_gate = work.get("decorrelation_gate_action", pd.Series(index=work.index, dtype=object)).fillna("").astype(str)
+    fallback_mask = (
+        candidate_mask
+        & error_text.eq("")
+        & ~decision_text.str.startswith("drop_redundant")
+        & decorrelation_gate.ne("drop")
+    )
     fallback_df = work.loc[fallback_mask].copy()
     if fallback_df.empty:
         return work
@@ -1040,6 +1117,8 @@ def _assign_winners(
     )
     if "neutral_winner_guard_passed" in work.columns:
         winner_eligible_mask = winner_eligible_mask & work["neutral_winner_guard_passed"].fillna(True).astype(bool)
+    if "decorrelation_winner_allowed" in work.columns:
+        winner_eligible_mask = winner_eligible_mask & work["decorrelation_winner_allowed"].fillna(True).astype(bool)
     winner_eligible_mask = winner_eligible_mask & work["stage_winner_guard_passed"].fillna(False).astype(bool)
     keep_df = work.loc[winner_eligible_mask].copy()
     if keep_df.empty:
@@ -1145,6 +1224,13 @@ def _slim_summary(summary_df: pd.DataFrame) -> pd.DataFrame:
         "nearest_decorrelation_target",
         "corr_to_nearest_decorrelation_target",
         "avg_abs_decorrelation_target_corr",
+        "decorrelation_grade",
+        "decorrelation_score",
+        "decorrelation_gate_action",
+        "decorrelation_gate_reason",
+        "decorrelation_winner_allowed",
+        "decorrelation_quality_gate_passed",
+        "decorrelation_strong_quality_passed",
         "raw_neutral_rank_icir_gap",
         "raw_neutral_net_sharpe_gap",
         "neutral_winner_guard_passed",
@@ -1278,6 +1364,7 @@ def _evaluate_one_window(
     run_id: str,
     archive_db: str | Path,
     stage_mode: str = "auto",
+    target_profile: str = "raw_alpha",
     decorrelation_targets: tuple[str, ...] = (),
 ) -> tuple[pd.DataFrame, dict[str, pd.Series], dict[str, Any], dict[str, Any]]:
     registry = create_default_registry()
@@ -1474,6 +1561,12 @@ def _evaluate_one_window(
             axis=1,
         )
     parent = _parent_reference(summary_df, family, parent_factor_name=parent_factor_name)
+    summary_df = _attach_decorrelation_assessment(
+        summary_df,
+        parent,
+        target_profile=target_profile,
+        decorrelation_targets_present=bool(decorrelation_targets),
+    )
 
     # Build family novelty context from accepted archive + this run's kept candidates
     family_motif_set: set[str] = set()
@@ -1496,6 +1589,8 @@ def _evaluate_one_window(
             row,
             parent,
             stage_mode=stage_mode,
+            target_profile=target_profile,
+            decorrelation_targets_present=bool(decorrelation_targets),
             family_motif_set=family_motif_set,
             family_mutation_set=family_mutation_set,
             seen_models=seen_models,
@@ -1599,6 +1694,7 @@ def evaluate_refinement_run(
     archive_db: str | Path = DEFAULT_ARCHIVE_DB,
     auto_apply_promotion: bool = False,
     stage_mode: str = "auto",
+    target_profile: str = "raw_alpha",
     decorrelation_targets: tuple[str, ...] = (),
 ) -> dict[str, Path]:
     run_path = Path(run_dir)
@@ -1637,6 +1733,7 @@ def evaluate_refinement_run(
                 run_id=run_id,
                 archive_db=archive_db,
                 stage_mode=stage_mode,
+                target_profile=target_profile,
                 decorrelation_targets=decorrelation_targets,
             )
             stage_outputs = _write_window_outputs(
@@ -1697,6 +1794,7 @@ def evaluate_refinement_run(
             run_id=run_id,
             archive_db=archive_db,
             stage_mode=stage_mode,
+            target_profile=target_profile,
             decorrelation_targets=decorrelation_targets,
         )
         outputs.update(

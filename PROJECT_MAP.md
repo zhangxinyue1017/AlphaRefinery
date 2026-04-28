@@ -220,6 +220,11 @@ factors_store/llm_refine/
 ├── parsing/
 ├── prompting/
 └── search/
+    ├── README.md
+    ├── core/
+    ├── decision/
+    ├── transition/
+    └── io/
 ```
 
 This is the **flagship subsystem** of AlphaRefinery.
@@ -259,7 +264,12 @@ For subsystem-level usage and design details, see:
   * retrieval, reflection, round1/bootstrap support, next-step planning
 * `search/`
 
-  * search state, policy, objectives, frontier, decision logic
+  * layered search and control surface:
+    * `core/`: search state, budgets, frontier, objectives, scoring, normalizers, `SearchPolicy`
+    * `decision/`: candidate feature extraction, rerank / winner selection, de-correlation policy
+    * `transition/`: stage evidence, legacy transition logic, signal extraction, shadow table policy
+    * `io/`: artifact ingestion from completed runs
+  * top-level `search/__init__.py` remains as the public facade for common imports; implementation modules live in the subpackages above
 * `docs/`
 
   * subsystem-specific design and tuning notes
@@ -315,6 +325,8 @@ Start with:
 * `factors_store/llm_refine/`
 * [`factors_store/llm_refine/README.md`](./factors_store/llm_refine/README.md)
 * `factors_store/llm_refine/search/`
+* [`factors_store/llm_refine/search/README.md`](./factors_store/llm_refine/search/README.md)
+* [`factors_store/llm_refine/docs/stage_transition_signals.md`](./factors_store/llm_refine/docs/stage_transition_signals.md)
 * `factors_store/llm_refine/evaluation/`
 
 ### If you want to inspect public factor examples

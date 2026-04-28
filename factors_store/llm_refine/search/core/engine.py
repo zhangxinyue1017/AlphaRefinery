@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 import statistics
 from typing import Any
 
-from ..core.archive import make_seed_candidate_id, utc_now_iso
+from ...core.archive import make_seed_candidate_id, utc_now_iso
 from .frontier import SearchFrontier
 from .normalization import SearchNormalizer
 from .policy import SearchPolicy

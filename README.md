@@ -7,6 +7,7 @@
 [![LLM Refine](https://img.shields.io/badge/LLM_Refine-Family%20Loop%20%2B%20Round1%20Bootstrap-4C8BF5.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Target Search](https://img.shields.io/badge/Target--Conditioned_Search-v1-7B61FF.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Research Funnel](https://img.shields.io/badge/Research_Funnel-Uplift%20%2B%20Stability-0F766E.svg?style=flat)](./factors_store/llm_refine/README.md)
+[![Stage Policy](https://img.shields.io/badge/Stage_Policy-Signals%20%2B%20Shadow_Table-6D5DF6.svg?style=flat)](./factors_store/llm_refine/docs/stage_transition_signals.md)
 
 🚩 **Flagship subsystem:** [`llm_refine`](./factors_store/llm_refine/README.md) — a family-level LLM-guided factor refinement engine with staged search progression, branch preservation, target-conditioned search, and context-aware decision support.
 
@@ -22,7 +23,8 @@
 - 🎯 **Target-conditioned search** for `raw_alpha`, `deployability`, and `complementarity`
 - 🧠 **Search-plan advisory layer** that frames family refinement as a state-action-feedback transition process
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
-- 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
+- 🪄 **De-correlation-aware refinement** with unified scoring, rerank diagnostics, and complementarity gates
+- 🔍 **Auditable stage policy signals** with legacy decisions and shadow table recommendations recorded side by side
 - 🏗 Surrounding infrastructure for **evaluation, reports, promotion, and local optional downstream hooks**
 
 ## 📌 Start Here
@@ -205,7 +207,7 @@ graph TD
         B1["llm_refine/prompting"]
         B2["llm_refine/parsing"]
         B3["llm_refine/evaluation"]
-        B4["llm_refine/search"]
+        B4["llm_refine/search<br/>core / decision / transition / io"]
         B5["llm_refine/cli"]
     end
 
@@ -248,6 +250,8 @@ It currently supports:
 * Path Evaluation
 * target-conditioned search
 * stage-transition advisory over `FamilyState -> RefinementAction -> EvaluationFeedback`
+* auditable stage-transition signals and shadow table policy comparison
+* de-correlation assessment for complementarity-oriented refinement
 * small historical eval sets for comparing advisory decisions with human research judgment
 * context-aware rerank and anchor selection
 * archive, reporting, promotion, and funnel evaluation workflows
@@ -568,6 +572,8 @@ Runtime outputs under `artifacts/**`, private factor families, provider secrets,
 2. [docs/family_search_formulation.md](./docs/family_search_formulation.md)
 3. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
 4. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
+5. [factors_store/llm_refine/docs/stage_transition_signals.md](./factors_store/llm_refine/docs/stage_transition_signals.md)
+6. [factors_store/llm_refine/search/README.md](./factors_store/llm_refine/search/README.md)
 
 ### If you want to inspect research outputs
 
@@ -587,6 +593,7 @@ Near-term directions may include:
 
 * more target-conditioned search objectives,
 * stronger robustness-aware evaluation,
+* value/scoring layer for stage transition actions,
 * more automated promotion and reporting pipelines,
 * cleaner boundaries between family research and optional local downstream workflows,
 * and broader support for intraday and cross-frequency evaluation.

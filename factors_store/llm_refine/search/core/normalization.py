@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..knowledge.archive_queries import extract_economic_family_tags, extract_operator_skeleton, infer_mutation_class
+from ...knowledge.archive_queries import extract_economic_family_tags, extract_operator_skeleton, infer_mutation_class
 
 _OPERATOR_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\(")
 _TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")

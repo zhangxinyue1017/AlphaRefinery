@@ -8,9 +8,15 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .decision_context import DecisionContext, FamilyDecisionState
-from .decision_features import CandidateDecisionFeatures
-from .scoring import safe_float
+from .context import DecisionContext, FamilyDecisionState
+from .features import CandidateDecisionFeatures
+from .decorrelation_policy import (
+    DecorrelationPolicy,
+    assess_decorrelation,
+    decorate_with_decorrelation_assessment,
+    decorrelation_rerank_enabled,
+)
+from ..core.scoring import safe_float
 
 
 def _flag_value(item: dict[str, object], name: str, *, default: bool) -> float:
@@ -82,31 +88,17 @@ class DecisionEngine:
         self.context = context
 
     def decorrelation_rerank_enabled(self, records: list[dict[str, object]]) -> bool:
-        if self.context.decorrelation_enabled:
+        if decorrelation_rerank_enabled(records, decorrelation_targets_present=self.context.decorrelation_enabled):
             return True
-        for item in records:
-            if CandidateDecisionFeatures.from_record(item).has_decorrelation_metrics:
-                return True
-        return False
+        return any(CandidateDecisionFeatures.from_record(item).has_decorrelation_metrics for item in records)
 
     def _decorrelation_quality_gate_passed(self, item: dict[str, object]) -> bool:
-        features = CandidateDecisionFeatures.from_record(item)
-        return bool(
-            (
-                math.isfinite(features.quick_rank_icir)
-                and math.isfinite(features.net_sharpe)
-                and features.quick_rank_icir >= 0.15
-                and features.net_sharpe >= 1.2
-            )
-            or (math.isfinite(features.net_excess_ann_return) and features.net_excess_ann_return >= 0.05)
-            or (math.isfinite(features.net_ann_return) and features.net_ann_return >= 1.5)
-            or (
-                math.isfinite(features.neutral_quick_rank_icir)
-                and math.isfinite(features.neutral_net_sharpe)
-                and features.neutral_quick_rank_icir >= 0.08
-                and features.neutral_net_sharpe >= 1.0
-            )
+        policy = DecorrelationPolicy.from_search_policy(
+            None,
+            target_profile=self.context.target_profile,
+            decorrelation_targets_present=self.context.decorrelation_enabled,
         )
+        return bool(assess_decorrelation(dict(item), policy).quality_gate_passed)
 
     def _base_rerank_quality_score(self, item: dict[str, object]) -> float:
         status = str(item.get("status", "")).strip().lower()
@@ -123,54 +115,23 @@ class DecisionEngine:
         )
 
     def _decorrelation_adjustment(self, item: dict[str, object]) -> float:
-        features = CandidateDecisionFeatures.from_record(item)
-        nearest_corr = abs(features.corr_to_nearest_decorrelation_target)
-        avg_corr = features.avg_abs_decorrelation_target_corr
-        if not math.isfinite(nearest_corr) and not math.isfinite(avg_corr):
-            return 0.0
-
-        quality_gate_passed = self._decorrelation_quality_gate_passed(item)
-        adjustment = 0.0
-
-        if math.isfinite(nearest_corr):
-            if quality_gate_passed:
-                if nearest_corr <= 0.35:
-                    adjustment += 0.12
-                elif nearest_corr <= 0.60:
-                    adjustment += 0.06
-                elif nearest_corr <= 0.80:
-                    adjustment += 0.02
-                elif nearest_corr >= 0.95:
-                    adjustment -= 0.08
-                elif nearest_corr >= 0.85:
-                    adjustment -= 0.04
-            elif nearest_corr >= 0.90:
-                adjustment -= 0.03
-
-        if math.isfinite(avg_corr):
-            if quality_gate_passed:
-                if avg_corr <= 0.20:
-                    adjustment += 0.05
-                elif avg_corr <= 0.40:
-                    adjustment += 0.02
-                elif avg_corr >= 0.75:
-                    adjustment -= 0.05
-                elif avg_corr >= 0.60:
-                    adjustment -= 0.02
-            elif avg_corr >= 0.80:
-                adjustment -= 0.02
-
-        return adjustment
+        policy = DecorrelationPolicy.from_search_policy(
+            None,
+            target_profile=self.context.target_profile,
+            decorrelation_targets_present=self.context.decorrelation_enabled,
+        )
+        decorated = decorate_with_decorrelation_assessment(dict(item), policy)
+        return safe_float(decorated.get("decorrelation_adjustment"), default=0.0)
 
     def _decorate_record(self, item: dict[str, object]) -> dict[str, object]:
         out = dict(item)
         quality_score = self._base_rerank_quality_score(out)
-        adjustment = self._decorrelation_adjustment(out)
-        out["decorrelation_quality_gate_passed"] = self._decorrelation_quality_gate_passed(out)
-        out["decorrelation_quality_score"] = quality_score
-        out["decorrelation_adjustment"] = adjustment
-        out["decorrelation_adjusted_score"] = quality_score + adjustment
-        return out
+        policy = DecorrelationPolicy.from_search_policy(
+            None,
+            target_profile=self.context.target_profile,
+            decorrelation_targets_present=self.context.decorrelation_enabled,
+        )
+        return decorate_with_decorrelation_assessment(out, policy, base_quality_score=quality_score)
 
     def _decorrelation_rerank_sort_key(self, item: dict[str, object]) -> tuple[float, float, float, float, float, float, float, float]:
         adjusted = safe_float(item.get("decorrelation_adjusted_score"), default=float("-inf"))
@@ -246,6 +207,11 @@ class DecisionEngine:
                     "decorrelation_quality_score": safe_float(
                         item.get("decorrelation_quality_score"), default=float("nan")
                     ),
+                    "decorrelation_grade": str(item.get("decorrelation_grade", "") or ""),
+                    "decorrelation_score": safe_float(item.get("decorrelation_score"), default=float("nan")),
+                    "decorrelation_gate_action": str(item.get("decorrelation_gate_action", "") or ""),
+                    "decorrelation_gate_reason": str(item.get("decorrelation_gate_reason", "") or ""),
+                    "decorrelation_winner_allowed": bool(item.get("decorrelation_winner_allowed", True)),
                     "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
                     "decorrelation_adjusted_score": safe_float(
                         item.get("decorrelation_adjusted_score"), default=float("nan")
@@ -273,6 +239,11 @@ class DecisionEngine:
                 item.get("avg_abs_decorrelation_target_corr"), default=float("nan")
             ),
             "decorrelation_quality_gate_passed": bool(item.get("decorrelation_quality_gate_passed", False)),
+            "decorrelation_grade": str(item.get("decorrelation_grade", "") or ""),
+            "decorrelation_score": safe_float(item.get("decorrelation_score"), default=float("nan")),
+            "decorrelation_gate_action": str(item.get("decorrelation_gate_action", "") or ""),
+            "decorrelation_gate_reason": str(item.get("decorrelation_gate_reason", "") or ""),
+            "decorrelation_winner_allowed": bool(item.get("decorrelation_winner_allowed", True)),
             "decorrelation_quality_score": safe_float(item.get("decorrelation_quality_score"), default=float("nan")),
             "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
             "decorrelation_adjusted_score": safe_float(

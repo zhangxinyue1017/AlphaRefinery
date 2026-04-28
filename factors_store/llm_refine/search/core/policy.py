@@ -87,6 +87,27 @@ class SearchPolicy:
     dual_parent_similarity_threshold: float = 0.65
     dual_parent_min_expandability_advantage: float = 0.02
 
+    # De-correlation scoring/gating knobs.
+    decorrelation_excellent_corr: float = 0.35
+    decorrelation_good_corr: float = 0.55
+    decorrelation_acceptable_corr: float = 0.70
+    decorrelation_weak_corr: float = 0.85
+    decorrelation_suppress_winner_corr: float = 0.75
+    decorrelation_soft_drop_corr: float = 0.85
+    decorrelation_hard_drop_corr: float = 0.90
+    decorrelation_excellent_bonus: float = 0.12
+    decorrelation_good_bonus: float = 0.08
+    decorrelation_acceptable_bonus: float = 0.03
+    decorrelation_weak_penalty: float = 0.08
+    decorrelation_failed_penalty: float = 0.16
+    decorrelation_avg_corr_penalty_weight: float = 0.05
+    decorrelation_quality_icir_floor: float = 0.15
+    decorrelation_quality_sharpe_floor: float = 1.20
+    decorrelation_quality_excess_floor: float = 0.05
+    decorrelation_quality_ann_floor: float = 1.50
+    decorrelation_strong_quality_icir: float = 0.50
+    decorrelation_strong_quality_sharpe: float = 3.00
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -163,6 +184,12 @@ class SearchPolicy:
                 correlation_redundancy_weight=max(float(self.correlation_redundancy_weight), 0.14),
                 dual_parent_delta_threshold=max(float(self.dual_parent_delta_threshold), 0.22),
                 dual_parent_similarity_threshold=min(float(self.dual_parent_similarity_threshold), 0.55),
+                decorrelation_excellent_bonus=max(float(self.decorrelation_excellent_bonus), 0.25),
+                decorrelation_good_bonus=max(float(self.decorrelation_good_bonus), 0.15),
+                decorrelation_acceptable_bonus=max(float(self.decorrelation_acceptable_bonus), 0.05),
+                decorrelation_weak_penalty=max(float(self.decorrelation_weak_penalty), 0.20),
+                decorrelation_failed_penalty=max(float(self.decorrelation_failed_penalty), 0.35),
+                decorrelation_avg_corr_penalty_weight=max(float(self.decorrelation_avg_corr_penalty_weight), 0.12),
             )
         if normalized == "robustness":
             return replace(

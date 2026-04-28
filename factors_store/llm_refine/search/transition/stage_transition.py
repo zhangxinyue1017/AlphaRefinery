@@ -97,6 +97,11 @@ class StageTransitionEvidence:
     budget_exhausted: bool = False
     frontier_exhausted: bool = False
     has_decorrelation_targets: bool = False
+    frontier_nodes: tuple[dict[str, Any], ...] = ()
+    motif_state: dict[str, Any] = field(default_factory=dict)
+    redundancy_state: dict[str, Any] = field(default_factory=dict)
+    failure_state: dict[str, Any] = field(default_factory=dict)
+    budget_state: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -309,6 +314,7 @@ def build_stage_transition_evidence(
     failure_state = dict(state.failure_state or {})
     budget_state = dict(state.budget_state or {})
     redundancy_state = dict(state.redundancy_state or {})
+    motif_state = dict(state.motif_state or {})
     return StageTransitionEvidence(
         family=str(state.family_id),
         current_stage=str(action.stage_mode or state.stage or "auto"),
@@ -344,6 +350,11 @@ def build_stage_transition_evidence(
             or redundancy_state.get("decorrelation_targets")
             or redundancy_state.get("has_decorrelation_targets")
         ),
+        frontier_nodes=tuple(dict(item) for item in (state.frontier_nodes or ()) if isinstance(item, dict)),
+        motif_state=motif_state,
+        redundancy_state=redundancy_state,
+        failure_state=failure_state,
+        budget_state=budget_state,
     )
 
 

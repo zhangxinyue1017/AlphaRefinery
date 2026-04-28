@@ -1,25 +1,40 @@
 '''Search package for family-state refinement.
 
-Exports policy, state, engine, scoring, normalization, stage-transition, and run-ingest helpers.
+Public facade for the layered search implementation:
+core search mechanics, candidate decisions, stage transitions, and IO adapters.
 '''
 
 from __future__ import annotations
 
-from .decision_context import DecisionContext, FamilyDecisionState
-from .decision_engine import DecisionEngine
-from .decision_features import CandidateDecisionFeatures
-from .context_resolver import (
+from .decision import DecisionContext, DecisionEngine, FamilyDecisionState, CandidateDecisionFeatures
+from .decision import (
+    DecorrelationAssessment,
+    DecorrelationPolicy,
+    assess_decorrelation,
+    decorate_with_decorrelation_assessment,
+    decorrelation_rerank_enabled,
+)
+from .transition import (
     ContextEvidence,
     ContextProfile,
     OrchestrationProfile,
     resolve_context_profile,
     resolve_orchestration_profile,  # deprecated: use resolve_stage_transition / resolve_stage_transition_from_state
 )
-from .engine import SearchEngine
-from .frontier import SearchFrontier
-from .normalization import SearchNormalizer, build_search_normalizer
-from .policy import SearchPolicy
-from .run_ingest import (
+from .core import (
+    SearchBudget,
+    SearchEdge,
+    SearchEngine,
+    SearchFrontier,
+    SearchNode,
+    SearchNormalizer,
+    SearchPolicy,
+    build_search_normalizer,
+    compute_base_score,
+    compute_frontier_score,
+    winner_improved,
+)
+from .io import (
     load_candidate_records_from_completed_runs,
     load_multi_run_candidate_records,
     load_single_run_candidate_records,
@@ -27,8 +42,14 @@ from .run_ingest import (
     resolve_materialized_multi_run_dir,
     resolve_materialized_single_run_dir,
 )
-from .scoring import compute_base_score, compute_frontier_score, winner_improved
-from .stage_transition import (
+from .transition import SignalExtractor, StageTransitionSignals
+from .transition import (
+    ShadowPolicyRule,
+    compare_stage_transition_decisions,
+    get_shadow_stage_policy_table,
+    resolve_shadow_table_policy,
+)
+from .transition import (
     EvaluationFeedback,
     FamilyState,
     PhasePolicyRule,
@@ -41,13 +62,14 @@ from .stage_transition import (
     resolve_stage_transition,
     resolve_stage_transition_from_state,
 )
-from .state import SearchBudget, SearchEdge, SearchNode
 
 __all__ = [
     "SearchBudget",
     "CandidateDecisionFeatures",
     "ContextEvidence",
     "ContextProfile",
+    "DecorrelationAssessment",
+    "DecorrelationPolicy",
     "OrchestrationProfile",
     "DecisionContext",
     "DecisionEngine",
@@ -62,11 +84,19 @@ __all__ = [
     "SearchNode",
     "SearchNormalizer",
     "SearchPolicy",
+    "ShadowPolicyRule",
+    "SignalExtractor",
     "StageTransitionDecision",
     "StageTransitionEvidence",
+    "StageTransitionSignals",
+    "assess_decorrelation",
     "build_stage_transition_evidence",
     "build_stage_transition_shadow",
+    "compare_stage_transition_decisions",
+    "decorate_with_decorrelation_assessment",
+    "decorrelation_rerank_enabled",
     "get_phase_policy_table",
+    "get_shadow_stage_policy_table",
     "build_search_normalizer",
     "compute_base_score",
     "compute_frontier_score",
@@ -78,6 +108,7 @@ __all__ = [
     "resolve_materialized_single_run_dir",
     "resolve_context_profile",
     "resolve_orchestration_profile",
+    "resolve_shadow_table_policy",
     "resolve_stage_transition",
     "resolve_stage_transition_from_state",
     "winner_improved",

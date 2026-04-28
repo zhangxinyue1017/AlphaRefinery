@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .context_resolver import ContextProfile
+from ..transition.context_resolver import ContextProfile
 
 
 @dataclass(frozen=True)

@@ -36,14 +36,17 @@ from ..search import (
     FamilyState,
     RefinementAction,
     SearchPolicy,
+    SignalExtractor,
     build_stage_transition_evidence,
     build_stage_transition_shadow,
+    compare_stage_transition_decisions,
+    resolve_shadow_table_policy,
     resolve_stage_transition_from_state,
 )
-from ..search.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
-from ..search.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
-from ..search.scoring import pairwise_similarity, safe_float
-from ..search.state import SearchNode
+from ..search.transition.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
+from ..search.io.run_ingest import load_multi_run_candidate_records, resolve_materialized_child_run_dir
+from ..search.core.scoring import pairwise_similarity, safe_float
+from ..search.core.state import SearchNode
 
 
 _FAMILY_LOOP_SERIES_CACHE_ROOT = Path(__file__).resolve().parents[3] / "artifacts" / "cache" / "family_loop_series"
@@ -976,16 +979,47 @@ def build_family_loop_summary(
         selected_parent_kind="family_loop_anchor",
     )
     orchestration_context_profile = resolve_context_profile(orchestration_evidence)
+    frontier_nodes = tuple(
+        dict(item)
+        for item in (
+            list(broad_summary.get("frontier") or [])
+            + list(focused_summary.get("frontier") or [])
+            + list(broad_summary.get("nodes") or [])
+            + list(focused_summary.get("nodes") or [])
+        )
+        if isinstance(item, dict)
+    )
+    motif_state = {
+        "motif_counts": dict(broad_summary.get("motif_counts") or focused_summary.get("motif_counts") or {}),
+    }
+    no_improve_count = int(
+        focused_summary.get("consecutive_no_improve")
+        or broad_summary.get("consecutive_no_improve")
+        or 0
+    )
+    broad_stop_lower = str(state.broad_stop_reason or "").lower()
+    focused_stop_lower = str(state.focused_stop_reason or "").lower()
+    frontier_exhausted = bool("frontier" in broad_stop_lower and "exhaust" in broad_stop_lower) or bool(
+        "frontier" in focused_stop_lower and "exhaust" in focused_stop_lower
+    )
+    budget_exhausted = bool("budget" in broad_stop_lower and "exhaust" in broad_stop_lower) or bool(
+        "budget" in focused_stop_lower and "exhaust" in focused_stop_lower
+    )
     family_state = FamilyState(
         family_id=family,
         stage="focused_refine" if focused_run_dir is not None else "family_loop",
         target_profile=target_profile,
         best_node=dict(state.focused_best_node or state.broad_best_node or {}),
+        frontier_nodes=frontier_nodes,
+        motif_state=motif_state,
         redundancy_state={},
-        failure_state={},
+        failure_state={
+            "validation_fail_count": int(dict(broad_snapshot or {}).get("evaluation_failed_count") or 0),
+        },
         budget_state={
-            "budget_exhausted": False,
-            "frontier_exhausted": False,
+            "consecutive_no_improve": no_improve_count,
+            "budget_exhausted": budget_exhausted,
+            "frontier_exhausted": frontier_exhausted,
             "children_collected": int(dict(broad_snapshot or {}).get("total_candidates") or 0),
             "children_added_to_search": int(dict(broad_snapshot or {}).get("evaluated_candidate_count") or 0),
         },
@@ -1003,8 +1037,12 @@ def build_family_loop_summary(
         best_anchor=dict((anchor_selection or {}).get("best_anchor") or {}),
         passed_anchor_count=len((anchor_selection or {}).get("passed_candidates") or []),
         focused_best_node=dict(state.focused_best_node or {}),
+        consecutive_no_improve=no_improve_count,
         children_collected=int(dict(broad_snapshot or {}).get("total_candidates") or 0),
         children_added_to_search=int(dict(broad_snapshot or {}).get("evaluated_candidate_count") or 0),
+        validation_fail_count=int(dict(broad_snapshot or {}).get("evaluation_failed_count") or 0),
+        budget_exhausted=budget_exhausted,
+        frontier_exhausted=frontier_exhausted,
     )
     stage_transition_evidence = build_stage_transition_evidence(
         family_state,
@@ -1016,7 +1054,17 @@ def build_family_loop_summary(
         refinement_action,
         evaluation_feedback,
     )
-    # Advisory stage_transition is now the primary execution driver.
+    stage_transition_signals = SignalExtractor.from_evidence(stage_transition_evidence)
+    stage_transition_shadow_table = resolve_shadow_table_policy(
+        stage_transition_evidence,
+        stage_transition_signals,
+    )
+    stage_transition_shadow_compare = compare_stage_transition_decisions(
+        legacy_decision=stage_transition,
+        shadow_decision=stage_transition_shadow_table,
+    )
+    # Legacy if/else transition remains the primary execution driver; the table
+    # policy below only emits a shadow decision for artifact comparison.
     orchestration_profile = OrchestrationProfile(
         recommended_stage_mode=stage_transition.next_stage,
         round_strategy=stage_transition.action,
@@ -1069,6 +1117,10 @@ def build_family_loop_summary(
         "evaluation_feedback": evaluation_feedback.to_dict(),
         "stage_transition_evidence": stage_transition_evidence.to_dict(),
         "stage_transition": stage_transition.to_dict(),
+        "stage_transition_legacy": stage_transition.to_dict(),
+        "stage_transition_signals": stage_transition_signals.to_dict(),
+        "stage_transition_shadow_table": stage_transition_shadow_table.to_dict(),
+        "stage_transition_shadow_compare": stage_transition_shadow_compare,
         "family_state_decision": stage_transition.to_dict(),
         "legacy_orchestration_decision": legacy_decision,
         "stage_transition_shadow": stage_transition_shadow,
@@ -1093,6 +1145,9 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     orchestration_profile = dict(summary.get("orchestration_profile") or {})
     stage_transition = dict(summary.get("stage_transition") or {})
     stage_transition_shadow = dict(summary.get("stage_transition_shadow") or {})
+    stage_transition_signals = dict(summary.get("stage_transition_signals") or {})
+    stage_transition_shadow_table = dict(summary.get("stage_transition_shadow_table") or {})
+    stage_transition_shadow_compare = dict(summary.get("stage_transition_shadow_compare") or {})
     stage_transition_tags = list(stage_transition.get("rationale_tags") or [])
 
     def _metric_line(payload: dict[str, Any]) -> str:
@@ -1164,6 +1219,28 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- family_state_action: `{stage_transition_shadow.get('family_state_action', '')}`",
         f"- stage_agrees: `{stage_transition_shadow.get('stage_agrees', '')}`",
         f"- action_agrees: `{stage_transition_shadow.get('action_agrees', '')}`",
+        "",
+        "## Stage Transition Signals",
+        f"- anchor_strength: `{stage_transition_signals.get('anchor_strength', '')}`",
+        f"- winner_quality: `{stage_transition_signals.get('winner_quality', '')}`",
+        f"- material_gain: `{stage_transition_signals.get('material_gain', '')}`",
+        f"- material_gain_score: `{stage_transition_signals.get('material_gain_score', '')}`",
+        f"- corr_pressure: `{stage_transition_signals.get('corr_pressure', '')}`",
+        f"- turnover_pressure: `{stage_transition_signals.get('turnover_pressure', '')}`",
+        f"- frontier_health: `{stage_transition_signals.get('frontier_health', '')}`",
+        f"- no_improve_count: `{stage_transition_signals.get('no_improve_count', '')}`",
+        f"- budget_exhausted: `{stage_transition_signals.get('budget_exhausted', '')}`",
+        f"- frontier_exhausted: `{stage_transition_signals.get('frontier_exhausted', '')}`",
+        f"- model_consensus: `{stage_transition_signals.get('model_consensus', '')}`",
+        f"- validation_fail_count: `{stage_transition_signals.get('validation_fail_count', '')}`",
+        "",
+        "## Shadow Table Policy",
+        f"- shadow_next_stage: `{stage_transition_shadow_table.get('next_stage', '')}`",
+        f"- shadow_action: `{stage_transition_shadow_table.get('action', '')}`",
+        f"- shadow_confidence: `{stage_transition_shadow_table.get('confidence', '')}`",
+        f"- shadow_stage_agrees: `{stage_transition_shadow_compare.get('stage_agrees', '')}`",
+        f"- shadow_action_agrees: `{stage_transition_shadow_compare.get('action_agrees', '')}`",
+        f"- shadow_reason: {stage_transition_shadow_table.get('reason', '')}",
         "",
         "## Broad Strongest",
         f"- factor: `{broad.get('factor_name', '')}`",

@@ -9,7 +9,8 @@
 - 🎯 **Target-conditioned search** beyond raw-alpha-only optimization
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
 - 🪢 **Shared context alignment** across prompting, decision trace, and orchestration
-- 🪄 **De-correlation-aware refinement** for lower-redundancy candidate generation
+- 🪄 **De-correlation-aware refinement** with unified assessment, rerank diagnostics, and early complementarity gates
+- 🔍 **Auditable transition policy** with explicit signals and a shadow table running beside legacy stage logic
 
 ---
 
@@ -175,7 +176,12 @@ The goal is to make the refinement loop **more consistent, more traceable, and e
 - De-correlation refine support
   - target-aware prompt block
   - de-correlation diagnostics
-  - rerank hook
+  - unified decorrelation assessment
+  - rerank hook and complementarity early gate
+- Stage-transition signal layer
+  - explicit signal extraction
+  - shadow table policy
+  - legacy / shadow decision comparison in summaries
 - `NA-heavy keep / best_node` tightening
 
 ---
@@ -243,6 +249,11 @@ factors_store/llm_refine/
 ├── evaluation/
 ├── knowledge/
 └── search/
+    ├── README.md
+    ├── core/
+    ├── decision/
+    ├── transition/
+    └── io/
 ```
 
 ### Responsibility by layer
@@ -270,7 +281,11 @@ factors_store/llm_refine/
   * retrieval / reflection / next experiment planning
 * `search/`
 
-  * frontier / policy / engine / objectives / path evaluation
+  * layered search and control logic
+  * `core/`: frontier / policy / engine / objectives / path evaluation
+  * `decision/`: rerank, winner / keep selection, decorrelation policy
+  * `transition/`: stage evidence, signal extraction, legacy and shadow transition policy
+  * `io/`: evaluated-run artifact ingestion
 * `docs/`
 
   * subsystem design, tuning, and usage notes
@@ -330,6 +345,21 @@ The goal is to let broad / focused / family-loop stages make **more coherent dec
 
 ---
 
+### Search package layering
+
+The search package has been split into explicit sublayers:
+
+| Layer | Path | Owns |
+| --- | --- | --- |
+| Core search | `search/core/` | `SearchEngine`, frontier, scoring, objectives, `SearchPolicy`, search state |
+| Candidate decision | `search/decision/` | `DecisionEngine`, decision features, decorrelation assessment and gates |
+| Stage transition | `search/transition/` | context resolution, transition evidence, signals, legacy and shadow policy |
+| IO adapters | `search/io/` | loading completed run artifacts into search records |
+
+The old flat import paths are kept as compatibility wrappers. New code should prefer the layered paths.
+
+---
+
 ## Additional Notes on Shared Context Resolution
 
 Between `DecisionContext` and `PromptPlan`, the subsystem has also added a lighter shared interpretation layer:
@@ -380,6 +410,40 @@ The long-term goal is:
 
 ---
 
+## Additional Notes on Stage Transition Signals and Shadow Table
+
+Stage transition still uses the legacy if/else path as the formal execution path.
+In parallel, the subsystem now extracts explicit transition signals and runs a shadow table policy for comparison.
+
+The main signals include:
+
+* `anchor_strength`
+* `winner_quality`
+* `material_gain` and `material_gain_score`
+* `corr_pressure`
+* `turnover_pressure`
+* `frontier_health`
+* `no_improve_count`
+* `budget_exhausted`
+* `frontier_exhausted`
+* `model_consensus`
+* `validation_fail_count`
+
+The shadow policy currently recommends one of:
+
+* `continue_focused`
+* `reopen_broad`
+* `switch_to_complementarity`
+* `confirmation`
+* `terminate`
+
+Summaries and artifacts record legacy decision, shadow decision, signal values, and disagreement diagnostics.
+This makes it possible to compare table-style routing against the legacy transition path before allowing it to control execution.
+
+For the full table and thresholds, see [docs/stage_transition_signals.md](./docs/stage_transition_signals.md).
+
+---
+
 ## Additional Notes on De-correlation Refine
 
 De-correlation is not a globally forced objective.
@@ -389,7 +453,18 @@ Currently implemented pieces include:
 
 * de-correlation target sets in prompting,
 * nearest-target / average-target correlation diagnostics in evaluation,
-* soft rerank adjustment hooks.
+* unified `DecorrelationAssessment` in `search/decision/decorrelation_policy.py`,
+* rerank adjustment hooks,
+* three-level strong gate when complementarity mode or explicit decorrelation targets are active,
+* summary / rerank preview fields such as `decorrelation_grade`, `decorrelation_score`, and `decorrelation_gate_reason`.
+
+The first strong-gate version is intentionally tiered rather than all-or-nothing:
+
+| Condition | Gate behavior |
+| --- | --- |
+| very high nearest correlation | drop candidate |
+| high nearest correlation without material gain | drop candidate |
+| elevated correlation without strong quality | keep candidate possible, but suppress winner eligibility |
 
 This is most useful when:
 
@@ -501,7 +576,7 @@ In short:
 `target_profile` is the objective preference of a round.
 It decides **what kind of factor this round wants**.
 
-Current options come from [policy.py](./search/policy.py):
+Current options come from [policy.py](./search/core/policy.py):
 
 | `target_profile`  | Meaning                                                 | Emphasis                                | Best for                             |
 | ----------------- | ------------------------------------------------------- | --------------------------------------- | ------------------------------------ |
@@ -521,7 +596,7 @@ In short:
 `policy_preset` is the search-style package.
 It decides **how aggressively or conservatively the round should search**.
 
-Current options also come from [policy.py](./search/policy.py):
+Current options also come from [policy.py](./search/core/policy.py):
 
 | `policy_preset` | Meaning                              | Typical characteristics                                | Best for                      |
 | --------------- | ------------------------------------ | ------------------------------------------------------ | ----------------------------- |
@@ -540,7 +615,7 @@ In short:
 `mode` is closer to the searcher organization itself.
 It decides **how the search tree or frontier is traversed**.
 
-Typical modes in [policy.py](./search/policy.py) include:
+Typical modes in [policy.py](./search/core/policy.py) include:
 
 | `mode`                   | Meaning                           | Typical behavior                                                               | Best for                           |
 | ------------------------ | --------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
@@ -618,6 +693,14 @@ Interfaces currently reserved:
 ### Want to tune `SearchPolicy`
 
 * [docs/policy_tuning.md](./docs/policy_tuning.md)
+
+### Want to inspect the `search/` package layout
+
+* [search/README.md](./search/README.md)
+
+### Want to inspect stage-transition signals / shadow table policy
+
+* [docs/stage_transition_signals.md](./docs/stage_transition_signals.md)
 
 ### Want to inspect `research_keep / research_winner / promotion`
 

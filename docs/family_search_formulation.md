@@ -780,7 +780,7 @@ def resolve_stage_transition_from_state(
     ...
 ```
 
-There is also a lower-level compatibility resolver:
+There is also a lower-level evidence resolver:
 
 ```python
 def resolve_stage_transition(evidence: StageTransitionEvidence) -> StageTransitionDecision:
@@ -809,7 +809,7 @@ observed family-state signals to the next advisory action.
 The code version of this table lives in:
 
 ```text
-factors_store/llm_refine/search/stage_transition.py
+factors_store/llm_refine/search/transition/stage_transition.py
 ```
 
 Initial rule:
