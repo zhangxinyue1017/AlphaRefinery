@@ -1305,6 +1305,8 @@ def main() -> int:
                 run_id=run_id,
                 round_id=int(effective_round_id),
                 parent_candidate_id=effective_parent_candidate_id,
+                parent_factor_name=selected_parent.factor_name,
+                parent_expression=selected_parent.expression,
                 archive_db=archive_db,
                 auto_apply_promotion=args.auto_apply_promotion,
                 stage_mode=stage_mode,

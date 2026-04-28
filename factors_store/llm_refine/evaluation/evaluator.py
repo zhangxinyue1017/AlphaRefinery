@@ -188,11 +188,16 @@ def _baseline_items(
     registry: FactorRegistry,
     *,
     parent_factor_name: str = "",
+    parent_expression: str = "",
+    parent_candidate_id: str = "",
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     effective_parent_name = str(parent_factor_name or "").strip() or resolve_preferred_refine_seed(family)
+    explicit_parent_expression = str(parent_expression or "").strip()
 
     def _resolve_compute_name(name: str) -> str:
+        if name == effective_parent_name and explicit_parent_expression:
+            return ""
         candidates = [name]
         if name.startswith("llmgen."):
             candidates.append(f"llm_refined.{name.split('.', 1)[1]}")
@@ -207,6 +212,8 @@ def _baseline_items(
         return name
 
     def _expr_for(name: str, *, compute_name: str) -> str:
+        if name == effective_parent_name and explicit_parent_expression:
+            return explicit_parent_expression
         if name in family.formulas:
             return resolve_family_formula(family, name)
         try:
@@ -225,7 +232,7 @@ def _baseline_items(
             "expression": _expr_for(name, compute_name=compute_name),
             "candidate_rank": 0,
             "validation_warnings": (),
-            "candidate_id": make_seed_candidate_id(name),
+            "candidate_id": str(parent_candidate_id or "").strip() if role == "parent" and name == effective_parent_name else make_seed_candidate_id(name),
             "round_id": 0,
             "parent_candidate_id": "",
         }
@@ -360,10 +367,16 @@ def _compute_item_series(
     registry: FactorRegistry,
     data: dict[str, pd.Series],
 ) -> pd.Series:
+    expression = str(item.get("expression", "")).strip()
+    if not str(item.get("compute_factor_name") or "").strip() and expression:
+        return _compute_expression_series(
+            expression=expression,
+            data=data,
+            factor_name=str(item.get("factor_name", "")),
+        )
     try:
         return _compute_factor_series(item=item, registry=registry, data=data)
     except KeyError:
-        expression = str(item.get("expression", "")).strip()
         if not expression:
             raise
         return _compute_expression_series(
@@ -1366,6 +1379,9 @@ def _evaluate_one_window(
     stage_mode: str = "auto",
     target_profile: str = "raw_alpha",
     decorrelation_targets: tuple[str, ...] = (),
+    parent_factor_name_override: str = "",
+    parent_expression: str = "",
+    parent_candidate_id: str = "",
 ) -> tuple[pd.DataFrame, dict[str, pd.Series], dict[str, Any], dict[str, Any]]:
     registry = create_default_registry()
     register_proposal_candidates(registry, proposal=proposal, name_prefix=name_prefix)
@@ -1380,10 +1396,18 @@ def _evaluate_one_window(
     )
     prepared = prepare_backtest_inputs(data, horizon=int(settings["horizon"]))
 
-    parent_factor_name = str(proposal.parent_factor or "").strip() or resolve_preferred_refine_seed(family)
-    items = _baseline_items(family, registry, parent_factor_name=parent_factor_name) + _candidate_items(
-        proposal, name_prefix=name_prefix
+    parent_factor_name = (
+        str(parent_factor_name_override or "").strip()
+        or str(proposal.parent_factor or "").strip()
+        or resolve_preferred_refine_seed(family)
     )
+    items = _baseline_items(
+        family,
+        registry,
+        parent_factor_name=parent_factor_name,
+        parent_expression=parent_expression,
+        parent_candidate_id=parent_candidate_id,
+    ) + _candidate_items(proposal, name_prefix=name_prefix)
     item_by_name = {item["factor_name"]: item for item in items}
     series_cache: dict[str, pd.Series] = {}
     rows: list[dict[str, Any]] = []
@@ -1691,6 +1715,8 @@ def evaluate_refinement_run(
     run_id: str = "",
     round_id: int = 1,
     parent_candidate_id: str = "",
+    parent_factor_name: str = "",
+    parent_expression: str = "",
     archive_db: str | Path = DEFAULT_ARCHIVE_DB,
     auto_apply_promotion: bool = False,
     stage_mode: str = "auto",
@@ -1735,6 +1761,9 @@ def evaluate_refinement_run(
                 stage_mode=stage_mode,
                 target_profile=target_profile,
                 decorrelation_targets=decorrelation_targets,
+                parent_factor_name_override=parent_factor_name,
+                parent_expression=parent_expression,
+                parent_candidate_id=parent_candidate_id,
             )
             stage_outputs = _write_window_outputs(
                 run_path=run_path,
@@ -1796,6 +1825,9 @@ def evaluate_refinement_run(
             stage_mode=stage_mode,
             target_profile=target_profile,
             decorrelation_targets=decorrelation_targets,
+            parent_factor_name_override=parent_factor_name,
+            parent_expression=parent_expression,
+            parent_candidate_id=parent_candidate_id,
         )
         outputs.update(
             _write_window_outputs(
