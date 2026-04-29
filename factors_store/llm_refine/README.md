@@ -454,6 +454,13 @@ and a recommended escape mode. It does not control the main path yet; it is
 intended for offline auditing before we promote saturation into a scoring/value
 layer.
 
+Round execution is separated from stage routing. `StageTransitionDecision`
+answers the research-state question, while `RoundTransitionPlan` answers whether
+the runner may launch another round under `audit_only`, `advisory`, or
+`guarded_control` authority. Scheduler guarded control can grant bounded policy
+extensions via `--transition-authority guarded_control`,
+`--max-policy-extensions`, and `--max-total-rounds`.
+
 ---
 
 ## Additional Notes on De-correlation Refine

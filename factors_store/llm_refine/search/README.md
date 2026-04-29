@@ -8,7 +8,7 @@ and artifact adapters stay separate.
 | --- | --- | --- |
 | Core search | `search/core/` | Search nodes, budgets, frontier ranking, search scoring, normalizers, target-profile weights. |
 | Candidate decision | `search/decision/` | Candidate features, winner/keep rerank, decorrelation scoring and gates. |
-| Stage transition | `search/transition/` | Runtime context, signal extraction, table-driven stage policy, legacy audit helpers. |
+| Stage transition | `search/transition/` | Runtime context, signal extraction, table-driven stage policy, round-transition planning, legacy audit helpers. |
 | IO adapters | `search/io/` | Loading evaluated run artifacts into search records. |
 | Policy config | `search/policy_config.py` | Versioned thresholds and weights shared by signals, decorrelation, and advisory saturation. |
 
@@ -40,6 +40,7 @@ implementation modules have been removed to keep the package boundary explicit.
 - `core/` answers: which parent/search node should we explore next?
 - `decision/` answers: which evaluated child should be kept or treated as winner?
 - `transition/` answers: which stage/action should the family run next?
+- `transition/round_controller.py` answers: should the runner execute another round under the current authority/budget?
 - `io/` answers: how do completed run artifacts become search records?
 
 ## Current Policy Surfaces
@@ -51,6 +52,7 @@ implementation modules have been removed to keep the package boundary explicit.
 | De-correlation policy | `decision/decorrelation_policy.py` | Unified grade, score, rerank adjustment, and complementarity/decorrelation gates. |
 | Saturation assessment | `decision/saturation_policy.py` | Advisory continuous family-saturation score written to artifacts; not a main-path action in v1. |
 | Stage transition policy | `transition/stage_transition.py`, `transition/signals.py`, `transition/table_policy.py` | Formal table-policy decision plus explicit signals and legacy audit comparison. |
+| Round transition controller | `transition/round_controller.py` | Converts the stage decision into an execution plan with authority and budget gates. |
 | Shared policy defaults | `policy_config.py` | `DEFAULT_POLICY_CONFIG` keeps search weights, thresholds, and overlays visible instead of scattered through code. |
 
 For the stage signal thresholds and stage policy table, see
