@@ -1269,6 +1269,7 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"- recommended_escape_mode: `{saturation_assessment.get('recommended_escape_mode', '')}`",
         f"- components: `corr={saturation_components.get('corr', '')}, "
         f"motif={saturation_components.get('motif', '')}, "
+        f"turnover={saturation_components.get('turnover', '')}, "
         f"plateau={saturation_components.get('plateau', '')}, "
         f"frontier={saturation_components.get('frontier', '')}, "
         f"anchor_reuse={saturation_components.get('anchor_reuse', '')}`",

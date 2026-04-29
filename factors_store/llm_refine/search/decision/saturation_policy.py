@@ -90,6 +90,9 @@ class SaturationAnalyzer:
             frontier_diag.get("children_added_to_search"),
             _safe_int(getattr(evidence, "children_added_to_search", 0)),
         )
+        motif_count = _safe_int(frontier_diag.get("motif_count"))
+        branch_count = _safe_int(frontier_diag.get("branch_count"))
+        model_count = _safe_int(frontier_diag.get("model_count"))
         passed_anchor_count = _safe_int(anchor_diag.get("passed_anchor_count"))
 
         corr_component = max(
@@ -105,7 +108,14 @@ class SaturationAnalyzer:
         plateau_component = _clamp(
             _safe_int(signals.no_improve_count) / max(float(thresholds.max_no_improve_count), 1.0)
         )
-        frontier_component = _ORDERED_FRONTIER.get(str(signals.frontier_health), 0.0)
+        turnover_component = _ORDERED_PRESSURE.get(str(signals.turnover_pressure), 0.0)
+        frontier_component = self._frontier_component(
+            signals=signals,
+            children_added=children_added,
+            motif_count=motif_count,
+            branch_count=branch_count,
+            model_count=model_count,
+        )
         if children_added <= 1 and signals.winner_quality in {"none", "weak"}:
             frontier_component = max(frontier_component, 0.60)
 
@@ -118,6 +128,7 @@ class SaturationAnalyzer:
         components = {
             "corr": round(corr_component, 4),
             "motif": round(motif_component, 4),
+            "turnover": round(turnover_component, 4),
             "plateau": round(plateau_component, 4),
             "frontier": round(frontier_component, 4),
             "anchor_reuse": round(anchor_reuse_component, 4),
@@ -125,6 +136,7 @@ class SaturationAnalyzer:
         score = (
             components["corr"] * thresholds.corr_weight
             + components["motif"] * thresholds.motif_weight
+            + components["turnover"] * thresholds.turnover_weight
             + components["plateau"] * thresholds.plateau_weight
             + components["frontier"] * thresholds.frontier_weight
             + components["anchor_reuse"] * thresholds.anchor_reuse_weight
@@ -150,10 +162,14 @@ class SaturationAnalyzer:
                 "family_overlap": round(family_overlap, 4),
                 "family_motif_saturation_penalty": round(saturation_penalty, 4),
                 "children_added_to_search": children_added,
+                "motif_count": motif_count,
+                "branch_count": branch_count,
+                "model_count": model_count,
                 "passed_anchor_count": passed_anchor_count,
                 "weights": {
                     "corr": thresholds.corr_weight,
                     "motif": thresholds.motif_weight,
+                    "turnover": thresholds.turnover_weight,
                     "plateau": thresholds.plateau_weight,
                     "frontier": thresholds.frontier_weight,
                     "anchor_reuse": thresholds.anchor_reuse_weight,
@@ -183,6 +199,8 @@ class SaturationAnalyzer:
                 return "retire_family"
             return "fork_new_seed"
         if grade == "high":
+            if signals.turnover_pressure in {"high", "critical"}:
+                return "switch_to_complementarity"
             if signals.corr_pressure in {"high", "critical"} or high_corr_count > 0:
                 return "switch_to_complementarity"
             return "diversify_within_family"
@@ -190,3 +208,26 @@ class SaturationAnalyzer:
             return "diversify_within_family"
         return "continue_local"
 
+    def _frontier_component(
+        self,
+        *,
+        signals: StageTransitionSignals,
+        children_added: int,
+        motif_count: int,
+        branch_count: int,
+        model_count: int,
+    ) -> float:
+        thresholds = self.config.saturation
+        frontier_health = str(signals.frontier_health or "low")
+        if frontier_health != "medium":
+            return _ORDERED_FRONTIER.get(frontier_health, 0.0)
+        component = float(thresholds.frontier_medium_base)
+        if motif_count <= 1:
+            component += float(thresholds.frontier_medium_single_motif_penalty)
+        if branch_count <= 1:
+            component += float(thresholds.frontier_medium_single_branch_penalty)
+        if model_count <= 1:
+            component += float(thresholds.frontier_medium_single_model_penalty)
+        if children_added <= 2:
+            component += 0.05
+        return _clamp(component, high=float(thresholds.frontier_medium_cap))

@@ -122,21 +122,27 @@ class DecorrelationPolicyConfig:
 
 @dataclass(frozen=True)
 class SaturationPolicyConfig:
-    version: str = "saturation_policy_v1"
-    low_score: float = 0.25
-    medium_score: float = 0.50
-    high_score: float = 0.70
-    critical_score: float = 0.85
-    corr_weight: float = 0.35
-    motif_weight: float = 0.25
-    plateau_weight: float = 0.20
-    frontier_weight: float = 0.10
-    anchor_reuse_weight: float = 0.10
+    version: str = "saturation_policy_v1_1"
+    low_score: float = 0.0
+    medium_score: float = 0.10
+    high_score: float = 0.25
+    critical_score: float = 0.45
+    corr_weight: float = 0.25
+    motif_weight: float = 0.18
+    turnover_weight: float = 0.25
+    plateau_weight: float = 0.12
+    frontier_weight: float = 0.08
+    anchor_reuse_weight: float = 0.12
     plateau_no_improve_count: int = 2
     max_no_improve_count: int = 4
     motif_usage_reference: int = 4
     family_overlap_reference: float = 0.80
     high_corr_reference_count: int = 3
+    frontier_medium_base: float = 0.15
+    frontier_medium_single_motif_penalty: float = 0.10
+    frontier_medium_single_branch_penalty: float = 0.10
+    frontier_medium_single_model_penalty: float = 0.10
+    frontier_medium_cap: float = 0.45
 
 
 @dataclass(frozen=True)

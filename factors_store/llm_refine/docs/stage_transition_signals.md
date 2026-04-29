@@ -206,19 +206,29 @@ being over-mined.
 | `recommended_escape_mode` | Advisory hint: `continue_local`, `diversify_within_family`, `switch_to_complementarity`, `fork_new_seed`, or `retire_family` |
 | `components.corr` | Pressure from high-correlation diagnostics |
 | `components.motif` | Motif/family crowding pressure |
+| `components.turnover` | Pressure from high-turnover runtime signals |
 | `components.plateau` | Consecutive no-improve pressure |
-| `components.frontier` | Weak/exhausted frontier pressure |
+| `components.frontier` | Weak/exhausted frontier pressure, with medium frontier refined by motif/branch/model diversity |
 | `components.anchor_reuse` | Approximate repeated-anchor / no-anchor pressure |
 
-Default saturation weights live in `SaturationPolicyConfig`:
+Default saturation v1.1 weights live in `SaturationPolicyConfig`:
 
 | Component | Weight |
 |---|---:|
-| `corr` | `0.35` |
-| `motif` | `0.25` |
-| `plateau` | `0.20` |
-| `frontier` | `0.10` |
-| `anchor_reuse` | `0.10` |
+| `corr` | `0.25` |
+| `motif` | `0.18` |
+| `turnover` | `0.25` |
+| `plateau` | `0.12` |
+| `frontier` | `0.08` |
+| `anchor_reuse` | `0.12` |
+
+Default grade thresholds:
+
+| Grade | Score floor |
+|---|---:|
+| `medium` | `0.10` |
+| `high` | `0.25` |
+| `critical` | `0.45` |
 
 The main table policy does not consume `saturation_assessment` in v1. This keeps
 the production decision surface small while collecting enough data for a later
