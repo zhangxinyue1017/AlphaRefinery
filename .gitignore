@@ -59,6 +59,7 @@ factors_store/factors/factor365_pattern.py
 # Local maintenance helpers
 scripts/organize_runs_by_family.py
 scripts/refresh_run_indexes.py
+scripts/quick_eval_factor.py
 update_panel_from_baostock.sh
 factors_store/autofactorset_bridge/
 

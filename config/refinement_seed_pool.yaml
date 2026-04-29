@@ -41,7 +41,7 @@ seed_groups:
   aliases:
   - alpha101.alpha006
   relation_note: alpha003 与 alpha006 本质上是同一套开盘价-成交活跃度逻辑，只是一个偏 rank 形式、一个偏 raw 形式。
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/alpha101_like.py
   - factors_store/factors/alpha191_like.py
@@ -85,7 +85,7 @@ seed_groups:
   priority: high
   canonical_seed: alpha101.alpha013
   aliases: []
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/alpha101_like.py
   - factors_store/factors/alpha191_like.py
@@ -127,7 +127,7 @@ seed_groups:
   priority: high
   canonical_seed: alpha101.alpha016
   aliases: []
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/alpha101_like.py
   - factors_store/factors/alpha191_like.py
@@ -169,7 +169,7 @@ seed_groups:
   priority: high
   canonical_seed: alpha101.alpha044
   aliases: []
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/alpha101_like.py
   - factors_store/factors/alpha191_like.py
@@ -210,7 +210,7 @@ seed_groups:
   priority: high
   canonical_seed: alpha101.alpha040
   aliases: []
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/alpha101_like.py
   - factors_store/factors/alpha191_like.py
@@ -251,7 +251,7 @@ seed_groups:
   priority: high
   canonical_seed: alpha101.alpha069
   aliases: []
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/alpha101_like.py
   formulas:
@@ -406,7 +406,7 @@ seed_groups:
   canonical_seed: qp_momentum.amp_spread_ret_60_q30
   aliases:
   - qp_momentum.amp_spread_ret_120_q30
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/qp_momentum.py
   formulas:
@@ -519,7 +519,7 @@ seed_groups:
   canonical_seed: qp_pressure.apb_5
   aliases:
   - qp_pressure.apb_30
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/qp_pressure.py
   formulas:
@@ -545,7 +545,7 @@ seed_groups:
   aliases:
   - qp_pressure.low_price_volume_bias_20
   - qp_pressure.low_price_volume_share_20
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/qp_pressure.py
   formulas:
@@ -621,7 +621,7 @@ seed_groups:
   aliases:
   - gp_mined.volume_mean60_over_volume
   - gp_mined.down_volume_share_30
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/gp_mined.py
   formulas:
@@ -650,7 +650,7 @@ seed_groups:
   - gp_mined.low5min_over_close
   - gp_mined.low10min_over_close
   - gp_mined.low_over_close
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/gp_mined.py
   formulas:
@@ -680,7 +680,7 @@ seed_groups:
   aliases:
   - gp_mined.close_quantile10_over_close
   - gp_mined.open_quantile5_over_close
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/gp_mined.py
   formulas:
@@ -704,7 +704,7 @@ seed_groups:
   priority: medium
   canonical_seed: gp_mined.cov_ret_open_beta_r2_abs
   aliases: []
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/gp_mined.py
   formulas:
@@ -728,7 +728,7 @@ seed_groups:
   canonical_seed: factor365.positive_intraday_reversal_frequency_20
   aliases:
   - factor365.abnormal_positive_intraday_reversal_frequency_12m
-  direction: positive_as_is
+  direction: use_negative_sign
   implementation_paths:
   - factors_store/factors/factor365_daily.py
   formulas:
