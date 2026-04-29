@@ -7,6 +7,7 @@ core search mechanics, candidate decisions, stage transitions, and IO adapters.
 from __future__ import annotations
 
 from .decision import DecisionContext, DecisionEngine, FamilyDecisionState, CandidateDecisionFeatures
+from .decision import SaturationAnalyzer, SaturationAssessment
 from .decision import (
     DecorrelationAssessment,
     DecorrelationPolicy,
@@ -42,11 +43,25 @@ from .io import (
     resolve_materialized_multi_run_dir,
     resolve_materialized_single_run_dir,
 )
+from .policy_config import (
+    DEFAULT_POLICY_CONFIG,
+    RefinePolicyConfig,
+    SearchPolicyBaseConfig,
+    SearchPolicyConfig,
+    SearchPolicyModeConfig,
+    SearchPolicyPresetConfig,
+    SearchPolicyTargetProfileConfig,
+    get_default_policy_config,
+    policy_config_from_mapping,
+    policy_config_to_dict,
+)
 from .transition import SignalExtractor, StageTransitionSignals
 from .transition import (
     ShadowPolicyRule,
     compare_stage_transition_decisions,
+    get_stage_policy_table,
     get_shadow_stage_policy_table,
+    resolve_stage_table_policy,
     resolve_shadow_table_policy,
 )
 from .transition import (
@@ -68,6 +83,7 @@ __all__ = [
     "CandidateDecisionFeatures",
     "ContextEvidence",
     "ContextProfile",
+    "DEFAULT_POLICY_CONFIG",
     "DecorrelationAssessment",
     "DecorrelationPolicy",
     "OrchestrationProfile",
@@ -78,14 +94,22 @@ __all__ = [
     "FamilyState",
     "PhasePolicyRule",
     "RefinementAction",
+    "RefinePolicyConfig",
     "SearchEdge",
     "SearchEngine",
     "SearchFrontier",
     "SearchNode",
     "SearchNormalizer",
     "SearchPolicy",
+    "SearchPolicyBaseConfig",
+    "SearchPolicyConfig",
+    "SearchPolicyModeConfig",
+    "SearchPolicyPresetConfig",
+    "SearchPolicyTargetProfileConfig",
     "ShadowPolicyRule",
     "SignalExtractor",
+    "SaturationAnalyzer",
+    "SaturationAssessment",
     "StageTransitionDecision",
     "StageTransitionEvidence",
     "StageTransitionSignals",
@@ -96,6 +120,8 @@ __all__ = [
     "decorate_with_decorrelation_assessment",
     "decorrelation_rerank_enabled",
     "get_phase_policy_table",
+    "get_default_policy_config",
+    "get_stage_policy_table",
     "get_shadow_stage_policy_table",
     "build_search_normalizer",
     "compute_base_score",
@@ -103,11 +129,14 @@ __all__ = [
     "load_candidate_records_from_completed_runs",
     "load_multi_run_candidate_records",
     "load_single_run_candidate_records",
+    "policy_config_from_mapping",
+    "policy_config_to_dict",
     "resolve_materialized_child_run_dir",
     "resolve_materialized_multi_run_dir",
     "resolve_materialized_single_run_dir",
     "resolve_context_profile",
     "resolve_orchestration_profile",
+    "resolve_stage_table_policy",
     "resolve_shadow_table_policy",
     "resolve_stage_transition",
     "resolve_stage_transition_from_state",

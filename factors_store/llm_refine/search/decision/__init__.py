@@ -12,6 +12,7 @@ from .decorrelation_policy import (
 )
 from .engine import DecisionEngine
 from .features import CandidateDecisionFeatures
+from .saturation_policy import SaturationAnalyzer, SaturationAssessment
 
 __all__ = [
     "CandidateDecisionFeatures",
@@ -20,6 +21,8 @@ __all__ = [
     "DecisionContext",
     "DecisionEngine",
     "FamilyDecisionState",
+    "SaturationAnalyzer",
+    "SaturationAssessment",
     "assess_decorrelation",
     "decorate_with_decorrelation_assessment",
     "decorrelation_rerank_enabled",

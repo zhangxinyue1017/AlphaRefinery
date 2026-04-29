@@ -11,6 +11,8 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from ..policy_config import DEFAULT_POLICY_CONFIG, RefinePolicyConfig
+
 
 def _safe_float(value: object, default: float = float("nan")) -> float:
     try:
@@ -65,9 +67,8 @@ class StageTransitionSignals:
 class SignalExtractor:
     '''Extract discrete transition signals from StageTransitionEvidence.'''
 
-    EXCESS_GAIN_UNIT = 0.02
-    ICIR_GAIN_UNIT = 0.05
-    SHARPE_GAIN_UNIT = 0.25
+    def __init__(self, config: RefinePolicyConfig | None = None) -> None:
+        self.config = config or DEFAULT_POLICY_CONFIG
 
     def extract(self, evidence: Any) -> StageTransitionSignals:
         stage = str(getattr(evidence, "current_stage", "") or "auto").strip() or "auto"
@@ -78,6 +79,7 @@ class SignalExtractor:
             "primary_winner_name": _candidate_name(winner),
             "baseline_name": _candidate_name(baseline),
             "stage": stage,
+            "policy_config_version": self.config.stage_transition.version,
         }
 
         anchor_strength, anchor_diag = self._anchor_strength(evidence)
@@ -118,8 +120,12 @@ class SignalExtractor:
         )
 
     @classmethod
-    def from_evidence(cls, evidence: Any) -> StageTransitionSignals:
-        return cls().extract(evidence)
+    def from_evidence(
+        cls,
+        evidence: Any,
+        config: RefinePolicyConfig | None = None,
+    ) -> StageTransitionSignals:
+        return cls(config=config).extract(evidence)
 
     def _primary_winner(self, evidence: Any) -> dict[str, Any]:
         focused = dict(getattr(evidence, "focused_best_node", None) or {})
@@ -151,6 +157,7 @@ class SignalExtractor:
         return tuple(nodes)
 
     def _anchor_strength(self, evidence: Any) -> tuple[str, dict[str, Any]]:
+        thresholds = self.config.stage_transition.anchor
         anchor = dict(getattr(evidence, "best_anchor", None) or {})
         passed_count = _safe_int(getattr(evidence, "passed_anchor_count", 0))
         score = _first_finite(
@@ -158,11 +165,15 @@ class SignalExtractor:
             anchor.get("anchor_score"),
             anchor.get("winner_score"),
         )
-        if passed_count >= 2 and _finite(score) and score >= 0.70:
+        if (
+            passed_count >= thresholds.strong_passed_count
+            and _finite(score)
+            and score >= thresholds.strong_quality_score
+        ):
             level = "strong"
-        elif passed_count >= 1:
+        elif passed_count >= thresholds.passed_count:
             level = "passed"
-        elif anchor and _finite(score) and score >= 0.50:
+        elif anchor and _finite(score) and score >= thresholds.weak_quality_score:
             level = "weak"
         else:
             level = "none"
@@ -170,16 +181,33 @@ class SignalExtractor:
             "passed_anchor_count": passed_count,
             "best_anchor_name": _candidate_name(anchor),
             "anchor_quality_score": score if _finite(score) else None,
+            "thresholds": asdict(thresholds),
         }
 
     def _winner_quality(self, winner: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        thresholds = self.config.stage_transition.winner_quality
         icir = _safe_float(winner.get("quick_rank_icir"))
         sharpe = _safe_float(winner.get("net_sharpe"))
-        if winner and _finite(icir) and _finite(sharpe) and icir >= 0.50 and sharpe >= 3.0:
+        if (
+            winner
+            and _finite(icir)
+            and _finite(sharpe)
+            and icir >= thresholds.strong_icir
+            and sharpe >= thresholds.strong_sharpe
+        ):
             level = "strong"
-        elif winner and _finite(icir) and _finite(sharpe) and icir >= 0.40 and sharpe >= 2.0:
+        elif (
+            winner
+            and _finite(icir)
+            and _finite(sharpe)
+            and icir >= thresholds.usable_icir
+            and sharpe >= thresholds.usable_sharpe
+        ):
             level = "usable"
-        elif winner and ((_finite(icir) and icir >= 0.30) or (_finite(sharpe) and sharpe >= 1.5)):
+        elif winner and (
+            (_finite(icir) and icir >= thresholds.weak_icir)
+            or (_finite(sharpe) and sharpe >= thresholds.weak_sharpe)
+        ):
             level = "weak"
         else:
             level = "none"
@@ -187,6 +215,7 @@ class SignalExtractor:
             "factor_name": _candidate_name(winner),
             "quick_rank_icir": icir if _finite(icir) else None,
             "net_sharpe": sharpe if _finite(sharpe) else None,
+            "thresholds": asdict(thresholds),
         }
 
     def _material_gain(
@@ -199,6 +228,7 @@ class SignalExtractor:
                 "available": False,
                 "reason": "missing candidate or baseline",
             }
+        thresholds = self.config.stage_transition.material_gain
         excess_gain = _safe_float(candidate.get("net_excess_ann_return"), 0.0) - _safe_float(
             baseline.get("net_excess_ann_return"), 0.0
         )
@@ -209,14 +239,14 @@ class SignalExtractor:
             baseline.get("net_sharpe"), 0.0
         )
         score = max(
-            excess_gain / self.EXCESS_GAIN_UNIT,
-            icir_gain / self.ICIR_GAIN_UNIT,
-            sharpe_gain / self.SHARPE_GAIN_UNIT,
+            excess_gain / thresholds.excess_gain_unit,
+            icir_gain / thresholds.icir_gain_unit,
+            sharpe_gain / thresholds.sharpe_gain_unit,
         )
         passed = bool(
-            excess_gain >= self.EXCESS_GAIN_UNIT
-            or icir_gain >= self.ICIR_GAIN_UNIT
-            or sharpe_gain >= self.SHARPE_GAIN_UNIT
+            excess_gain >= thresholds.excess_gain_unit
+            or icir_gain >= thresholds.icir_gain_unit
+            or sharpe_gain >= thresholds.sharpe_gain_unit
         )
         return passed, score, {
             "available": True,
@@ -226,6 +256,7 @@ class SignalExtractor:
             "icir_gain": round(float(icir_gain), 6),
             "sharpe_gain": round(float(sharpe_gain), 6),
             "score": round(float(score), 4),
+            "thresholds": asdict(thresholds),
         }
 
     def _corr_pressure(
@@ -234,6 +265,7 @@ class SignalExtractor:
         winner: dict[str, Any],
         frontier_nodes: tuple[dict[str, Any], ...],
     ) -> tuple[str, dict[str, Any]]:
+        thresholds = self.config.stage_transition.corr_pressure
         redundancy_state = dict(getattr(evidence, "redundancy_state", None) or {})
         motif_state = dict(getattr(evidence, "motif_state", None) or {})
         high_corr_count = _safe_int(getattr(evidence, "high_corr_count", 0))
@@ -273,20 +305,20 @@ class SignalExtractor:
         motif_counts = dict(motif_state.get("motif_counts") or {})
         max_motif_count = max([_safe_int(value, 0) for value in motif_counts.values()], default=0)
         motif_saturation = bool(
-            motif_usage_count >= 3
-            or max_motif_count >= 3
-            or family_overlap >= 0.70
-            or saturation_penalty >= 0.05
+            motif_usage_count >= thresholds.motif_usage_medium
+            or max_motif_count >= thresholds.motif_count_medium
+            or family_overlap >= thresholds.family_overlap_medium
+            or saturation_penalty >= thresholds.saturation_penalty_medium
         )
         high_family_overlap = bool(
-            portfolio_max_similarity >= 0.85
-            or family_overlap >= 0.80
-            or motif_usage_count >= 4
-            or max_motif_count >= 4
+            portfolio_max_similarity >= thresholds.portfolio_similarity_high
+            or family_overlap >= thresholds.family_overlap_high
+            or motif_usage_count >= thresholds.motif_usage_high
+            or max_motif_count >= thresholds.motif_count_high
         )
-        if high_corr_count >= 3 and high_family_overlap:
+        if high_corr_count >= thresholds.critical_high_corr_count and high_family_overlap:
             level = "critical"
-        elif high_corr_count > 0:
+        elif high_corr_count >= thresholds.high_corr_count:
             level = "high"
         elif motif_saturation:
             level = "medium"
@@ -301,6 +333,7 @@ class SignalExtractor:
             "family_motif_saturation_penalty": round(float(saturation_penalty), 4),
             "has_decorrelation_targets": bool(getattr(evidence, "has_decorrelation_targets", False)),
             "note": "decorrelation targets are reported but not treated as pressure by themselves",
+            "thresholds": asdict(thresholds),
         }
 
     def _turnover_pressure(
@@ -309,19 +342,24 @@ class SignalExtractor:
         winner: dict[str, Any],
         frontier_nodes: tuple[dict[str, Any], ...],
     ) -> tuple[str, dict[str, Any]]:
+        thresholds = self.config.stage_transition.turnover_pressure
         winner_turnover = _safe_float(winner.get("mean_turnover"))
         high_turnover_count = _safe_int(getattr(evidence, "high_turnover_count", 0))
         inferred_high_count = sum(
             1
             for item in frontier_nodes
-            if _finite(_safe_float(item.get("mean_turnover"))) and _safe_float(item.get("mean_turnover")) > 0.65
+            if _finite(_safe_float(item.get("mean_turnover")))
+            and _safe_float(item.get("mean_turnover")) > thresholds.high_winner_turnover
         )
-        multiple_high = max(high_turnover_count, inferred_high_count) >= 2
-        if (_finite(winner_turnover) and winner_turnover > 0.80) or multiple_high:
+        multiple_high = max(high_turnover_count, inferred_high_count) >= thresholds.multiple_high_turnover_count
+        if (_finite(winner_turnover) and winner_turnover > thresholds.critical_winner_turnover) or multiple_high:
             level = "critical"
-        elif (_finite(winner_turnover) and winner_turnover > 0.65) or high_turnover_count > 0:
+        elif (_finite(winner_turnover) and winner_turnover > thresholds.high_winner_turnover) or high_turnover_count > 0:
             level = "high"
-        elif _finite(winner_turnover) and 0.50 <= winner_turnover <= 0.65:
+        elif (
+            _finite(winner_turnover)
+            and thresholds.medium_winner_turnover <= winner_turnover <= thresholds.high_winner_turnover
+        ):
             level = "medium"
         else:
             level = "low"
@@ -329,6 +367,7 @@ class SignalExtractor:
             "winner_turnover": winner_turnover if _finite(winner_turnover) else None,
             "high_turnover_count": high_turnover_count,
             "inferred_high_turnover_count": inferred_high_count,
+            "thresholds": asdict(thresholds),
         }
 
     def _frontier_health(
@@ -336,6 +375,7 @@ class SignalExtractor:
         evidence: Any,
         frontier_nodes: tuple[dict[str, Any], ...],
     ) -> tuple[str, dict[str, Any]]:
+        thresholds = self.config.stage_transition.frontier_health
         if bool(getattr(evidence, "frontier_exhausted", False)):
             return "exhausted", {"frontier_exhausted": True}
         added = _safe_int(getattr(evidence, "children_added_to_search", 0))
@@ -354,12 +394,12 @@ class SignalExtractor:
             for item in frontier_nodes
             if str(item.get("source_model") or item.get("model") or "").strip()
         }
-        multiple_motifs = len(motif_keys) >= 2
-        multiple_branches = len(branch_keys) >= 2
-        cross_model = len(model_keys) >= 2
-        if added >= 5 and (multiple_motifs or multiple_branches or cross_model):
+        multiple_motifs = len(motif_keys) >= thresholds.multiple_motif_count
+        multiple_branches = len(branch_keys) >= thresholds.multiple_branch_count
+        cross_model = len(model_keys) >= thresholds.cross_model_count
+        if added >= thresholds.high_children_added and (multiple_motifs or multiple_branches or cross_model):
             level = "high"
-        elif added >= 2:
+        elif added >= thresholds.medium_children_added:
             level = "medium"
         else:
             level = "low"
@@ -369,6 +409,7 @@ class SignalExtractor:
             "branch_count": len(branch_keys),
             "model_count": len(model_keys),
             "cross_model": cross_model,
+            "thresholds": asdict(thresholds),
         }
 
     def _model_consensus(
@@ -376,6 +417,7 @@ class SignalExtractor:
         winner: dict[str, Any],
         frontier_nodes: tuple[dict[str, Any], ...],
     ) -> tuple[str, dict[str, Any]]:
+        thresholds = self.config.stage_transition.model_consensus
         motif_model_map: dict[str, set[str]] = defaultdict(set)
         motif_counts: Counter[str] = Counter()
         for item in (winner, *frontier_nodes):
@@ -395,9 +437,9 @@ class SignalExtractor:
                 motif_model_map[motif].add(model)
         max_model_support = max((len(models) for models in motif_model_map.values()), default=0)
         max_motif_count = max(motif_counts.values(), default=0)
-        if max_model_support >= 3:
+        if max_model_support >= thresholds.high_model_support:
             level = "high"
-        elif max_model_support >= 2 or max_motif_count >= 3:
+        elif max_model_support >= thresholds.medium_model_support or max_motif_count >= thresholds.medium_motif_count:
             level = "medium"
         else:
             level = "low"
@@ -405,4 +447,5 @@ class SignalExtractor:
             "max_model_support": max_model_support,
             "max_motif_count": int(max_motif_count),
             "motif_count": len(motif_counts),
+            "thresholds": asdict(thresholds),
         }

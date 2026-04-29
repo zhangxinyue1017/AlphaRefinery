@@ -2,7 +2,14 @@
 
 ## 先看什么
 
-`search/core/policy.py` 参数很多，但真正常调的，主要是下面这些。
+`SearchPolicy` 的运行时 dataclass 仍在 `search/core/policy.py`，但默认
+权重、preset、target profile overlay、search mode overlay 已集中到
+`search/policy_config.py` 的 `DEFAULT_POLICY_CONFIG.search`。
+
+以后调权重优先改 `policy_config.py`，不要在 `core/policy.py` 里散写新数值。
+`core/policy.py` 主要保留 typed runtime object 和构造逻辑。
+
+真正常调的，主要是下面这些。
 
 ## 1. 探索强度
 
@@ -124,7 +131,23 @@
 - 更偏质量和惩罚
 - 更适合主线明确后的稳健深挖
 
-## 7. 实用调参建议
+## 7. target profile / mode overlay
+
+`with_target_profile()` 现在从 `DEFAULT_POLICY_CONFIG.search.target_profiles`
+读取 overlay。
+
+- `raw_alpha`: 偏原始 alpha 质量，同时保留适度 constraint / portfolio 权重
+- `deployability`: 提高 constraint 权重
+- `complementarity`: 提高 portfolio / decorrelation 相关权重和 gate penalty
+- `robustness`: 提高 regime 权重
+
+`for_mode()` 现在从 `DEFAULT_POLICY_CONFIG.search.modes` 读取 overlay。
+
+- `multi_model_best_first`: 保证多模型 best-first 的基础 frontier 宽度
+- `family_breadth_first`: 增强探索、novelty，并限制单 branch 过度占用
+- `local_best_first`: 降低探索，偏局部深挖
+
+## 8. 实用调参建议
 
 ### 新 family 首跑
 

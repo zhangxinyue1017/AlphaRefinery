@@ -267,8 +267,9 @@ For subsystem-level usage and design details, see:
   * layered search and control surface:
     * `core/`: search state, budgets, frontier, objectives, scoring, normalizers, `SearchPolicy`
     * `decision/`: candidate feature extraction, rerank / winner selection, de-correlation policy
-    * `transition/`: stage evidence, legacy transition logic, signal extraction, shadow table policy
+    * `transition/`: stage evidence, signal extraction, table-driven transition policy, legacy audit helpers
     * `io/`: artifact ingestion from completed runs
+    * `policy_config.py`: versioned SearchPolicy weights plus thresholds shared by stage, de-correlation, and advisory saturation policy
   * top-level `search/__init__.py` remains as the public facade for common imports; implementation modules live in the subpackages above
 * `docs/`
 

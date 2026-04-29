@@ -5,8 +5,14 @@ Defines balanced, exploratory, and conservative settings plus raw-alpha, deploya
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from typing import Any
+
+from ..policy_config import DEFAULT_POLICY_CONFIG
+
+
+_SEARCH_DEFAULTS = DEFAULT_POLICY_CONFIG.search.base
+_DECORRELATION_DEFAULTS = DEFAULT_POLICY_CONFIG.decorrelation
 
 
 @dataclass(frozen=True)
@@ -14,102 +20,106 @@ class SearchPolicy:
     # Basic policy identity and global interpretation mode.
     name: str
     target_profile: str = "raw_alpha"
-    selection_strategy: str = "ucb_lite"
-    metric_normalization: str = "percentile"
+    selection_strategy: str = _SEARCH_DEFAULTS.selection_strategy
+    metric_normalization: str = _SEARCH_DEFAULTS.metric_normalization
 
     # Main alpha-quality objective and normalization scales.
-    rank_ic_weight: float = 1.8
-    rank_icir_weight: float = 0.6
-    ann_return_weight: float = 0.7
-    excess_return_weight: float = 0.6
-    sharpe_weight: float = 0.8
-    rank_ic_scale: float = 0.08
-    rank_icir_scale: float = 0.6
-    ann_return_scale: float = 1.8
-    excess_return_scale: float = 1.2
-    sharpe_scale: float = 2.0
+    rank_ic_weight: float = _SEARCH_DEFAULTS.rank_ic_weight
+    rank_icir_weight: float = _SEARCH_DEFAULTS.rank_icir_weight
+    ann_return_weight: float = _SEARCH_DEFAULTS.ann_return_weight
+    excess_return_weight: float = _SEARCH_DEFAULTS.excess_return_weight
+    sharpe_weight: float = _SEARCH_DEFAULTS.sharpe_weight
+    rank_ic_scale: float = _SEARCH_DEFAULTS.rank_ic_scale
+    rank_icir_scale: float = _SEARCH_DEFAULTS.rank_icir_scale
+    ann_return_scale: float = _SEARCH_DEFAULTS.ann_return_scale
+    excess_return_scale: float = _SEARCH_DEFAULTS.excess_return_scale
+    sharpe_scale: float = _SEARCH_DEFAULTS.sharpe_scale
 
     # Costs that make candidates harder to deploy or maintain.
-    turnover_penalty_weight: float = 0.35
-    complexity_penalty_weight: float = 0.025
-    depth_penalty_weight: float = 0.05
-    turnover_scale: float = 0.45
-    complexity_scale: float = 8.0
-    depth_scale: float = 3.0
+    turnover_penalty_weight: float = _SEARCH_DEFAULTS.turnover_penalty_weight
+    complexity_penalty_weight: float = _SEARCH_DEFAULTS.complexity_penalty_weight
+    depth_penalty_weight: float = _SEARCH_DEFAULTS.depth_penalty_weight
+    turnover_scale: float = _SEARCH_DEFAULTS.turnover_scale
+    complexity_scale: float = _SEARCH_DEFAULTS.complexity_scale
+    depth_scale: float = _SEARCH_DEFAULTS.depth_scale
 
     # Redundancy controls that push search away from repeated motifs/branches.
-    mmr_rerank: bool = True
-    mmr_lambda: float = 0.72
-    branch_penalty_weight: float = 0.14
-    redundancy_penalty_weight: float = 0.10
-    family_motif_saturation_weight: float = 0.06
-    correlation_redundancy_weight: float = 0.20
-    novelty_bonus_weight: float = 0.10
-    motif_novelty_weight: float = 0.08
+    mmr_rerank: bool = _SEARCH_DEFAULTS.mmr_rerank
+    mmr_lambda: float = _SEARCH_DEFAULTS.mmr_lambda
+    branch_penalty_weight: float = _SEARCH_DEFAULTS.branch_penalty_weight
+    redundancy_penalty_weight: float = _SEARCH_DEFAULTS.redundancy_penalty_weight
+    family_motif_saturation_weight: float = _SEARCH_DEFAULTS.family_motif_saturation_weight
+    correlation_redundancy_weight: float = _SEARCH_DEFAULTS.correlation_redundancy_weight
+    novelty_bonus_weight: float = _SEARCH_DEFAULTS.novelty_bonus_weight
+    motif_novelty_weight: float = _SEARCH_DEFAULTS.motif_novelty_weight
 
     # Frontier-selection mechanics and caps.
-    frontier_rerank: bool = True
-    prefer_unexpanded: bool = True
-    allow_keep_nodes: bool = True
-    require_novel_expression: bool = True
-    branch_frontier_cap: int = 2
-    motif_frontier_cap: int = 3
-    selection_pool_size: int = 5
-    mmr_candidate_pool_size: int = 8
+    frontier_rerank: bool = _SEARCH_DEFAULTS.frontier_rerank
+    prefer_unexpanded: bool = _SEARCH_DEFAULTS.prefer_unexpanded
+    allow_keep_nodes: bool = _SEARCH_DEFAULTS.allow_keep_nodes
+    require_novel_expression: bool = _SEARCH_DEFAULTS.require_novel_expression
+    branch_frontier_cap: int = _SEARCH_DEFAULTS.branch_frontier_cap
+    motif_frontier_cap: int = _SEARCH_DEFAULTS.motif_frontier_cap
+    selection_pool_size: int = _SEARCH_DEFAULTS.selection_pool_size
+    mmr_candidate_pool_size: int = _SEARCH_DEFAULTS.mmr_candidate_pool_size
 
     # Feature weights used to estimate similarity between candidate nodes.
-    similarity_branch_weight: float = 0.4
-    similarity_motif_weight: float = 0.25
-    similarity_mutation_weight: float = 0.15
-    similarity_skeleton_weight: float = 0.2
-    similarity_economic_weight: float = 0.15
-    similarity_operator_weight: float = 0.2
-    similarity_token_weight: float = 0.1
+    similarity_branch_weight: float = _SEARCH_DEFAULTS.similarity_branch_weight
+    similarity_motif_weight: float = _SEARCH_DEFAULTS.similarity_motif_weight
+    similarity_mutation_weight: float = _SEARCH_DEFAULTS.similarity_mutation_weight
+    similarity_skeleton_weight: float = _SEARCH_DEFAULTS.similarity_skeleton_weight
+    similarity_economic_weight: float = _SEARCH_DEFAULTS.similarity_economic_weight
+    similarity_operator_weight: float = _SEARCH_DEFAULTS.similarity_operator_weight
+    similarity_token_weight: float = _SEARCH_DEFAULTS.similarity_token_weight
 
     # Extra objective terms activated by raw_alpha/deployability/complementarity/robustness profiles.
-    target_conditioned_weight: float = 0.0
-    constraint_weight: float = 0.0
-    portfolio_weight: float = 0.0
-    regime_weight: float = 0.0
-    transfer_weight: float = 0.0
+    target_conditioned_weight: float = _SEARCH_DEFAULTS.target_conditioned_weight
+    constraint_weight: float = _SEARCH_DEFAULTS.constraint_weight
+    portfolio_weight: float = _SEARCH_DEFAULTS.portfolio_weight
+    regime_weight: float = _SEARCH_DEFAULTS.regime_weight
+    transfer_weight: float = _SEARCH_DEFAULTS.transfer_weight
 
     # Continuation-value bonuses for promising branches and expandable parents.
-    exploration_weight: float = 0.18
-    expandability_weight: float = 0.08
-    branch_value_weight: float = 0.12
-    winner_status_bonus: float = 0.05
-    keep_status_bonus: float = 0.02
+    exploration_weight: float = _SEARCH_DEFAULTS.exploration_weight
+    expandability_weight: float = _SEARCH_DEFAULTS.expandability_weight
+    branch_value_weight: float = _SEARCH_DEFAULTS.branch_value_weight
+    winner_status_bonus: float = _SEARCH_DEFAULTS.winner_status_bonus
+    keep_status_bonus: float = _SEARCH_DEFAULTS.keep_status_bonus
 
     # Optional two-parent expansion policy.
-    dual_parent_enabled: bool = False
-    dual_parent_max_parents: int = 2
-    dual_parent_delta_threshold: float = 0.12
-    dual_parent_similarity_threshold: float = 0.65
-    dual_parent_min_expandability_advantage: float = 0.02
+    dual_parent_enabled: bool = _SEARCH_DEFAULTS.dual_parent_enabled
+    dual_parent_max_parents: int = _SEARCH_DEFAULTS.dual_parent_max_parents
+    dual_parent_delta_threshold: float = _SEARCH_DEFAULTS.dual_parent_delta_threshold
+    dual_parent_similarity_threshold: float = _SEARCH_DEFAULTS.dual_parent_similarity_threshold
+    dual_parent_min_expandability_advantage: float = _SEARCH_DEFAULTS.dual_parent_min_expandability_advantage
 
     # De-correlation scoring/gating knobs.
-    decorrelation_excellent_corr: float = 0.35
-    decorrelation_good_corr: float = 0.55
-    decorrelation_acceptable_corr: float = 0.70
-    decorrelation_weak_corr: float = 0.85
-    decorrelation_suppress_winner_corr: float = 0.75
-    decorrelation_soft_drop_corr: float = 0.85
-    decorrelation_hard_drop_corr: float = 0.90
-    decorrelation_excellent_bonus: float = 0.12
-    decorrelation_good_bonus: float = 0.08
-    decorrelation_acceptable_bonus: float = 0.03
-    decorrelation_weak_penalty: float = 0.08
-    decorrelation_failed_penalty: float = 0.16
-    decorrelation_avg_corr_penalty_weight: float = 0.05
-    decorrelation_quality_icir_floor: float = 0.15
-    decorrelation_quality_sharpe_floor: float = 1.20
-    decorrelation_quality_excess_floor: float = 0.05
-    decorrelation_quality_ann_floor: float = 1.50
-    decorrelation_strong_quality_icir: float = 0.50
-    decorrelation_strong_quality_sharpe: float = 3.00
+    decorrelation_excellent_corr: float = _DECORRELATION_DEFAULTS.excellent_corr
+    decorrelation_good_corr: float = _DECORRELATION_DEFAULTS.good_corr
+    decorrelation_acceptable_corr: float = _DECORRELATION_DEFAULTS.acceptable_corr
+    decorrelation_weak_corr: float = _DECORRELATION_DEFAULTS.weak_corr
+    decorrelation_suppress_winner_corr: float = _DECORRELATION_DEFAULTS.suppress_winner_corr
+    decorrelation_soft_drop_corr: float = _DECORRELATION_DEFAULTS.soft_drop_corr
+    decorrelation_hard_drop_corr: float = _DECORRELATION_DEFAULTS.hard_drop_corr
+    decorrelation_excellent_bonus: float = _DECORRELATION_DEFAULTS.excellent_bonus
+    decorrelation_good_bonus: float = _DECORRELATION_DEFAULTS.good_bonus
+    decorrelation_acceptable_bonus: float = _DECORRELATION_DEFAULTS.acceptable_bonus
+    decorrelation_weak_penalty: float = _DECORRELATION_DEFAULTS.weak_penalty
+    decorrelation_failed_penalty: float = _DECORRELATION_DEFAULTS.failed_penalty
+    decorrelation_avg_corr_penalty_weight: float = _DECORRELATION_DEFAULTS.avg_corr_penalty_weight
+    decorrelation_quality_icir_floor: float = _DECORRELATION_DEFAULTS.quality_icir_floor
+    decorrelation_quality_sharpe_floor: float = _DECORRELATION_DEFAULTS.quality_sharpe_floor
+    decorrelation_quality_excess_floor: float = _DECORRELATION_DEFAULTS.quality_excess_floor
+    decorrelation_quality_ann_floor: float = _DECORRELATION_DEFAULTS.quality_ann_floor
+    decorrelation_strong_quality_icir: float = _DECORRELATION_DEFAULTS.strong_quality_icir
+    decorrelation_strong_quality_sharpe: float = _DECORRELATION_DEFAULTS.strong_quality_sharpe
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["policy_config_version"] = DEFAULT_POLICY_CONFIG.version
+        payload["search_policy_config_version"] = DEFAULT_POLICY_CONFIG.search.version
+        payload["search_policy_config_source"] = "DEFAULT_POLICY_CONFIG.search"
+        return payload
 
     def with_mmr_rerank(self, enabled: bool) -> "SearchPolicy":
         return replace(self, mmr_rerank=bool(enabled))
@@ -144,131 +154,30 @@ class SearchPolicy:
 
     def with_target_profile(self, target_profile: str) -> "SearchPolicy":
         normalized = str(target_profile or "raw_alpha").strip().lower() or "raw_alpha"
-        if normalized == "raw_alpha":
-            return replace(
-                self,
-                target_profile=normalized,
-                target_conditioned_weight=0.08,
-                constraint_weight=0.55,
-                portfolio_weight=0.45,
-                regime_weight=0.0,
-                transfer_weight=0.0,
-                ann_return_weight=max(float(self.ann_return_weight), 0.65),
-                excess_return_weight=max(float(self.excess_return_weight), 0.6),
-                sharpe_weight=min(float(self.sharpe_weight), 0.8),
-                ann_return_scale=min(float(self.ann_return_scale), 1.8),
-                excess_return_scale=min(float(self.excess_return_scale), 0.9),
-                sharpe_scale=max(float(self.sharpe_scale), 2.0),
-            )
-        if normalized == "deployability":
-            return replace(
-                self,
-                target_profile=normalized,
-                target_conditioned_weight=0.16,
-                constraint_weight=0.75,
-                portfolio_weight=0.25,
-                regime_weight=0.0,
-                transfer_weight=0.0,
-            )
-        if normalized == "complementarity":
-            return replace(
-                self,
-                target_profile=normalized,
-                target_conditioned_weight=0.24,
-                constraint_weight=0.25,
-                portfolio_weight=0.85,
-                regime_weight=0.0,
-                transfer_weight=0.0,
-                redundancy_penalty_weight=max(float(self.redundancy_penalty_weight), 0.12),
-                family_motif_saturation_weight=max(float(self.family_motif_saturation_weight), 0.08),
-                correlation_redundancy_weight=max(float(self.correlation_redundancy_weight), 0.14),
-                dual_parent_delta_threshold=max(float(self.dual_parent_delta_threshold), 0.22),
-                dual_parent_similarity_threshold=min(float(self.dual_parent_similarity_threshold), 0.55),
-                decorrelation_excellent_bonus=max(float(self.decorrelation_excellent_bonus), 0.25),
-                decorrelation_good_bonus=max(float(self.decorrelation_good_bonus), 0.15),
-                decorrelation_acceptable_bonus=max(float(self.decorrelation_acceptable_bonus), 0.05),
-                decorrelation_weak_penalty=max(float(self.decorrelation_weak_penalty), 0.20),
-                decorrelation_failed_penalty=max(float(self.decorrelation_failed_penalty), 0.35),
-                decorrelation_avg_corr_penalty_weight=max(float(self.decorrelation_avg_corr_penalty_weight), 0.12),
-            )
-        if normalized == "robustness":
-            return replace(
-                self,
-                target_profile=normalized,
-                target_conditioned_weight=0.14,
-                constraint_weight=0.55,
-                portfolio_weight=0.20,
-                regime_weight=0.25,
-                transfer_weight=0.0,
-            )
-        raise ValueError(f"unknown search target profile: {target_profile}")
+        profile_updates = getattr(DEFAULT_POLICY_CONFIG.search.target_profiles, normalized, None)
+        if profile_updates is None:
+            raise ValueError(f"unknown search target profile: {target_profile}")
+        return _apply_policy_operations(
+            self,
+            profile_updates.operations,
+            initial_updates={"target_profile": normalized},
+        )
 
     @classmethod
     def available_presets(cls) -> tuple[str, ...]:
-        return ("balanced", "exploratory", "conservative")
+        return tuple(field.name for field in fields(DEFAULT_POLICY_CONFIG.search.presets))
 
     @classmethod
     def available_target_profiles(cls) -> tuple[str, ...]:
-        return ("raw_alpha", "deployability", "complementarity", "robustness")
+        return tuple(field.name for field in fields(DEFAULT_POLICY_CONFIG.search.target_profiles))
 
     @classmethod
     def from_preset(cls, preset: str = "balanced") -> "SearchPolicy":
         normalized = str(preset or "balanced").strip().lower()
-        if normalized == "balanced":
-            return cls(name="balanced")
-        if normalized == "exploratory":
-            return cls(
-                name="exploratory",
-                mmr_lambda=0.6,
-                exploration_weight=0.24,
-                rank_ic_weight=1.55,
-                rank_icir_weight=0.55,
-                ann_return_weight=0.65,
-                excess_return_weight=0.6,
-                sharpe_weight=0.82,
-                turnover_penalty_weight=0.35,
-                complexity_penalty_weight=0.018,
-                depth_penalty_weight=0.04,
-                branch_penalty_weight=0.12,
-                redundancy_penalty_weight=0.06,
-                family_motif_saturation_weight=0.04,
-                correlation_redundancy_weight=0.04,
-                expandability_weight=0.1,
-                branch_value_weight=0.14,
-                novelty_bonus_weight=0.14,
-                motif_novelty_weight=0.1,
-                branch_frontier_cap=2,
-                motif_frontier_cap=2,
-                selection_pool_size=7,
-                mmr_candidate_pool_size=10,
-            )
-        if normalized == "conservative":
-            return cls(
-                name="conservative",
-                mmr_lambda=0.82,
-                exploration_weight=0.1,
-                rank_ic_weight=1.7,
-                rank_icir_weight=0.7,
-                ann_return_weight=0.75,
-                excess_return_weight=0.65,
-                sharpe_weight=0.95,
-                turnover_penalty_weight=0.62,
-                complexity_penalty_weight=0.03,
-                depth_penalty_weight=0.06,
-                branch_penalty_weight=0.12,
-                redundancy_penalty_weight=0.06,
-                family_motif_saturation_weight=0.04,
-                correlation_redundancy_weight=0.08,
-                expandability_weight=0.05,
-                branch_value_weight=0.08,
-                novelty_bonus_weight=0.04,
-                motif_novelty_weight=0.03,
-                branch_frontier_cap=2,
-                motif_frontier_cap=3,
-                selection_pool_size=4,
-                mmr_candidate_pool_size=6,
-            )
-        raise ValueError(f"unknown search policy preset: {preset}")
+        preset_updates = getattr(DEFAULT_POLICY_CONFIG.search.presets, normalized, None)
+        if preset_updates is None:
+            raise ValueError(f"unknown search policy preset: {preset}")
+        return cls(name=normalized, **dict(preset_updates.values))
 
     @classmethod
     def balanced(cls) -> "SearchPolicy":
@@ -286,43 +195,14 @@ class SearchPolicy:
     def for_mode(cls, mode: str, *, preset: str = "balanced") -> "SearchPolicy":
         base = cls.from_preset(preset)
         normalized_mode = str(mode or "").strip().lower()
-        if normalized_mode == "multi_model_best_first":
-            return replace(
-                base,
-                name=f"multi_model_best_first:{base.name}",
-                branch_frontier_cap=max(base.branch_frontier_cap, 2),
-                motif_frontier_cap=max(base.motif_frontier_cap, 3),
-                selection_pool_size=max(base.selection_pool_size, 5),
-                mmr_candidate_pool_size=max(base.mmr_candidate_pool_size, 8),
-            )
-        if normalized_mode == "family_breadth_first":
-            return replace(
-                base,
-                name=f"family_breadth_first:{base.name}",
-                exploration_weight=base.exploration_weight + 0.02,
-                novelty_bonus_weight=base.novelty_bonus_weight + 0.03,
-                motif_novelty_weight=base.motif_novelty_weight + 0.03,
-                branch_penalty_weight=max(base.branch_penalty_weight, 0.18),
-                prefer_unexpanded=True,
-                branch_frontier_cap=1,
-                motif_frontier_cap=2,
-                selection_pool_size=max(base.selection_pool_size, 8),
-                mmr_candidate_pool_size=max(base.mmr_candidate_pool_size, 12),
-            )
-        if normalized_mode == "local_best_first":
-            return replace(
-                base,
-                name=f"local_best_first:{base.name}",
-                exploration_weight=max(base.exploration_weight - 0.04, 0.08),
-                novelty_bonus_weight=max(base.novelty_bonus_weight - 0.03, 0.03),
-                motif_novelty_weight=max(base.motif_novelty_weight - 0.02, 0.02),
-                branch_penalty_weight=max(base.branch_penalty_weight - 0.04, 0.08),
-                branch_frontier_cap=max(base.branch_frontier_cap, 3),
-                motif_frontier_cap=max(base.motif_frontier_cap, 3),
-                selection_pool_size=min(max(base.selection_pool_size, 4), 5),
-                mmr_candidate_pool_size=min(max(base.mmr_candidate_pool_size, 6), 8),
-            )
-        raise ValueError(f"unknown search policy mode: {mode}")
+        mode_updates = getattr(DEFAULT_POLICY_CONFIG.search.modes, normalized_mode, None)
+        if mode_updates is None:
+            raise ValueError(f"unknown search policy mode: {mode}")
+        return _apply_policy_operations(
+            base,
+            mode_updates.operations,
+            initial_updates={"name": f"{normalized_mode}:{base.name}"},
+        )
 
     @classmethod
     def multi_model_best_first(cls, *, preset: str = "balanced") -> "SearchPolicy":
@@ -335,3 +215,37 @@ class SearchPolicy:
     @classmethod
     def local_best_first(cls, *, preset: str = "balanced") -> "SearchPolicy":
         return cls.for_mode("local_best_first", preset=preset)
+
+
+def _apply_policy_operations(
+    policy: SearchPolicy,
+    operations: tuple[tuple[str, str, Any], ...],
+    *,
+    initial_updates: dict[str, Any] | None = None,
+) -> SearchPolicy:
+    updates = dict(initial_updates or {})
+    for field_name, operator, value in operations:
+        current = getattr(policy, field_name)
+        if operator == "set":
+            updates[field_name] = value
+        elif operator == "max":
+            updates[field_name] = _typed_numeric_update(current, max(float(current), float(value)))
+        elif operator == "min":
+            updates[field_name] = _typed_numeric_update(current, min(float(current), float(value)))
+        elif operator == "add":
+            updates[field_name] = _typed_numeric_update(current, float(current) + float(value))
+        elif operator == "add_min":
+            delta, floor = value
+            updates[field_name] = _typed_numeric_update(current, max(float(current) + float(delta), float(floor)))
+        elif operator == "clamp":
+            low, high = value
+            updates[field_name] = _typed_numeric_update(current, min(max(float(current), float(low)), float(high)))
+        else:
+            raise ValueError(f"unknown search policy operation: {operator}")
+    return replace(policy, **updates)
+
+
+def _typed_numeric_update(current: Any, value: float) -> float | int:
+    if isinstance(current, int) and not isinstance(current, bool):
+        return int(value)
+    return float(value)

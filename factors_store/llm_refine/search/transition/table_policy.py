@@ -1,7 +1,7 @@
-'''Shadow table policy for stage-transition auditing.
+'''Table policy for stage-transition decisions.
 
-The table policy consumes explicit signals and emits a shadow decision. It does
-not replace the legacy resolver; it exists to compare decisions in artifacts.
+The table policy consumes explicit signals and emits the formal stage-transition
+decision. The legacy if/else resolver is retained only as an audit reference.
 '''
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ..policy_config import DEFAULT_POLICY_CONFIG
 from .signals import StageTransitionSignals
 from .stage_transition import StageTransitionDecision, StageTransitionEvidence
 
@@ -29,6 +30,8 @@ _VALID_ACTIONS = {
     "confirmation",
     "terminate",
 }
+
+_STAGE_DEFAULTS = DEFAULT_POLICY_CONFIG.stage_transition
 
 
 @dataclass(frozen=True)
@@ -75,7 +78,7 @@ SHADOW_STAGE_POLICY_TABLE: tuple[ShadowPolicyRule, ...] = (
     ShadowPolicyRule(
         rule_id="candidate_eval_fail_no_winner_reopen",
         phase="any",
-        conditions=("validation_fail_count>=2", "winner_quality<=weak"),
+        conditions=(f"validation_fail_count>={_STAGE_DEFAULTS.validation_fail_repair_count}", "winner_quality<=weak"),
         action="reopen_broad",
         next_stage="broad_followup",
         specificity=58,
@@ -185,7 +188,7 @@ SHADOW_STAGE_POLICY_TABLE: tuple[ShadowPolicyRule, ...] = (
     ShadowPolicyRule(
         rule_id="no_improve_reopen",
         phase="any",
-        conditions=("no_improve_count>=2", "frontier_health>=medium"),
+        conditions=(f"no_improve_count>={_STAGE_DEFAULTS.no_improve_reopen_count}", "frontier_health>=medium"),
         action="reopen_broad",
         next_stage="broad_followup",
         specificity=50,
@@ -195,7 +198,7 @@ SHADOW_STAGE_POLICY_TABLE: tuple[ShadowPolicyRule, ...] = (
     ShadowPolicyRule(
         rule_id="no_improve_terminate",
         phase="any",
-        conditions=("no_improve_count>=2", "frontier_health<=low"),
+        conditions=(f"no_improve_count>={_STAGE_DEFAULTS.no_improve_reopen_count}", "frontier_health<=low"),
         action="terminate",
         next_stage="terminate",
         specificity=48,
@@ -221,7 +224,7 @@ SHADOW_STAGE_POLICY_TABLE: tuple[ShadowPolicyRule, ...] = (
         specificity=1,
         parent_selection_bias="diversify_branch",
         confidence="low",
-        reason="default broad-stage shadow action keeps search open",
+        reason="default broad-stage table action keeps search open",
     ),
     ShadowPolicyRule(
         rule_id="focused_default_reopen",
@@ -232,7 +235,7 @@ SHADOW_STAGE_POLICY_TABLE: tuple[ShadowPolicyRule, ...] = (
         specificity=1,
         parent_selection_bias="diversify_branch",
         confidence="low",
-        reason="default focused-stage shadow action reopens broad search",
+        reason="default focused-stage table action reopens broad search",
     ),
     ShadowPolicyRule(
         rule_id="terminal_phase_terminate",
@@ -252,11 +255,16 @@ def get_shadow_stage_policy_table() -> tuple[dict[str, Any], ...]:
     return tuple(rule.to_dict() for rule in SHADOW_STAGE_POLICY_TABLE)
 
 
-def resolve_shadow_table_policy(
+def get_stage_policy_table() -> tuple[dict[str, Any], ...]:
+    return get_shadow_stage_policy_table()
+
+
+def resolve_stage_table_policy(
     evidence: StageTransitionEvidence,
     signals: StageTransitionSignals,
 ) -> StageTransitionDecision:
     stage = str(evidence.current_stage or "auto").strip() or "auto"
+    config_version = DEFAULT_POLICY_CONFIG.stage_transition.version
     sorted_rules = sorted(
         enumerate(SHADOW_STAGE_POLICY_TABLE),
         key=lambda item: (-int(item[1].specificity), item[0]),
@@ -277,13 +285,14 @@ def resolve_shadow_table_policy(
         if matched:
             action = rule.action if rule.action in _VALID_ACTIONS else "reopen_broad"
             tags = (
-                "shadow_table",
-                f"shadow_rule:{rule.rule_id}",
+                "table_policy",
+                f"table_rule:{rule.rule_id}",
                 f"anchor_strength:{signals.anchor_strength}",
                 f"winner_quality:{signals.winner_quality}",
                 f"corr_pressure:{signals.corr_pressure}",
                 f"turnover_pressure:{signals.turnover_pressure}",
                 f"frontier_health:{signals.frontier_health}",
+                f"policy_config:{config_version}",
             )
             return StageTransitionDecision(
                 current_stage=stage,
@@ -295,7 +304,7 @@ def resolve_shadow_table_policy(
                 parent_selection_bias=rule.parent_selection_bias,
                 target_profile_bias=rule.target_profile_bias,
                 termination_bias=rule.termination_bias,
-                mode="shadow_table",
+                mode="table_policy",
             )
 
     return StageTransitionDecision(
@@ -303,11 +312,18 @@ def resolve_shadow_table_policy(
         next_stage="broad_followup",
         action="reopen_broad",
         confidence="low",
-        reason="no shadow table rule matched",
-        rationale_tags=("shadow_table", "shadow_rule:none"),
+        reason="no stage table rule matched",
+        rationale_tags=("table_policy", "table_rule:none", f"policy_config:{config_version}"),
         parent_selection_bias="diversify_branch",
-        mode="shadow_table",
+        mode="table_policy",
     )
+
+
+def resolve_shadow_table_policy(
+    evidence: StageTransitionEvidence,
+    signals: StageTransitionSignals,
+) -> StageTransitionDecision:
+    return resolve_stage_table_policy(evidence, signals)
 
 
 def compare_stage_transition_decisions(
@@ -318,16 +334,20 @@ def compare_stage_transition_decisions(
     legacy = legacy_decision.to_dict() if isinstance(legacy_decision, StageTransitionDecision) else dict(legacy_decision or {})
     shadow = shadow_decision.to_dict() if isinstance(shadow_decision, StageTransitionDecision) else dict(shadow_decision or {})
     return {
-        "mode": "legacy_vs_shadow_table",
+        "mode": "legacy_vs_table_policy",
         "legacy_next_stage": str(legacy.get("next_stage") or ""),
         "legacy_action": str(legacy.get("action") or ""),
         "legacy_reason": str(legacy.get("reason") or ""),
+        "table_next_stage": str(shadow.get("next_stage") or ""),
+        "table_action": str(shadow.get("action") or ""),
+        "table_reason": str(shadow.get("reason") or ""),
         "shadow_next_stage": str(shadow.get("next_stage") or ""),
         "shadow_action": str(shadow.get("action") or ""),
         "shadow_reason": str(shadow.get("reason") or ""),
         "stage_agrees": bool(legacy.get("next_stage") and legacy.get("next_stage") == shadow.get("next_stage")),
         "action_agrees": bool(legacy.get("action") and legacy.get("action") == shadow.get("action")),
         "legacy_tags": tuple(legacy.get("rationale_tags") or ()),
+        "table_tags": tuple(shadow.get("rationale_tags") or ()),
         "shadow_tags": tuple(shadow.get("rationale_tags") or ()),
     }
 

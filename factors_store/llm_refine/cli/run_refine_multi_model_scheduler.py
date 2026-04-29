@@ -36,15 +36,15 @@ from ..search import (
     EvaluationFeedback,
     FamilyState,
     RefinementAction,
+    SaturationAnalyzer,
     SearchBudget,
     SearchEngine,
     SearchPolicy,
     SignalExtractor,
     build_stage_transition_evidence,
-    build_stage_transition_shadow,
     build_search_normalizer,
     compare_stage_transition_decisions,
-    resolve_shadow_table_policy,
+    resolve_stage_table_policy,
 )
 from ..search.transition.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
 from ..search.core.scoring import pairwise_similarity
@@ -379,22 +379,24 @@ def _build_orchestration_trace(
         refinement_action,
         evaluation_feedback,
     )
-    stage_transition = resolve_stage_transition_from_state(
+    legacy_stage_transition = resolve_stage_transition_from_state(
         family_state,
         refinement_action,
         evaluation_feedback,
     )
     stage_transition_signals = SignalExtractor.from_evidence(stage_transition_evidence)
-    stage_transition_shadow_table = resolve_shadow_table_policy(
+    saturation_assessment = SaturationAnalyzer.from_evidence(
         stage_transition_evidence,
         stage_transition_signals,
     )
-    stage_transition_shadow_compare = compare_stage_transition_decisions(
-        legacy_decision=stage_transition,
-        shadow_decision=stage_transition_shadow_table,
+    stage_transition = resolve_stage_table_policy(
+        stage_transition_evidence,
+        stage_transition_signals,
     )
-    # Legacy if/else transition remains the primary execution driver; the table
-    # policy only emits a shadow decision for artifact comparison.
+    stage_transition_legacy_compare = compare_stage_transition_decisions(
+        legacy_decision=legacy_stage_transition,
+        shadow_decision=stage_transition,
+    )
     orchestration_profile = OrchestrationProfile(
         recommended_stage_mode=stage_transition.next_stage,
         round_strategy=stage_transition.action,
@@ -403,10 +405,6 @@ def _build_orchestration_trace(
         termination_bias=stage_transition.termination_bias,
         confidence=stage_transition.confidence,
         rationale_tags=stage_transition.rationale_tags,
-    )
-    stage_transition_shadow = build_stage_transition_shadow(
-        legacy_decision=orchestration_profile.to_dict(),
-        family_state_decision=stage_transition,
     )
     return {
         "context_evidence": evidence.to_dict(),
@@ -417,13 +415,19 @@ def _build_orchestration_trace(
         "evaluation_feedback": evaluation_feedback.to_dict(),
         "stage_transition_evidence": stage_transition_evidence.to_dict(),
         "stage_transition": stage_transition.to_dict(),
-        "stage_transition_legacy": stage_transition.to_dict(),
+        "stage_transition_policy": stage_transition.to_dict(),
+        "stage_transition_policy_source": "table_policy",
+        "stage_transition_legacy_audit": legacy_stage_transition.to_dict(),
+        "stage_transition_legacy_compare": stage_transition_legacy_compare,
         "stage_transition_signals": stage_transition_signals.to_dict(),
-        "stage_transition_shadow_table": stage_transition_shadow_table.to_dict(),
-        "stage_transition_shadow_compare": stage_transition_shadow_compare,
+        "saturation_assessment": saturation_assessment.to_dict(),
+        "stage_transition_legacy": legacy_stage_transition.to_dict(),
+        "stage_transition_shadow_table": stage_transition.to_dict(),
+        "stage_transition_shadow_compare": stage_transition_legacy_compare,
         "family_state_decision": stage_transition.to_dict(),
-        "legacy_orchestration_decision": orchestration_profile.to_dict(),
-        "stage_transition_shadow": stage_transition_shadow,
+        "table_orchestration_decision": orchestration_profile.to_dict(),
+        "legacy_orchestration_decision": legacy_stage_transition.to_dict(),
+        "stage_transition_shadow": stage_transition_legacy_compare,
     }
 
 
@@ -497,11 +501,18 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
     context_profile = dict(summary.get("orchestration_context_profile") or {})
     orchestration_profile = dict(summary.get("orchestration_profile") or {})
     stage_transition = dict(summary.get("stage_transition") or {})
-    stage_transition_shadow = dict(summary.get("stage_transition_shadow") or {})
+    stage_transition_legacy_audit = dict(summary.get("stage_transition_legacy_audit") or summary.get("stage_transition_legacy") or {})
+    stage_transition_legacy_compare = dict(
+        summary.get("stage_transition_legacy_compare") or summary.get("stage_transition_shadow_compare") or {}
+    )
+    stage_transition_signals = dict(summary.get("stage_transition_signals") or {})
+    saturation_assessment = dict(summary.get("saturation_assessment") or {})
+    saturation_components = dict(saturation_assessment.get("components") or {})
     rounds = list(summary.get("rounds") or [])
     last_round = dict(rounds[-1] or {}) if rounds else {}
     rationale_tags = list(orchestration_profile.get("rationale_tags") or [])
     stage_transition_tags = list(stage_transition.get("rationale_tags") or [])
+    legacy_tags = list(stage_transition_legacy_audit.get("rationale_tags") or [])
 
     lines = [
         f"# Multi-Model Scheduler Summary: {summary.get('family', '')}",
@@ -542,9 +553,9 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- confidence: `{orchestration_profile.get('confidence', '')}`",
         f"- rationale_tags: `{', '.join(str(item) for item in rationale_tags)}`",
         "",
-        "*Note: Legacy orchestration resolver has been retired. The trace above is derived from the advisory StageTransitionDecision.*",
+        "*Note: Stage transition is now table-policy driven. Legacy if/else output is retained only as an audit artifact.*",
         "",
-        "## Stage Transition Advisory",
+        "## Stage Transition Table Policy",
         f"- current_stage: `{stage_transition.get('current_stage', '')}`",
         f"- next_stage: `{stage_transition.get('next_stage', '')}`",
         f"- action: `{stage_transition.get('action', '')}`",
@@ -555,13 +566,36 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- rationale_tags: `{', '.join(str(item) for item in stage_transition_tags)}`",
         f"- reason: {stage_transition.get('reason', '')}",
         "",
-        "## Stage Transition Shadow",
-        f"- legacy_next_stage: `{stage_transition_shadow.get('legacy_next_stage', '')}`",
-        f"- legacy_action: `{stage_transition_shadow.get('legacy_action', '')}`",
-        f"- family_state_next_stage: `{stage_transition_shadow.get('family_state_next_stage', '')}`",
-        f"- family_state_action: `{stage_transition_shadow.get('family_state_action', '')}`",
-        f"- stage_agrees: `{stage_transition_shadow.get('stage_agrees', '')}`",
-        f"- action_agrees: `{stage_transition_shadow.get('action_agrees', '')}`",
+        "## Legacy Transition Audit",
+        f"- legacy_next_stage: `{stage_transition_legacy_audit.get('next_stage', '')}`",
+        f"- legacy_action: `{stage_transition_legacy_audit.get('action', '')}`",
+        f"- legacy_confidence: `{stage_transition_legacy_audit.get('confidence', '')}`",
+        f"- legacy_rationale_tags: `{', '.join(str(item) for item in legacy_tags)}`",
+        f"- legacy_reason: {stage_transition_legacy_audit.get('reason', '')}",
+        f"- table_vs_legacy_stage_agrees: `{stage_transition_legacy_compare.get('stage_agrees', '')}`",
+        f"- table_vs_legacy_action_agrees: `{stage_transition_legacy_compare.get('action_agrees', '')}`",
+        "",
+        "## Stage Transition Signals",
+        f"- anchor_strength: `{stage_transition_signals.get('anchor_strength', '')}`",
+        f"- winner_quality: `{stage_transition_signals.get('winner_quality', '')}`",
+        f"- material_gain: `{stage_transition_signals.get('material_gain', '')}`",
+        f"- material_gain_score: `{stage_transition_signals.get('material_gain_score', '')}`",
+        f"- corr_pressure: `{stage_transition_signals.get('corr_pressure', '')}`",
+        f"- turnover_pressure: `{stage_transition_signals.get('turnover_pressure', '')}`",
+        f"- frontier_health: `{stage_transition_signals.get('frontier_health', '')}`",
+        f"- no_improve_count: `{stage_transition_signals.get('no_improve_count', '')}`",
+        f"- validation_fail_count: `{stage_transition_signals.get('validation_fail_count', '')}`",
+        "",
+        "## Saturation Assessment",
+        f"- grade: `{saturation_assessment.get('grade', '')}`",
+        f"- score: `{saturation_assessment.get('score', '')}`",
+        f"- recommended_escape_mode: `{saturation_assessment.get('recommended_escape_mode', '')}`",
+        f"- components: `corr={saturation_components.get('corr', '')}, "
+        f"motif={saturation_components.get('motif', '')}, "
+        f"plateau={saturation_components.get('plateau', '')}, "
+        f"frontier={saturation_components.get('frontier', '')}, "
+        f"anchor_reuse={saturation_components.get('anchor_reuse', '')}`",
+        f"- advisory_only: `{dict(saturation_assessment.get('diagnostics') or {}).get('advisory_only', '')}`",
         "",
         "## Runtime Evidence",
         f"- selected_parent_kind: `{context_evidence.get('selected_parent_kind', '')}`",
@@ -834,6 +868,12 @@ def _build_scheduler_summary_payload(
         "evaluation_feedback": dict(last_round.get("evaluation_feedback") or {}),
         "stage_transition_evidence": dict(last_round.get("stage_transition_evidence") or {}),
         "stage_transition": dict(last_round.get("stage_transition") or {}),
+        "stage_transition_policy": dict(last_round.get("stage_transition_policy") or {}),
+        "stage_transition_policy_source": str(last_round.get("stage_transition_policy_source") or ""),
+        "stage_transition_legacy_audit": dict(last_round.get("stage_transition_legacy_audit") or {}),
+        "stage_transition_legacy_compare": dict(last_round.get("stage_transition_legacy_compare") or {}),
+        "stage_transition_signals": dict(last_round.get("stage_transition_signals") or {}),
+        "saturation_assessment": dict(last_round.get("saturation_assessment") or {}),
         "family_state_decision": dict(last_round.get("family_state_decision") or {}),
         "legacy_orchestration_decision": dict(last_round.get("legacy_orchestration_decision") or {}),
         "stage_transition_shadow": dict(last_round.get("stage_transition_shadow") or {}),

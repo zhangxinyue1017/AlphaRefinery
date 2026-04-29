@@ -6,6 +6,8 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ..policy_config import DEFAULT_POLICY_CONFIG
+
 
 def _safe_float(value: object, default: float = float("nan")) -> float:
     try:
@@ -54,43 +56,56 @@ class DecorrelationPolicy:
         target_profile: str = "",
         decorrelation_targets_present: bool = False,
     ) -> "DecorrelationPolicy":
+        defaults = DEFAULT_POLICY_CONFIG.decorrelation
         profile = str(target_profile or getattr(policy, "target_profile", "raw_alpha") or "raw_alpha").strip().lower()
         strong_gate_enabled = bool(decorrelation_targets_present or profile == "complementarity")
-        excellent_bonus = float(getattr(policy, "decorrelation_excellent_bonus", 0.12))
-        good_bonus = float(getattr(policy, "decorrelation_good_bonus", 0.08))
-        acceptable_bonus = float(getattr(policy, "decorrelation_acceptable_bonus", 0.03))
-        weak_penalty = float(getattr(policy, "decorrelation_weak_penalty", 0.08))
-        failed_penalty = float(getattr(policy, "decorrelation_failed_penalty", 0.16))
-        avg_corr_penalty_weight = float(getattr(policy, "decorrelation_avg_corr_penalty_weight", 0.05))
+        excellent_bonus = float(getattr(policy, "decorrelation_excellent_bonus", defaults.excellent_bonus))
+        good_bonus = float(getattr(policy, "decorrelation_good_bonus", defaults.good_bonus))
+        acceptable_bonus = float(getattr(policy, "decorrelation_acceptable_bonus", defaults.acceptable_bonus))
+        weak_penalty = float(getattr(policy, "decorrelation_weak_penalty", defaults.weak_penalty))
+        failed_penalty = float(getattr(policy, "decorrelation_failed_penalty", defaults.failed_penalty))
+        avg_corr_penalty_weight = float(
+            getattr(policy, "decorrelation_avg_corr_penalty_weight", defaults.avg_corr_penalty_weight)
+        )
         if profile == "complementarity":
-            excellent_bonus = max(excellent_bonus, 0.25)
-            good_bonus = max(good_bonus, 0.15)
-            acceptable_bonus = max(acceptable_bonus, 0.05)
-            weak_penalty = max(weak_penalty, 0.20)
-            failed_penalty = max(failed_penalty, 0.35)
-            avg_corr_penalty_weight = max(avg_corr_penalty_weight, 0.12)
+            excellent_bonus = max(excellent_bonus, defaults.complementarity_excellent_bonus)
+            good_bonus = max(good_bonus, defaults.complementarity_good_bonus)
+            acceptable_bonus = max(acceptable_bonus, defaults.complementarity_acceptable_bonus)
+            weak_penalty = max(weak_penalty, defaults.complementarity_weak_penalty)
+            failed_penalty = max(failed_penalty, defaults.complementarity_failed_penalty)
+            avg_corr_penalty_weight = max(avg_corr_penalty_weight, defaults.complementarity_avg_corr_penalty_weight)
         return cls(
             target_profile=profile,
             strong_gate_enabled=strong_gate_enabled,
-            excellent_corr_threshold=float(getattr(policy, "decorrelation_excellent_corr", 0.35)),
-            good_corr_threshold=float(getattr(policy, "decorrelation_good_corr", 0.55)),
-            acceptable_corr_threshold=float(getattr(policy, "decorrelation_acceptable_corr", 0.70)),
-            weak_corr_threshold=float(getattr(policy, "decorrelation_weak_corr", 0.85)),
-            suppress_winner_corr_threshold=float(getattr(policy, "decorrelation_suppress_winner_corr", 0.75)),
-            soft_drop_corr_threshold=float(getattr(policy, "decorrelation_soft_drop_corr", 0.85)),
-            hard_drop_corr_threshold=float(getattr(policy, "decorrelation_hard_drop_corr", 0.90)),
+            excellent_corr_threshold=float(getattr(policy, "decorrelation_excellent_corr", defaults.excellent_corr)),
+            good_corr_threshold=float(getattr(policy, "decorrelation_good_corr", defaults.good_corr)),
+            acceptable_corr_threshold=float(getattr(policy, "decorrelation_acceptable_corr", defaults.acceptable_corr)),
+            weak_corr_threshold=float(getattr(policy, "decorrelation_weak_corr", defaults.weak_corr)),
+            suppress_winner_corr_threshold=float(
+                getattr(policy, "decorrelation_suppress_winner_corr", defaults.suppress_winner_corr)
+            ),
+            soft_drop_corr_threshold=float(getattr(policy, "decorrelation_soft_drop_corr", defaults.soft_drop_corr)),
+            hard_drop_corr_threshold=float(getattr(policy, "decorrelation_hard_drop_corr", defaults.hard_drop_corr)),
             excellent_bonus=excellent_bonus,
             good_bonus=good_bonus,
             acceptable_bonus=acceptable_bonus,
             weak_penalty=weak_penalty,
             failed_penalty=failed_penalty,
             avg_corr_penalty_weight=avg_corr_penalty_weight,
-            quality_icir_floor=float(getattr(policy, "decorrelation_quality_icir_floor", 0.15)),
-            quality_sharpe_floor=float(getattr(policy, "decorrelation_quality_sharpe_floor", 1.20)),
-            quality_excess_floor=float(getattr(policy, "decorrelation_quality_excess_floor", 0.05)),
-            quality_ann_floor=float(getattr(policy, "decorrelation_quality_ann_floor", 1.50)),
-            strong_quality_icir=float(getattr(policy, "decorrelation_strong_quality_icir", 0.50)),
-            strong_quality_sharpe=float(getattr(policy, "decorrelation_strong_quality_sharpe", 3.00)),
+            quality_icir_floor=float(getattr(policy, "decorrelation_quality_icir_floor", defaults.quality_icir_floor)),
+            quality_sharpe_floor=float(
+                getattr(policy, "decorrelation_quality_sharpe_floor", defaults.quality_sharpe_floor)
+            ),
+            quality_excess_floor=float(
+                getattr(policy, "decorrelation_quality_excess_floor", defaults.quality_excess_floor)
+            ),
+            quality_ann_floor=float(getattr(policy, "decorrelation_quality_ann_floor", defaults.quality_ann_floor)),
+            strong_quality_icir=float(
+                getattr(policy, "decorrelation_strong_quality_icir", defaults.strong_quality_icir)
+            ),
+            strong_quality_sharpe=float(
+                getattr(policy, "decorrelation_strong_quality_sharpe", defaults.strong_quality_sharpe)
+            ),
         )
 
 

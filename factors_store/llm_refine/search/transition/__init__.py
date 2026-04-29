@@ -26,7 +26,9 @@ from .stage_transition import (
 from .table_policy import (
     ShadowPolicyRule,
     compare_stage_transition_decisions,
+    get_stage_policy_table,
     get_shadow_stage_policy_table,
+    resolve_stage_table_policy,
     resolve_shadow_table_policy,
 )
 
@@ -47,9 +49,11 @@ __all__ = [
     "build_stage_transition_shadow",
     "compare_stage_transition_decisions",
     "get_phase_policy_table",
+    "get_stage_policy_table",
     "get_shadow_stage_policy_table",
     "resolve_context_profile",
     "resolve_orchestration_profile",
+    "resolve_stage_table_policy",
     "resolve_shadow_table_policy",
     "resolve_stage_transition",
     "resolve_stage_transition_from_state",

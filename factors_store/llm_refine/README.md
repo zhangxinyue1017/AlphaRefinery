@@ -10,7 +10,7 @@
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
 - 🪢 **Shared context alignment** across prompting, decision trace, and orchestration
 - 🪄 **De-correlation-aware refinement** with unified assessment, rerank diagnostics, and early complementarity gates
-- 🔍 **Auditable transition policy** with explicit signals and a shadow table running beside legacy stage logic
+- 🔍 **Table-driven transition policy** with explicit signals and legacy logic retained as audit-only reference
 
 ---
 
@@ -180,8 +180,8 @@ The goal is to make the refinement loop **more consistent, more traceable, and e
   - rerank hook and complementarity early gate
 - Stage-transition signal layer
   - explicit signal extraction
-  - shadow table policy
-  - legacy / shadow decision comparison in summaries
+  - formal table policy
+  - legacy / table decision comparison in summaries
 - `NA-heavy keep / best_node` tightening
 
 ---
@@ -284,7 +284,7 @@ factors_store/llm_refine/
   * layered search and control logic
   * `core/`: frontier / policy / engine / objectives / path evaluation
   * `decision/`: rerank, winner / keep selection, decorrelation policy
-  * `transition/`: stage evidence, signal extraction, legacy and shadow transition policy
+  * `transition/`: stage evidence, signal extraction, formal table policy, legacy audit helpers
   * `io/`: evaluated-run artifact ingestion
 * `docs/`
 
@@ -353,7 +353,7 @@ The search package has been split into explicit sublayers:
 | --- | --- | --- |
 | Core search | `search/core/` | `SearchEngine`, frontier, scoring, objectives, `SearchPolicy`, search state |
 | Candidate decision | `search/decision/` | `DecisionEngine`, decision features, decorrelation assessment and gates |
-| Stage transition | `search/transition/` | context resolution, transition evidence, signals, legacy and shadow policy |
+| Stage transition | `search/transition/` | context resolution, transition evidence, signals, table policy, legacy audit |
 | IO adapters | `search/io/` | loading completed run artifacts into search records |
 
 The old flat import paths are kept as compatibility wrappers. New code should prefer the layered paths.
@@ -410,10 +410,11 @@ The long-term goal is:
 
 ---
 
-## Additional Notes on Stage Transition Signals and Shadow Table
+## Additional Notes on Stage Transition Signals and Table Policy
 
-Stage transition still uses the legacy if/else path as the formal execution path.
-In parallel, the subsystem now extracts explicit transition signals and runs a shadow table policy for comparison.
+Stage transition now uses the explicit signal/table policy as the formal
+execution-facing decision path. The legacy if/else resolver is retained only as
+an audit artifact during migration.
 
 The main signals include:
 
@@ -429,7 +430,7 @@ The main signals include:
 * `model_consensus`
 * `validation_fail_count`
 
-The shadow policy currently recommends one of:
+The table policy currently recommends one of:
 
 * `continue_focused`
 * `reopen_broad`
@@ -437,10 +438,21 @@ The shadow policy currently recommends one of:
 * `confirmation`
 * `terminate`
 
-Summaries and artifacts record legacy decision, shadow decision, signal values, and disagreement diagnostics.
-This makes it possible to compare table-style routing against the legacy transition path before allowing it to control execution.
+Summaries and artifacts record the table decision, legacy audit decision, signal values, and disagreement diagnostics.
+This makes it possible to keep monitoring table-style routing while no longer letting the legacy path control execution.
 
 For the full table and thresholds, see [docs/stage_transition_signals.md](./docs/stage_transition_signals.md).
+
+Policy thresholds and search weights are centralized in `search/policy_config.py`
+as `DEFAULT_POLICY_CONFIG`. This keeps `SearchPolicy` presets, target-profile
+overlays, stage routing, decorrelation, and saturation knobs versioned and
+auditable instead of spreading constants across controllers.
+
+Family-loop and scheduler artifacts also include an advisory
+`saturation_assessment` with one continuous score, a small component breakdown,
+and a recommended escape mode. It does not control the main path yet; it is
+intended for offline auditing before we promote saturation into a scoring/value
+layer.
 
 ---
 
@@ -698,7 +710,7 @@ Interfaces currently reserved:
 
 * [search/README.md](./search/README.md)
 
-### Want to inspect stage-transition signals / shadow table policy
+### Want to inspect stage-transition signals / table policy
 
 * [docs/stage_transition_signals.md](./docs/stage_transition_signals.md)
 

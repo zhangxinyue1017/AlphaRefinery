@@ -8,8 +8,9 @@ and artifact adapters stay separate.
 | --- | --- | --- |
 | Core search | `search/core/` | Search nodes, budgets, frontier ranking, search scoring, normalizers, target-profile weights. |
 | Candidate decision | `search/decision/` | Candidate features, winner/keep rerank, decorrelation scoring and gates. |
-| Stage transition | `search/transition/` | Runtime context, legacy stage advisory, signal extraction, shadow table policy. |
+| Stage transition | `search/transition/` | Runtime context, signal extraction, table-driven stage policy, legacy audit helpers. |
 | IO adapters | `search/io/` | Loading evaluated run artifacts into search records. |
+| Policy config | `search/policy_config.py` | Versioned thresholds and weights shared by signals, decorrelation, and advisory saturation. |
 
 ## Dependency Direction
 
@@ -45,10 +46,16 @@ implementation modules have been removed to keep the package boundary explicit.
 
 | Surface | Owner | Notes |
 | --- | --- | --- |
-| Search scoring / frontier policy | `core/policy.py`, `core/scoring.py` | Target profiles, frontier scoring, branch value, MMR-related search behavior. |
+| Search scoring / frontier policy | `core/policy.py`, `core/scoring.py` | Runtime `SearchPolicy`, frontier scoring, branch value, MMR-related search behavior. |
 | Candidate rerank / keep / winner | `decision/engine.py`, `decision/features.py` | Produces rerank previews and round-level best candidate / best keep records. |
 | De-correlation policy | `decision/decorrelation_policy.py` | Unified grade, score, rerank adjustment, and complementarity/decorrelation gates. |
-| Stage transition policy | `transition/stage_transition.py`, `transition/signals.py`, `transition/table_policy.py` | Legacy transition decision plus explicit signals and shadow table recommendation. |
+| Saturation assessment | `decision/saturation_policy.py` | Advisory continuous family-saturation score written to artifacts; not a main-path action in v1. |
+| Stage transition policy | `transition/stage_transition.py`, `transition/signals.py`, `transition/table_policy.py` | Formal table-policy decision plus explicit signals and legacy audit comparison. |
+| Shared policy defaults | `policy_config.py` | `DEFAULT_POLICY_CONFIG` keeps search weights, thresholds, and overlays visible instead of scattered through code. |
 
-For the stage signal thresholds and shadow table, see
+For the stage signal thresholds and stage policy table, see
 [`../docs/stage_transition_signals.md`](../docs/stage_transition_signals.md).
+
+`core/policy.py` intentionally remains the typed runtime object. The numeric
+defaults for `SearchPolicy` presets, target-profile overlays, and search-mode
+overlays live in `policy_config.py` under `DEFAULT_POLICY_CONFIG.search`.

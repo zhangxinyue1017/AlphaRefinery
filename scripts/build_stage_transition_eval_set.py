@@ -20,7 +20,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from factors_store.llm_refine.config import DEFAULT_MULTI_SCHEDULER_RUNS_DIR, PROJECT_ROOT
 from factors_store.llm_refine.search import EvaluationFeedback, FamilyState, RefinementAction
-from factors_store.llm_refine.search.transition.stage_transition import resolve_stage_transition_from_state
+from factors_store.llm_refine.search.transition.signals import SignalExtractor
+from factors_store.llm_refine.search.transition.stage_transition import build_stage_transition_evidence
+from factors_store.llm_refine.search.transition.table_policy import resolve_stage_table_policy
 
 
 LABELS = (
@@ -178,7 +180,9 @@ def _row(path: Path, root: Path) -> dict[str, Any] | None:
     if not summary:
         return None
     state, action, feedback = _build_state_action_feedback(summary)
-    decision = resolve_stage_transition_from_state(state, action, feedback).to_dict()
+    evidence = build_stage_transition_evidence(state, action, feedback)
+    signals = SignalExtractor.from_evidence(evidence)
+    decision = resolve_stage_table_policy(evidence, signals).to_dict()
     predicted = _decision_to_label(decision)
     winner = dict(summary.get("last_round_best_candidate") or summary.get("last_round_winner") or {})
     keep = dict(summary.get("last_round_best_keep") or {})

@@ -6,7 +6,7 @@
 [![LLM Refine](https://img.shields.io/badge/LLM_Refine-Family%20Loop%20%2B%20Round1%20Bootstrap-4C8BF5.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Target Search](https://img.shields.io/badge/Target--Conditioned_Search-v1-7B61FF.svg?style=flat)](./factors_store/llm_refine/README.md)
 [![Research Funnel](https://img.shields.io/badge/Research_Funnel-Uplift%20%2B%20Stability-0F766E.svg?style=flat)](./factors_store/llm_refine/README.md)
-[![Stage Policy](https://img.shields.io/badge/Stage_Policy-Signals%20%2B%20Shadow_Table-6D5DF6.svg?style=flat)](./factors_store/llm_refine/docs/stage_transition_signals.md)
+[![Stage Policy](https://img.shields.io/badge/Stage_Policy-Signals%20%2B%20Table-6D5DF6.svg?style=flat)](./factors_store/llm_refine/docs/stage_transition_signals.md)
 
 **🚩 旗舰子系统：** [`llm_refine`](./factors_store/llm_refine/README.md) —— 一个面向 family 级因子精炼的 LLM 驱动研究引擎，支持阶段化搜索推进、分支保留、目标条件化搜索，以及上下文感知决策。
 
@@ -18,7 +18,8 @@
 - 🎯 面向 `raw_alpha`、`deployability`、`complementarity` 的**目标条件化搜索**
 - 🧩 用于 rerank、anchor selection、next-step recommendation 的**上下文感知决策**
 - 🪄 带统一评分、rerank 诊断和 complementarity gate 的 **de-correlation-aware refinement**
-- 🔍 同时记录 legacy 决策与 shadow table 建议的**可审计 stage policy signals**
+- 🔍 由显式 signals 驱动、并保留 legacy audit 的 **stage table policy**
+- 🧮 统一版本化的 **policy config**，集中管理 SearchPolicy 权重、阈值和 advisory family saturation score
 - 🏗 配套提供 **evaluation、reports、promotion，以及本地可选的下游检查钩子**
 
 ## 📌 从这里开始
@@ -217,7 +218,7 @@ graph TD
 * dual-parent branch preservation
 * Path Evaluation
 * target-conditioned search
-* stage-transition signals 与 shadow table policy 对比
+* stage-transition signals 与 table policy，legacy 仅保留为 audit
 * complementarity-oriented de-correlation assessment
 * context-aware rerank 与 anchor selection
 * archive、reporting、promotion 与 funnel evaluation workflows

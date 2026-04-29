@@ -1,9 +1,19 @@
 # Stage Transition Signals
 
-This note documents the shadow signal/table layer used to audit stage
-transition decisions. The legacy `resolve_stage_transition` if/else resolver
-remains the execution path. The table policy only writes a shadow decision into
-artifacts for comparison.
+This note documents the signal/table layer used for formal stage-transition
+decisions. The table policy is now the execution-facing transition decision;
+the legacy `resolve_stage_transition` if/else resolver is retained only as an
+audit reference.
+
+Thresholds are centralized in `search/policy_config.py` under
+`DEFAULT_POLICY_CONFIG`. The numeric values below document the default
+`refine_policy_config_v1`; they should not be duplicated as new hard-coded
+constants in policy modules.
+
+To tune policy behavior, change the matching dataclass in `policy_config.py`
+first, then let signal extraction / decorrelation / saturation consume that
+shared value. This keeps new knobs visible and prevents policy drift across
+modules.
 
 ## Signals
 
@@ -78,7 +88,7 @@ This is the explicit replacement for the older branch-diversity intuition.
 
 ### `model_consensus`
 
-This is currently a weak shadow signal based on repeated motif/skeleton support
+This is currently a weak signal based on repeated motif/skeleton support
 across models.
 
 | Value | Condition |
@@ -96,9 +106,9 @@ across models.
 | `frontier_exhausted` | boolean frontier exhaustion flag |
 | `validation_fail_count` | integer candidate-level evaluation failure count; one failed candidate does not mean the round failed |
 
-## Shadow Actions
+## Stage Actions
 
-The shadow table emits only:
+The stage table emits only:
 
 - `continue_focused`
 - `reopen_broad`
@@ -123,14 +133,14 @@ Important priority choices:
 - Correlation pressure is derived from runtime overlap/crowding diagnostics, not
   from `has_decorrelation_targets` alone.
 
-## Shadow Policy Table
+## Stage Policy Table
 
-The table below mirrors `SHADOW_STAGE_POLICY_TABLE` in
+The table below mirrors the stage policy table in
 `search/transition/table_policy.py`. It is intentionally small and auditable: each
 row matches a phase, checks simple conditions against extracted signals, and
-emits one shadow action.
+emits one stage-transition action.
 
-| Specificity | Rule | Phase | Conditions | Shadow action | Next stage | Intent |
+| Specificity | Rule | Phase | Conditions | Stage action | Next stage | Intent |
 |---:|---|---|---|---|---|---|
 | 100 | `frontier_exhausted_terminal` | `any` | `frontier_exhausted=true` | `terminate` | `terminate` | Hard-stop exhausted frontier before empty-flat fallback. |
 | 95 | `round_failed_reopen` | `any` | `last_round_status=failed` | `reopen_broad` | `broad_followup` | Treat failed rounds as repair/reopen, not phase advancement. |
@@ -147,8 +157,8 @@ emits one shadow action.
 | 50 | `no_improve_reopen` | `any` | `no_improve_count>=2`, `frontier_health>=medium` | `reopen_broad` | `broad_followup` | Repeated no-improve with live frontier should reopen broad search. |
 | 48 | `no_improve_terminate` | `any` | `no_improve_count>=2`, `frontier_health<=low` | `terminate` | `terminate` | Repeated no-improve with weak frontier should stop. |
 | 40 | `empty_or_low_frontier_broad` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | `winner_quality=none`, `anchor_strength=none`, `frontier_health<=low` | `terminate` | `terminate` | Broad search has no usable signal and poor frontier health. |
-| 1 | `broad_default_reopen` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | none | `reopen_broad` | `broad_followup` | Default broad-stage shadow action keeps search open. |
-| 1 | `focused_default_reopen` | `focused_refine` | none | `reopen_broad` | `broad_followup` | Default focused-stage shadow action reopens broad search. |
+| 1 | `broad_default_reopen` | `new_family_broad`, `broad_followup`, `family_loop`, `auto` | none | `reopen_broad` | `broad_followup` | Default broad-stage table action keeps search open. |
+| 1 | `focused_default_reopen` | `focused_refine` | none | `reopen_broad` | `broad_followup` | Default focused-stage table action reopens broad search. |
 | 1 | `terminal_phase_terminate` | `confirmation`, `donor_validation` | none | `terminate` | `terminate` | Confirmation and donor-validation are terminal for stage transition. |
 
 ### Rule Syntax
@@ -171,11 +181,48 @@ Ordered levels are defined in `table_policy.py`:
 | `frontier_health` | `exhausted < low < medium < high` |
 | `model_consensus` | `low < medium < high` |
 
+## Saturation Assessment
+
+Family-loop and scheduler summaries now also write an advisory
+`saturation_assessment`. This is deliberately **not** a stage-transition action
+yet; it is a continuous audit signal for deciding later whether a family is
+being over-mined.
+
+| Field | Meaning |
+|---|---|
+| `score` | Weighted continuous score in `[0, 1]` |
+| `grade` | `low`, `medium`, `high`, or `critical` from score thresholds |
+| `recommended_escape_mode` | Advisory hint: `continue_local`, `diversify_within_family`, `switch_to_complementarity`, `fork_new_seed`, or `retire_family` |
+| `components.corr` | Pressure from high-correlation diagnostics |
+| `components.motif` | Motif/family crowding pressure |
+| `components.plateau` | Consecutive no-improve pressure |
+| `components.frontier` | Weak/exhausted frontier pressure |
+| `components.anchor_reuse` | Approximate repeated-anchor / no-anchor pressure |
+
+Default saturation weights live in `SaturationPolicyConfig`:
+
+| Component | Weight |
+|---|---:|
+| `corr` | `0.35` |
+| `motif` | `0.25` |
+| `plateau` | `0.20` |
+| `frontier` | `0.10` |
+| `anchor_reuse` | `0.10` |
+
+The main table policy does not consume `saturation_assessment` in v1. This keeps
+the production decision surface small while collecting enough data for a later
+scoring/value layer.
+
 ## Artifact Fields
 
 Family-loop and scheduler artifacts include:
 
-- `stage_transition_legacy`: legacy if/else decision.
+- `stage_transition`: formal table-policy decision.
+- `stage_transition_policy`: alias of the formal table-policy decision.
+- `stage_transition_policy_source`: currently `table_policy`.
+- `stage_transition_legacy_audit`: legacy if/else decision retained for audit.
+- `stage_transition_legacy_compare`: legacy-vs-table agreement flags.
 - `stage_transition_signals`: extracted signal values and diagnostics.
-- `stage_transition_shadow_table`: shadow table decision.
-- `stage_transition_shadow_compare`: legacy-vs-shadow agreement flags.
+- `saturation_assessment`: advisory continuous family-saturation score and component breakdown.
+- `stage_transition_shadow_table`: deprecated alias of the table-policy decision.
+- `stage_transition_shadow_compare`: deprecated alias of legacy-vs-table agreement flags.
