@@ -40,6 +40,7 @@ from ..search import (
     SignalExtractor,
     build_stage_transition_evidence,
     compare_stage_transition_decisions,
+    resolve_round_transition_plan,
     resolve_stage_table_policy,
     resolve_stage_transition_from_state,
 )
@@ -1067,6 +1068,19 @@ def build_family_loop_summary(
         legacy_decision=legacy_stage_transition,
         shadow_decision=stage_transition,
     )
+    round_transition_plan = resolve_round_transition_plan(
+        stage_transition=stage_transition,
+        signals=stage_transition_signals,
+        saturation_assessment=saturation_assessment,
+        current_stage=family_state.stage,
+        target_profile=target_profile,
+        rounds_completed=1,
+        base_max_rounds=1,
+        max_total_rounds=1,
+        policy_extension_count=0,
+        max_policy_extensions=0,
+        transition_authority="advisory",
+    )
     orchestration_profile = OrchestrationProfile(
         recommended_stage_mode=stage_transition.next_stage,
         round_strategy=stage_transition.action,
@@ -1121,6 +1135,10 @@ def build_family_loop_summary(
         "stage_transition_legacy_compare": stage_transition_legacy_compare,
         "stage_transition_signals": stage_transition_signals.to_dict(),
         "saturation_assessment": saturation_assessment.to_dict(),
+        "round_transition_plan": round_transition_plan.to_dict(),
+        "transition_authority": round_transition_plan.transition_authority,
+        "budget_gate_decision": round_transition_plan.budget_gate,
+        "policy_extension_count": int(round_transition_plan.policy_extension_count),
         "stage_transition_legacy": legacy_stage_transition.to_dict(),
         "stage_transition_shadow_table": stage_transition.to_dict(),
         "stage_transition_shadow_compare": stage_transition_legacy_compare,
@@ -1155,6 +1173,8 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
     stage_transition_signals = dict(summary.get("stage_transition_signals") or {})
     saturation_assessment = dict(summary.get("saturation_assessment") or {})
     saturation_components = dict(saturation_assessment.get("components") or {})
+    round_transition_plan = dict(summary.get("round_transition_plan") or {})
+    budget_gate = dict(round_transition_plan.get("budget_gate") or summary.get("budget_gate_decision") or {})
     stage_transition_tags = list(stage_transition.get("rationale_tags") or [])
     legacy_tags = list(stage_transition_legacy_audit.get("rationale_tags") or [])
 
@@ -1253,6 +1273,20 @@ def render_family_loop_markdown(summary: dict[str, Any]) -> str:
         f"frontier={saturation_components.get('frontier', '')}, "
         f"anchor_reuse={saturation_components.get('anchor_reuse', '')}`",
         f"- advisory_only: `{dict(saturation_assessment.get('diagnostics') or {}).get('advisory_only', '')}`",
+        "",
+        "## Round Transition Plan",
+        f"- transition_authority: `{round_transition_plan.get('transition_authority', '')}`",
+        f"- control_effective: `{round_transition_plan.get('control_effective', '')}`",
+        f"- execute_next_round: `{round_transition_plan.get('execute_next_round', '')}`",
+        f"- next_stage_mode: `{round_transition_plan.get('next_stage_mode', '')}`",
+        f"- next_target_profile: `{round_transition_plan.get('next_target_profile', '')}`",
+        f"- policy_extension_granted: `{round_transition_plan.get('policy_extension_granted', '')}`",
+        f"- policy_extension_count: `{round_transition_plan.get('policy_extension_count', '')}`",
+        f"- stop_reason: `{round_transition_plan.get('stop_reason', '')}`",
+        f"- reason: {round_transition_plan.get('reason', '')}",
+        f"- budget_gate: `base_remaining={budget_gate.get('base_budget_remaining', '')}, "
+        f"total_remaining={budget_gate.get('total_budget_remaining', '')}, "
+        f"needs_extension={budget_gate.get('needs_policy_extension', '')}`",
         "",
         "## Broad Strongest",
         f"- factor: `{broad.get('factor_name', '')}`",

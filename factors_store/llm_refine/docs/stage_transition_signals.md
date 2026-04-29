@@ -5,6 +5,17 @@ decisions. The table policy is now the execution-facing transition decision;
 the legacy `resolve_stage_transition` if/else resolver is retained only as an
 audit reference.
 
+Stage transition and round transition are intentionally separate:
+
+| Layer | Question | Output |
+|---|---|---|
+| Stage transition | What research stage/action should this family move toward? | `StageTransitionDecision` |
+| Round transition | Should the runner execute another round under the current authority and budget? | `RoundTransitionPlan` |
+
+`StageTransitionDecision` is a research-state decision. `RoundTransitionPlan`
+is the execution/budget gate that decides whether the stage decision can become
+another launched round.
+
 Thresholds are centralized in `search/policy_config.py` under
 `DEFAULT_POLICY_CONFIG`. The numeric values below document the default
 `refine_policy_config_v1`; they should not be duplicated as new hard-coded
@@ -224,5 +235,37 @@ Family-loop and scheduler artifacts include:
 - `stage_transition_legacy_compare`: legacy-vs-table agreement flags.
 - `stage_transition_signals`: extracted signal values and diagnostics.
 - `saturation_assessment`: advisory continuous family-saturation score and component breakdown.
+- `round_transition_plan`: execution plan produced from the stage decision, authority mode, and budget gates.
+- `transition_authority`: `audit_only`, `advisory`, or `guarded_control`.
+- `budget_gate_decision`: compact copy of the round-controller budget gate diagnostics.
 - `stage_transition_shadow_table`: deprecated alias of the table-policy decision.
 - `stage_transition_shadow_compare`: deprecated alias of legacy-vs-table agreement flags.
+
+## Round Transition Authority
+
+`search/transition/round_controller.py` converts the stage decision into a
+round-level execution plan.
+
+| Authority | Effect |
+|---|---|
+| `audit_only` | Writes the plan but never controls execution. |
+| `advisory` | Writes the plan and shows whether budget would allow a next round; existing runner limits still control execution. |
+| `guarded_control` | Allows the table-policy decision to launch another round inside hard budget gates. |
+
+Guarded control keeps hard brakes:
+
+- `frontier_exhausted` and `budget_exhausted` stop immediately.
+- `max_total_rounds` cannot be exceeded.
+- `max_policy_extensions` limits extra rounds after the base `max_rounds`.
+- `continue_focused` extensions require usable-or-better winner quality, safe
+  turnover/correlation pressure, and low/medium saturation. Focused-stage
+  extensions also require `material_gain=true`.
+
+Scheduler CLI knobs:
+
+```bash
+--transition-authority advisory
+--transition-authority guarded_control
+--max-policy-extensions 2
+--max-total-rounds 4
+```

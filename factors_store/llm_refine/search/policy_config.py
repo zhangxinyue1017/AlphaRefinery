@@ -140,6 +140,19 @@ class SaturationPolicyConfig:
 
 
 @dataclass(frozen=True)
+class RoundTransitionPolicyConfig:
+    version: str = "round_transition_policy_v1"
+    default_authority: str = "advisory"
+    max_policy_extensions: int = 2
+    default_max_total_rounds: int = 4
+    allowed_authorities: tuple[str, ...] = ("audit_only", "advisory", "guarded_control")
+    extension_safe_saturation_grades: tuple[str, ...] = ("low", "medium")
+    extension_max_turnover_pressure: str = "medium"
+    extension_max_corr_pressure: str = "medium"
+    extension_min_winner_quality: str = "usable"
+
+
+@dataclass(frozen=True)
 class SearchPolicyBaseConfig:
     version: str = "search_policy_base_v1"
     selection_strategy: str = "ucb_lite"
@@ -375,6 +388,7 @@ class RefinePolicyConfig:
     version: str = "refine_policy_config_v1"
     search: SearchPolicyConfig = SearchPolicyConfig()
     stage_transition: StageTransitionPolicyConfig = StageTransitionPolicyConfig()
+    round_transition: RoundTransitionPolicyConfig = RoundTransitionPolicyConfig()
     decorrelation: DecorrelationPolicyConfig = DecorrelationPolicyConfig()
     saturation: SaturationPolicyConfig = SaturationPolicyConfig()
 

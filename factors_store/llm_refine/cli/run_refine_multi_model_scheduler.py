@@ -33,6 +33,7 @@ from ..core.archive import (
 from ..core.seed_loader import load_seed_pool, resolve_family_formula, resolve_preferred_refine_seed
 from ..knowledge.round1 import build_bootstrap_frontier, is_seed_stage_node_kind, select_bootstrap_parent
 from ..search import (
+    DEFAULT_POLICY_CONFIG,
     EvaluationFeedback,
     FamilyState,
     RefinementAction,
@@ -44,6 +45,7 @@ from ..search import (
     build_stage_transition_evidence,
     build_search_normalizer,
     compare_stage_transition_decisions,
+    resolve_round_transition_plan,
     resolve_stage_table_policy,
 )
 from ..search.transition.context_resolver import ContextEvidence, OrchestrationProfile, resolve_context_profile
@@ -185,6 +187,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=_STAGE_MODE_CHOICES,
         help="explicit orchestration stage label for this scheduler run",
     )
+    parser.add_argument(
+        "--transition-authority",
+        default=DEFAULT_POLICY_CONFIG.round_transition.default_authority,
+        choices=DEFAULT_POLICY_CONFIG.round_transition.allowed_authorities,
+        help="how much authority round transition planning has over scheduler execution",
+    )
+    parser.add_argument(
+        "--max-policy-extensions",
+        type=int,
+        default=DEFAULT_POLICY_CONFIG.round_transition.max_policy_extensions,
+        help="max extra rounds guarded_control may grant after --max-rounds is reached",
+    )
+    parser.add_argument(
+        "--max-total-rounds",
+        type=int,
+        default=DEFAULT_POLICY_CONFIG.round_transition.default_max_total_rounds,
+        help="hard total round cap when guarded_control is enabled; never below --max-rounds",
+    )
     return parser
 
 
@@ -194,6 +214,7 @@ def _build_round_cmd(
     parent: dict[str, Any],
     round_multi_root: Path,
     child_stage_mode: str,
+    target_profile: str = "",
     force_round1_seed_stage: bool = False,
     models_override: list[str] | None = None,
 ) -> list[str]:
@@ -255,8 +276,9 @@ def _build_round_cmd(
         cmd.append("--dry-run")
     if str(args.policy_preset).strip():
         cmd.extend(["--policy-preset", str(args.policy_preset)])
-    if str(args.target_profile).strip():
-        cmd.extend(["--target-profile", str(args.target_profile)])
+    effective_target_profile = str(target_profile or args.target_profile or "").strip()
+    if effective_target_profile:
+        cmd.extend(["--target-profile", effective_target_profile])
     if str(child_stage_mode).strip():
         cmd.extend(["--stage-mode", str(child_stage_mode)])
     if str(args.prompt_template_version).strip():
@@ -278,6 +300,10 @@ def _resolve_child_stage_mode(stage_mode: str, *, round_idx: int, last_round: di
     if stage == "auto":
         if int(round_idx) == 1:
             return "new_family_broad"
+        round_plan = dict((last_round or {}).get("round_transition_plan") or {})
+        planned = str(round_plan.get("next_stage_mode", "") or "").strip()
+        if planned in _STAGE_MODE_CHOICES and planned != "auto":
+            return planned
         # Advisory StageTransitionDecision is now the sole source of truth.
         stage_transition = dict((last_round or {}).get("stage_transition") or {})
         recommended = str(stage_transition.get("next_stage", "") or "").strip()
@@ -320,6 +346,12 @@ def _build_orchestration_trace(
     children_added_to_search: int = 0,
     budget_exhausted: bool = False,
     frontier_exhausted: bool = False,
+    round_idx: int = 0,
+    base_max_rounds: int = 0,
+    max_total_rounds: int = 0,
+    transition_authority: str = "",
+    policy_extension_count: int = 0,
+    max_policy_extensions: int = 0,
 ) -> dict[str, Any]:
     evidence = ContextEvidence.from_runtime(
         family=family,
@@ -397,6 +429,19 @@ def _build_orchestration_trace(
         legacy_decision=legacy_stage_transition,
         shadow_decision=stage_transition,
     )
+    round_transition_plan = resolve_round_transition_plan(
+        stage_transition=stage_transition,
+        signals=stage_transition_signals,
+        saturation_assessment=saturation_assessment,
+        current_stage=stage_mode,
+        target_profile=target_profile,
+        rounds_completed=int(round_idx or 0),
+        base_max_rounds=int(base_max_rounds or 0),
+        max_total_rounds=int(max_total_rounds or 0),
+        policy_extension_count=int(policy_extension_count or 0),
+        max_policy_extensions=int(max_policy_extensions or 0),
+        transition_authority=transition_authority,
+    )
     orchestration_profile = OrchestrationProfile(
         recommended_stage_mode=stage_transition.next_stage,
         round_strategy=stage_transition.action,
@@ -421,6 +466,10 @@ def _build_orchestration_trace(
         "stage_transition_legacy_compare": stage_transition_legacy_compare,
         "stage_transition_signals": stage_transition_signals.to_dict(),
         "saturation_assessment": saturation_assessment.to_dict(),
+        "round_transition_plan": round_transition_plan.to_dict(),
+        "transition_authority": round_transition_plan.transition_authority,
+        "budget_gate_decision": round_transition_plan.budget_gate,
+        "policy_extension_count": int(round_transition_plan.policy_extension_count),
         "stage_transition_legacy": legacy_stage_transition.to_dict(),
         "stage_transition_shadow_table": stage_transition.to_dict(),
         "stage_transition_shadow_compare": stage_transition_legacy_compare,
@@ -508,6 +557,8 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
     stage_transition_signals = dict(summary.get("stage_transition_signals") or {})
     saturation_assessment = dict(summary.get("saturation_assessment") or {})
     saturation_components = dict(saturation_assessment.get("components") or {})
+    round_transition_plan = dict(summary.get("round_transition_plan") or {})
+    budget_gate = dict(round_transition_plan.get("budget_gate") or summary.get("budget_gate_decision") or {})
     rounds = list(summary.get("rounds") or [])
     last_round = dict(rounds[-1] or {}) if rounds else {}
     rationale_tags = list(orchestration_profile.get("rationale_tags") or [])
@@ -596,6 +647,20 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"frontier={saturation_components.get('frontier', '')}, "
         f"anchor_reuse={saturation_components.get('anchor_reuse', '')}`",
         f"- advisory_only: `{dict(saturation_assessment.get('diagnostics') or {}).get('advisory_only', '')}`",
+        "",
+        "## Round Transition Plan",
+        f"- transition_authority: `{round_transition_plan.get('transition_authority', '')}`",
+        f"- control_effective: `{round_transition_plan.get('control_effective', '')}`",
+        f"- execute_next_round: `{round_transition_plan.get('execute_next_round', '')}`",
+        f"- next_stage_mode: `{round_transition_plan.get('next_stage_mode', '')}`",
+        f"- next_target_profile: `{round_transition_plan.get('next_target_profile', '')}`",
+        f"- policy_extension_granted: `{round_transition_plan.get('policy_extension_granted', '')}`",
+        f"- policy_extension_count: `{round_transition_plan.get('policy_extension_count', '')}`",
+        f"- stop_reason: `{round_transition_plan.get('stop_reason', '')}`",
+        f"- reason: {round_transition_plan.get('reason', '')}",
+        f"- budget_gate: `base_remaining={budget_gate.get('base_budget_remaining', '')}, "
+        f"total_remaining={budget_gate.get('total_budget_remaining', '')}, "
+        f"needs_extension={budget_gate.get('needs_policy_extension', '')}`",
         "",
         "## Runtime Evidence",
         f"- selected_parent_kind: `{context_evidence.get('selected_parent_kind', '')}`",
@@ -874,6 +939,10 @@ def _build_scheduler_summary_payload(
         "stage_transition_legacy_compare": dict(last_round.get("stage_transition_legacy_compare") or {}),
         "stage_transition_signals": dict(last_round.get("stage_transition_signals") or {}),
         "saturation_assessment": dict(last_round.get("saturation_assessment") or {}),
+        "round_transition_plan": dict(last_round.get("round_transition_plan") or {}),
+        "transition_authority": str(last_round.get("transition_authority") or ""),
+        "budget_gate_decision": dict(last_round.get("budget_gate_decision") or {}),
+        "policy_extension_count": int(last_round.get("policy_extension_count") or 0),
         "family_state_decision": dict(last_round.get("family_state_decision") or {}),
         "legacy_orchestration_decision": dict(last_round.get("legacy_orchestration_decision") or {}),
         "stage_transition_shadow": dict(last_round.get("stage_transition_shadow") or {}),
@@ -962,6 +1031,18 @@ def main() -> int:
 
     args = build_arg_parser().parse_args()
     models = _normalize_models(args.models)
+    transition_authority = str(args.transition_authority or DEFAULT_POLICY_CONFIG.round_transition.default_authority)
+    base_max_rounds = max(int(args.max_rounds), 0)
+    max_policy_extensions = max(int(args.max_policy_extensions), 0)
+    requested_max_total_rounds = int(args.max_total_rounds or 0)
+    max_total_rounds = max(
+        requested_max_total_rounds,
+        base_max_rounds,
+        base_max_rounds + (max_policy_extensions if transition_authority == "guarded_control" else 0),
+    )
+    effective_scheduler_rounds = max_total_rounds if transition_authority == "guarded_control" else base_max_rounds
+    active_target_profile = str(args.target_profile)
+    policy_extension_count = 0
 
     scheduler_dir = Path(args.scheduler_runs_dir).expanduser().resolve() / (
         time.strftime("%Y%m%d_%H%M%S", time.gmtime()) + f"_{args.family}"
@@ -972,16 +1053,16 @@ def main() -> int:
 
     policy = (
         SearchPolicy.multi_model_best_first(preset=args.policy_preset)
-        .with_target_profile(args.target_profile)
+        .with_target_profile(active_target_profile)
         .with_mmr_rerank(not bool(args.disable_mmr_rerank))
     )
     policy = policy.with_dual_parent(bool(args.enable_dual_parent_round))
     budget = SearchBudget(
-        max_rounds=int(args.max_rounds),
-        family_budget=int(args.max_rounds),
+        max_rounds=int(effective_scheduler_rounds),
+        family_budget=int(effective_scheduler_rounds),
         branch_budget=2,
         max_frontier_size=max(len(models) * max(int(args.n_candidates), 1), 6),
-        max_depth=max(int(args.max_rounds), 2) + 1,
+        max_depth=max(int(effective_scheduler_rounds), 2) + 1,
         stop_if_no_improve=int(args.stop_if_no_new_winner),
     )
     engine = SearchEngine(
@@ -1027,7 +1108,11 @@ def main() -> int:
         "stage_mode": str(args.stage_mode or "auto"),
         "target_profile": str(args.target_profile),
         "started_at": utc_now_iso(),
-        "max_rounds": int(args.max_rounds),
+        "base_max_rounds": int(base_max_rounds),
+        "effective_scheduler_rounds": int(effective_scheduler_rounds),
+        "max_total_rounds": int(max_total_rounds),
+        "transition_authority": transition_authority,
+        "max_policy_extensions": int(max_policy_extensions),
         "stop_if_no_new_winner": int(args.stop_if_no_new_winner),
         "models": models,
         "n_candidates": int(args.n_candidates),
@@ -1111,6 +1196,7 @@ def main() -> int:
                         },
                         round_multi_root=parent_multi_root,
                         child_stage_mode=child_stage_mode,
+                        target_profile=active_target_profile,
                         force_round1_seed_stage=child_stage_mode == "new_family_broad",
                         models_override=selected_models,
                     )
@@ -1287,7 +1373,7 @@ def main() -> int:
                 _build_orchestration_trace(
                     family=args.family,
                     stage_mode=resolved_child_stage_mode,
-                    target_profile=str(args.target_profile),
+                    target_profile=str(active_target_profile),
                     policy_preset=str(args.policy_preset),
                     parent_kind=str(primary_parent.node_kind),
                     requested_candidate_count=int(getattr(args, "n_candidates", 0) or 0),
@@ -1300,14 +1386,23 @@ def main() -> int:
                     consecutive_no_improve=int(engine.consecutive_no_improve),
                     children_collected=int(record.get("children_collected") or 0),
                     children_added_to_search=int(record.get("children_added_to_search") or 0),
+                    round_idx=int(round_idx),
+                    base_max_rounds=int(base_max_rounds),
+                    max_total_rounds=int(max_total_rounds),
+                    transition_authority=transition_authority,
+                    policy_extension_count=int(policy_extension_count),
+                    max_policy_extensions=int(max_policy_extensions),
                 )
             )
+            round_transition_plan = dict(record.get("round_transition_plan") or {})
+            if bool(round_transition_plan.get("policy_extension_granted")):
+                policy_extension_count = int(round_transition_plan.get("policy_extension_count") or policy_extension_count)
             round_records.append(record)
             _write_scheduler_summary_artifacts(
                 summary_path,
                 _build_scheduler_summary_payload(
                     family=args.family,
-                    target_profile=str(args.target_profile),
+                    target_profile=str(active_target_profile),
                     stage_mode=str(args.stage_mode or "auto"),
                     scheduler_dir=scheduler_dir,
                     archive_db=str(args.archive_db),
@@ -1331,6 +1426,20 @@ def main() -> int:
                 print(f"[stop] reached stop_if_no_new_winner threshold: {engine.consecutive_no_improve}")
                 stop_reason = "no_new_search_improvement"
                 break
+            if transition_authority == "guarded_control":
+                if not bool(round_transition_plan.get("execute_next_round")):
+                    stop_reason = str(round_transition_plan.get("stop_reason") or "round_transition_stop")
+                    print(f"[stop] round transition denied next round: {stop_reason}")
+                    break
+                next_target_profile = str(round_transition_plan.get("next_target_profile") or active_target_profile)
+                if next_target_profile and next_target_profile != active_target_profile:
+                    active_target_profile = next_target_profile
+                    engine.policy = (
+                        SearchPolicy.multi_model_best_first(preset=args.policy_preset)
+                        .with_target_profile(active_target_profile)
+                        .with_mmr_rerank(not bool(args.disable_mmr_rerank))
+                        .with_dual_parent(bool(args.enable_dual_parent_round))
+                    )
             if float(args.sleep_between_rounds) > 0 and engine.can_continue():
                 time.sleep(float(args.sleep_between_rounds))
     except KeyboardInterrupt as exc:
@@ -1346,7 +1455,7 @@ def main() -> int:
             summary_path,
             _build_scheduler_summary_payload(
                 family=args.family,
-                target_profile=str(args.target_profile),
+                target_profile=str(active_target_profile),
                 stage_mode=str(args.stage_mode or "auto"),
                 scheduler_dir=scheduler_dir,
                 archive_db=str(args.archive_db),
@@ -1369,7 +1478,7 @@ def main() -> int:
             summary_path,
             _build_scheduler_summary_payload(
                 family=args.family,
-                target_profile=str(args.target_profile),
+                target_profile=str(active_target_profile),
                 stage_mode=str(args.stage_mode or "auto"),
                 scheduler_dir=scheduler_dir,
                 archive_db=str(args.archive_db),
@@ -1384,7 +1493,7 @@ def main() -> int:
         summary_path,
         _build_scheduler_summary_payload(
             family=args.family,
-            target_profile=str(args.target_profile),
+            target_profile=str(active_target_profile),
             stage_mode=str(args.stage_mode or "auto"),
             scheduler_dir=scheduler_dir,
             archive_db=str(args.archive_db),

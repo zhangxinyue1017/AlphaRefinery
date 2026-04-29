@@ -9,6 +9,7 @@ from .context_resolver import (
     resolve_context_profile,
     resolve_orchestration_profile,
 )
+from .round_controller import RoundTransitionPlan, resolve_round_transition_plan
 from .signals import SignalExtractor, StageTransitionSignals
 from .stage_transition import (
     EvaluationFeedback,
@@ -40,6 +41,7 @@ __all__ = [
     "OrchestrationProfile",
     "PhasePolicyRule",
     "RefinementAction",
+    "RoundTransitionPlan",
     "ShadowPolicyRule",
     "SignalExtractor",
     "StageTransitionDecision",
@@ -53,6 +55,7 @@ __all__ = [
     "get_shadow_stage_policy_table",
     "resolve_context_profile",
     "resolve_orchestration_profile",
+    "resolve_round_transition_plan",
     "resolve_stage_table_policy",
     "resolve_shadow_table_policy",
     "resolve_stage_transition",

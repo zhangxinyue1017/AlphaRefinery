@@ -19,6 +19,8 @@ from .transition import (
     ContextEvidence,
     ContextProfile,
     OrchestrationProfile,
+    RoundTransitionPlan,
+    resolve_round_transition_plan,
     resolve_context_profile,
     resolve_orchestration_profile,  # deprecated: use resolve_stage_transition / resolve_stage_transition_from_state
 )
@@ -46,6 +48,7 @@ from .io import (
 from .policy_config import (
     DEFAULT_POLICY_CONFIG,
     RefinePolicyConfig,
+    RoundTransitionPolicyConfig,
     SearchPolicyBaseConfig,
     SearchPolicyConfig,
     SearchPolicyModeConfig,
@@ -95,6 +98,8 @@ __all__ = [
     "PhasePolicyRule",
     "RefinementAction",
     "RefinePolicyConfig",
+    "RoundTransitionPolicyConfig",
+    "RoundTransitionPlan",
     "SearchEdge",
     "SearchEngine",
     "SearchFrontier",
@@ -136,6 +141,7 @@ __all__ = [
     "resolve_materialized_single_run_dir",
     "resolve_context_profile",
     "resolve_orchestration_profile",
+    "resolve_round_transition_plan",
     "resolve_stage_table_policy",
     "resolve_shadow_table_policy",
     "resolve_stage_transition",
