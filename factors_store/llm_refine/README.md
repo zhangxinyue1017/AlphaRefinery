@@ -448,18 +448,19 @@ as `DEFAULT_POLICY_CONFIG`. This keeps `SearchPolicy` presets, target-profile
 overlays, stage routing, decorrelation, and saturation knobs versioned and
 auditable instead of spreading constants across controllers.
 
-Family-loop and scheduler artifacts also include an advisory
-`saturation_assessment` with one continuous score, a small component breakdown,
-and a recommended escape mode. It does not control the main path yet; it is
-intended for offline auditing before we promote saturation into a scoring/value
-layer.
+Family-loop and scheduler artifacts also include `saturation_assessment` with
+one continuous score, a small component breakdown, and a recommended escape
+mode. Saturation stays out of the stage table, but the round controller can use
+it under `guarded_control` to reopen broad search, switch to complementarity, or
+stop local continuation.
 
 Round execution is separated from stage routing. `StageTransitionDecision`
 answers the research-state question, while `RoundTransitionPlan` answers whether
 the runner may launch another round under `audit_only`, `advisory`, or
-`guarded_control` authority. Scheduler guarded control can grant bounded policy
-extensions via `--transition-authority guarded_control`,
-`--max-policy-extensions`, and `--max-total-rounds`.
+`guarded_control` authority. `guarded_control` is the default authority; it can
+grant bounded policy extensions via `--max-policy-extensions` and
+`--max-total-rounds`, while `--transition-authority advisory` keeps the plan as
+audit output only.
 
 ---
 

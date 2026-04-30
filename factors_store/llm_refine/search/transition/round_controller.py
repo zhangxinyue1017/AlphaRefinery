@@ -19,6 +19,7 @@ _ORDERED_VALUES: dict[str, tuple[str, ...]] = {
     "winner_quality": ("none", "weak", "usable", "strong"),
     "corr_pressure": ("low", "medium", "high", "critical"),
     "turnover_pressure": ("low", "medium", "high", "critical"),
+    "saturation_grade": ("low", "medium", "high", "critical"),
 }
 
 _NEXT_ROUND_ACTIONS = {
@@ -74,6 +75,7 @@ def resolve_round_transition_plan(
     action = str(decision.get("action") or "").strip()
     stage_next = str(decision.get("next_stage") or current_stage or "auto").strip() or "auto"
     saturation_grade = str(saturation_payload.get("grade") or "low").strip().lower() or "low"
+    saturation_recommendation = str(saturation_payload.get("recommended_escape_mode") or "continue_local").strip()
 
     base_limit = max(int(base_max_rounds or 0), 0)
     requested_total_limit = int(max_total_rounds or 0)
@@ -101,6 +103,8 @@ def resolve_round_transition_plan(
         "max_policy_extensions": extension_limit,
         "extension_budget_remaining": extension_budget_remaining,
         "saturation_grade": saturation_grade,
+        "saturation_recommendation": saturation_recommendation,
+        "saturation_control_enabled": bool(round_cfg.saturation_control_enabled),
         "control_effective": control_effective,
     }
 
@@ -183,6 +187,33 @@ def resolve_round_transition_plan(
         current_stage=current_stage,
         target_profile=target_profile,
     )
+    saturation_control = _saturation_control_decision(
+        action=action,
+        next_stage=next_stage,
+        next_target=next_target,
+        saturation_grade=saturation_grade,
+        saturation_recommendation=saturation_recommendation,
+        authority=authority,
+        config=cfg,
+    )
+    budget_gate["saturation_control_action"] = saturation_control["control_action"]
+    budget_gate["saturation_control_reason"] = saturation_control["reason"]
+    if saturation_control["control_action"] == "stop":
+        return _stop_plan(
+            authority=authority,
+            control_effective=control_effective,
+            action=action,
+            stage_next=str(saturation_control["next_stage"] or next_stage),
+            target_profile=str(saturation_control["next_target"] or next_target),
+            extension_count=extension_count_before,
+            stop_reason=str(saturation_control["stop_reason"] or "saturation_control_stop"),
+            reason=str(saturation_control["reason"] or "saturation control denied next round"),
+            budget_gate=budget_gate,
+        )
+    if saturation_control["control_action"] == "override":
+        next_stage = str(saturation_control["next_stage"] or next_stage)
+        next_target = str(saturation_control["next_target"] or next_target)
+
     if base_budget_remaining:
         return RoundTransitionPlan(
             transition_authority=authority,
@@ -195,7 +226,11 @@ def resolve_round_transition_plan(
             policy_extension_granted=False,
             policy_extension_count=extension_count_before,
             stop_reason="",
-            reason="base round budget remains; stage policy action is executable",
+            reason=(
+                str(saturation_control["reason"])
+                if saturation_control["control_action"] == "override"
+                else "base round budget remains; stage policy action is executable"
+            ),
             budget_gate=budget_gate,
         )
 
@@ -299,6 +334,89 @@ def _next_execution_target(
     if action == "switch_to_complementarity":
         return "focused_refine", "complementarity"
     return str(stage_next or current_stage or "auto"), str(target_profile or "raw_alpha")
+
+
+def _saturation_control_decision(
+    *,
+    action: str,
+    next_stage: str,
+    next_target: str,
+    saturation_grade: str,
+    saturation_recommendation: str,
+    authority: str,
+    config: RefinePolicyConfig,
+) -> dict[str, str]:
+    round_cfg = config.round_transition
+    if authority != "guarded_control" or not bool(round_cfg.saturation_control_enabled):
+        return {
+            "control_action": "none",
+            "next_stage": next_stage,
+            "next_target": next_target,
+            "stop_reason": "",
+            "reason": "saturation control inactive",
+        }
+
+    grade = str(saturation_grade or "low").strip().lower()
+    recommendation = str(saturation_recommendation or "continue_local").strip().lower()
+    if _ordered_at_least(grade, round_cfg.saturation_stop_grade, "saturation_grade"):
+        return {
+            "control_action": "stop",
+            "next_stage": next_stage,
+            "next_target": next_target,
+            "stop_reason": "saturation_critical",
+            "reason": f"saturation control stopped continuation: grade={grade}",
+        }
+
+    if recommendation in {"fork_new_seed", "retire_family"} and _ordered_at_least(
+        grade, round_cfg.saturation_escape_grade, "saturation_grade"
+    ):
+        return {
+            "control_action": "stop",
+            "next_stage": "terminate",
+            "next_target": next_target,
+            "stop_reason": f"saturation_{recommendation}",
+            "reason": f"saturation control stopped local continuation: recommendation={recommendation}, grade={grade}",
+        }
+
+    if recommendation == "switch_to_complementarity" and _ordered_at_least(
+        grade, round_cfg.saturation_diversify_grade, "saturation_grade"
+    ):
+        return {
+            "control_action": "override",
+            "next_stage": "focused_refine",
+            "next_target": "complementarity",
+            "stop_reason": "",
+            "reason": f"saturation control switched next round to complementarity: grade={grade}",
+        }
+
+    if recommendation == "diversify_within_family" and _ordered_at_least(
+        grade, round_cfg.saturation_diversify_grade, "saturation_grade"
+    ):
+        if action == "continue_focused":
+            return {
+                "control_action": "override",
+                "next_stage": "broad_followup",
+                "next_target": next_target,
+                "stop_reason": "",
+                "reason": f"saturation control reopened broad search for diversification: grade={grade}",
+            }
+
+    if _ordered_at_least(grade, round_cfg.saturation_escape_grade, "saturation_grade") and action == "continue_focused":
+        return {
+            "control_action": "override",
+            "next_stage": "broad_followup",
+            "next_target": next_target,
+            "stop_reason": "",
+            "reason": f"saturation control blocked focused continuation and reopened broad search: grade={grade}",
+        }
+
+    return {
+        "control_action": "none",
+        "next_stage": next_stage,
+        "next_target": next_target,
+        "stop_reason": "",
+        "reason": "saturation control allowed planned stage action",
+    }
 
 
 def _policy_extension_allowed(

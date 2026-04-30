@@ -92,7 +92,7 @@ class StageTransitionPolicyConfig:
 
 @dataclass(frozen=True)
 class DecorrelationPolicyConfig:
-    version: str = "decorrelation_policy_v1_1"
+    version: str = "decorrelation_policy_v1_2"
     excellent_corr: float = 0.35
     good_corr: float = 0.55
     acceptable_corr: float = 0.70
@@ -103,9 +103,9 @@ class DecorrelationPolicyConfig:
     excellent_bonus: float = 0.12
     good_bonus: float = 0.08
     acceptable_bonus: float = 0.03
-    weak_penalty: float = 0.08
-    failed_penalty: float = 0.16
-    avg_corr_penalty_weight: float = 0.05
+    weak_penalty: float = 0.12
+    failed_penalty: float = 0.24
+    avg_corr_penalty_weight: float = 0.08
     quality_icir_floor: float = 0.15
     quality_sharpe_floor: float = 1.20
     quality_excess_floor: float = 0.05
@@ -147,8 +147,8 @@ class SaturationPolicyConfig:
 
 @dataclass(frozen=True)
 class RoundTransitionPolicyConfig:
-    version: str = "round_transition_policy_v1"
-    default_authority: str = "advisory"
+    version: str = "round_transition_policy_v1_1"
+    default_authority: str = "guarded_control"
     max_policy_extensions: int = 2
     default_max_total_rounds: int = 4
     allowed_authorities: tuple[str, ...] = ("audit_only", "advisory", "guarded_control")
@@ -156,6 +156,10 @@ class RoundTransitionPolicyConfig:
     extension_max_turnover_pressure: str = "medium"
     extension_max_corr_pressure: str = "medium"
     extension_min_winner_quality: str = "usable"
+    saturation_control_enabled: bool = True
+    saturation_diversify_grade: str = "medium"
+    saturation_escape_grade: str = "high"
+    saturation_stop_grade: str = "critical"
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ and artifact adapters stay separate.
 | Candidate decision | `search/decision/` | Candidate features, winner/keep rerank, decorrelation scoring and gates. |
 | Stage transition | `search/transition/` | Runtime context, signal extraction, table-driven stage policy, round-transition planning, legacy audit helpers. |
 | IO adapters | `search/io/` | Loading evaluated run artifacts into search records. |
-| Policy config | `search/policy_config.py` | Versioned thresholds and weights shared by signals, decorrelation, and advisory saturation. |
+| Policy config | `search/policy_config.py` | Versioned thresholds and weights shared by signals, decorrelation, saturation, and round control. |
 
 ## Dependency Direction
 
@@ -50,7 +50,7 @@ implementation modules have been removed to keep the package boundary explicit.
 | Search scoring / frontier policy | `core/policy.py`, `core/scoring.py` | Runtime `SearchPolicy`, frontier scoring, branch value, MMR-related search behavior. |
 | Candidate rerank / keep / winner | `decision/engine.py`, `decision/features.py` | Produces rerank previews and round-level best candidate / best keep records. |
 | De-correlation policy | `decision/decorrelation_policy.py` | Unified grade, score, rerank adjustment, complementarity/decorrelation gates, and high-corr reference-only arbitration. |
-| Saturation assessment | `decision/saturation_policy.py` | Advisory continuous family-saturation score written to artifacts; not a main-path action in v1. |
+| Saturation assessment | `decision/saturation_policy.py` | Continuous family-saturation score written to artifacts and consumed by guarded round control. |
 | Stage transition policy | `transition/stage_transition.py`, `transition/signals.py`, `transition/table_policy.py` | Formal table-policy decision plus explicit signals and legacy audit comparison. |
 | Round transition controller | `transition/round_controller.py` | Converts the stage decision into an execution plan with authority and budget gates. |
 | Shared policy defaults | `policy_config.py` | `DEFAULT_POLICY_CONFIG` keeps search weights, thresholds, and overlays visible instead of scattered through code. |

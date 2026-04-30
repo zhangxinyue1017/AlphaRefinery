@@ -118,6 +118,11 @@ def init_archive_db(db_path: str | Path = DEFAULT_ARCHIVE_DB) -> Path:
                 decision_reason TEXT,
                 evaluation_stage TEXT,
                 decision_scope TEXT,
+                decorrelation_grade TEXT,
+                decorrelation_score REAL,
+                nearest_decorrelation_target TEXT,
+                corr_to_nearest_decorrelation_target REAL,
+                avg_abs_decorrelation_target_corr REAL,
                 evaluated_at TEXT
             );
 
@@ -140,6 +145,16 @@ def init_archive_db(db_path: str | Path = DEFAULT_ARCHIVE_DB) -> Path:
             conn.execute("ALTER TABLE evaluations ADD COLUMN evaluation_stage TEXT")
         if not _has_column(conn, "evaluations", "decision_scope"):
             conn.execute("ALTER TABLE evaluations ADD COLUMN decision_scope TEXT")
+        if not _has_column(conn, "evaluations", "decorrelation_grade"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN decorrelation_grade TEXT")
+        if not _has_column(conn, "evaluations", "decorrelation_score"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN decorrelation_score REAL")
+        if not _has_column(conn, "evaluations", "nearest_decorrelation_target"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN nearest_decorrelation_target TEXT")
+        if not _has_column(conn, "evaluations", "corr_to_nearest_decorrelation_target"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN corr_to_nearest_decorrelation_target REAL")
+        if not _has_column(conn, "evaluations", "avg_abs_decorrelation_target_corr"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN avg_abs_decorrelation_target_corr REAL")
     return path
 
 
@@ -252,8 +267,11 @@ def insert_evaluations(
             INSERT OR REPLACE INTO evaluations (
                 candidate_id, run_id, quick_rank_ic_mean, quick_rank_icir,
                 net_ann_return, net_excess_ann_return, net_sharpe, mean_turnover,
-                decision, decision_reason, evaluation_stage, decision_scope, evaluated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                decision, decision_reason, evaluation_stage, decision_scope,
+                decorrelation_grade, decorrelation_score, nearest_decorrelation_target,
+                corr_to_nearest_decorrelation_target, avg_abs_decorrelation_target_corr,
+                evaluated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -269,6 +287,11 @@ def insert_evaluations(
                     row.get("decision_reason"),
                     row.get("evaluation_stage"),
                     row.get("decision_scope"),
+                    row.get("decorrelation_grade"),
+                    row.get("decorrelation_score"),
+                    row.get("nearest_decorrelation_target"),
+                    row.get("corr_to_nearest_decorrelation_target"),
+                    row.get("avg_abs_decorrelation_target_corr"),
                     row.get("evaluated_at", utc_now_iso()),
                 )
                 for row in rows
@@ -529,6 +552,11 @@ def load_run_candidate_records(
                 e.mean_turnover,
                 e.evaluation_stage,
                 e.decision_scope,
+                e.decorrelation_grade,
+                e.decorrelation_score,
+                e.nearest_decorrelation_target,
+                e.corr_to_nearest_decorrelation_target,
+                e.avg_abs_decorrelation_target_corr,
                 e.evaluated_at
             FROM candidates c
             LEFT JOIN evaluations e
@@ -559,6 +587,11 @@ def load_run_candidate_records(
         "mean_turnover",
         "evaluation_stage",
         "decision_scope",
+        "decorrelation_grade",
+        "decorrelation_score",
+        "nearest_decorrelation_target",
+        "corr_to_nearest_decorrelation_target",
+        "avg_abs_decorrelation_target_corr",
         "evaluated_at",
     )
     return [dict(zip(keys, row)) for row in rows]
@@ -594,7 +627,12 @@ def get_candidate_record(
                 e.net_sharpe,
                 e.mean_turnover,
                 e.evaluation_stage,
-                e.decision_scope
+                e.decision_scope,
+                e.decorrelation_grade,
+                e.decorrelation_score,
+                e.nearest_decorrelation_target,
+                e.corr_to_nearest_decorrelation_target,
+                e.avg_abs_decorrelation_target_corr
             FROM candidates c
             LEFT JOIN evaluations e
               ON c.candidate_id = e.candidate_id
@@ -624,6 +662,11 @@ def get_candidate_record(
         "mean_turnover",
         "evaluation_stage",
         "decision_scope",
+        "decorrelation_grade",
+        "decorrelation_score",
+        "nearest_decorrelation_target",
+        "corr_to_nearest_decorrelation_target",
+        "avg_abs_decorrelation_target_corr",
     )
     return dict(zip(keys, row))
 
@@ -657,6 +700,11 @@ def get_latest_family_winner(
                 e.mean_turnover,
                 e.evaluation_stage,
                 e.decision_scope,
+                e.decorrelation_grade,
+                e.decorrelation_score,
+                e.nearest_decorrelation_target,
+                e.corr_to_nearest_decorrelation_target,
+                e.avg_abs_decorrelation_target_corr,
                 e.evaluated_at
             FROM candidates c
             LEFT JOIN evaluations e
@@ -690,6 +738,11 @@ def get_latest_family_winner(
         "mean_turnover",
         "evaluation_stage",
         "decision_scope",
+        "decorrelation_grade",
+        "decorrelation_score",
+        "nearest_decorrelation_target",
+        "corr_to_nearest_decorrelation_target",
+        "avg_abs_decorrelation_target_corr",
         "evaluated_at",
     )
     return dict(zip(keys, row))
@@ -724,6 +777,11 @@ def get_best_family_winner(
                 e.mean_turnover,
                 e.evaluation_stage,
                 e.decision_scope,
+                e.decorrelation_grade,
+                e.decorrelation_score,
+                e.nearest_decorrelation_target,
+                e.corr_to_nearest_decorrelation_target,
+                e.avg_abs_decorrelation_target_corr,
                 e.evaluated_at
             FROM candidates c
             LEFT JOIN evaluations e
@@ -765,6 +823,11 @@ def get_best_family_winner(
         "mean_turnover",
         "evaluation_stage",
         "decision_scope",
+        "decorrelation_grade",
+        "decorrelation_score",
+        "nearest_decorrelation_target",
+        "corr_to_nearest_decorrelation_target",
+        "avg_abs_decorrelation_target_corr",
         "evaluated_at",
     )
     return dict(zip(keys, row))

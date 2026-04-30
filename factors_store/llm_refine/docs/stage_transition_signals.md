@@ -214,18 +214,23 @@ The reference-only path records `decorrelation_keep_allowed=false`,
 `decorrelation_winner_allowed=false`, `decorrelation_reference_allowed=true`,
 and `decorrelation_arbitration_reason` in summary artifacts.
 
+Default decorrelation v1.2 keeps `hard_drop_corr=0.90` for near-duplicate
+blocking, but strengthens soft rerank penalties for weak/failed decorrelation so
+the `0.70-0.90` band is handled by ranking pressure rather than immediate hard
+deletion.
+
 ## Saturation Assessment
 
-Family-loop and scheduler summaries now also write an advisory
-`saturation_assessment`. This is deliberately **not** a stage-transition action
-yet; it is a continuous audit signal for deciding later whether a family is
-being over-mined.
+Family-loop and scheduler summaries now also write `saturation_assessment`.
+It is still **not** a stage-transition action, but the round controller can use
+it when `transition_authority=guarded_control` to decide whether another round
+should continue locally, reopen broad search, switch to complementarity, or stop.
 
 | Field | Meaning |
 |---|---|
 | `score` | Weighted continuous score in `[0, 1]` |
 | `grade` | `low`, `medium`, `high`, or `critical` from score thresholds |
-| `recommended_escape_mode` | Advisory hint: `continue_local`, `diversify_within_family`, `switch_to_complementarity`, `fork_new_seed`, or `retire_family` |
+| `recommended_escape_mode` | Round-control hint: `continue_local`, `diversify_within_family`, `switch_to_complementarity`, `fork_new_seed`, or `retire_family` |
 | `components.corr` | Pressure from high-correlation diagnostics |
 | `components.motif` | Motif/family crowding pressure |
 | `components.turnover` | Pressure from high-turnover runtime signals |
@@ -252,9 +257,17 @@ Default grade thresholds:
 | `high` | `0.25` |
 | `critical` | `0.45` |
 
-The main table policy does not consume `saturation_assessment` in v1. This keeps
-the production decision surface small while collecting enough data for a later
-scoring/value layer.
+The main stage table policy does not consume `saturation_assessment`; saturation
+is handled at the round-continuation layer. Default round-control behavior is:
+
+| Saturation state | Round-controller behavior under `guarded_control` |
+|---|---|
+| `low` | Allow the planned stage action if other gates pass |
+| `medium` + `diversify_within_family` | Reopen `broad_followup` instead of continuing focused locally |
+| `medium` + `switch_to_complementarity` | Switch next round to complementarity |
+| `high` + local focused continuation | Block local continuation and reopen broad search |
+| `critical` | Stop local continuation |
+| `high/critical` + `fork_new_seed` or `retire_family` | Stop this family loop so a new seed/retirement decision can be handled outside the round controller |
 
 ## Artifact Fields
 

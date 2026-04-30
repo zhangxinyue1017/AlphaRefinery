@@ -296,12 +296,15 @@ def _build_round_cmd(
 
 
 def _resolve_child_stage_mode(stage_mode: str, *, round_idx: int, last_round: dict[str, Any] | None = None) -> str:
+    round_plan = dict((last_round or {}).get("round_transition_plan") or {})
+    planned = str(round_plan.get("next_stage_mode", "") or "").strip()
+    if bool(round_plan.get("control_effective")) and planned in _STAGE_MODE_CHOICES and planned != "auto":
+        return planned
+
     stage = str(stage_mode or "auto").strip() or "auto"
     if stage == "auto":
         if int(round_idx) == 1:
             return "new_family_broad"
-        round_plan = dict((last_round or {}).get("round_transition_plan") or {})
-        planned = str(round_plan.get("next_stage_mode", "") or "").strip()
         if planned in _STAGE_MODE_CHOICES and planned != "auto":
             return planned
         # Advisory StageTransitionDecision is now the sole source of truth.
