@@ -203,6 +203,7 @@ def insert_candidates(
     run_id: str,
     candidates: list[dict[str, Any]],
 ) -> None:
+    init_archive_db(db_path)
     with sqlite3.connect(db_path) as conn:
         conn.executemany(
             """
@@ -244,6 +245,7 @@ def insert_evaluations(
     run_id: str,
     rows: list[dict[str, Any]],
 ) -> None:
+    init_archive_db(db_path)
     with sqlite3.connect(db_path) as conn:
         conn.executemany(
             """
@@ -296,6 +298,7 @@ def update_candidate_filter_metadata(
 ) -> None:
     if not updates:
         return
+    init_archive_db(db_path)
     with sqlite3.connect(db_path) as conn:
         conn.executemany(
             """
@@ -494,6 +497,7 @@ def load_run_candidate_records(
     run_id: str,
     statuses: tuple[str, ...] = (),
 ) -> list[dict[str, Any]]:
+    init_archive_db(db_path)
     if not run_id:
         return []
     params: list[Any] = [run_id]
@@ -565,6 +569,7 @@ def get_candidate_record(
     db_path: str | Path = DEFAULT_ARCHIVE_DB,
     candidate_id: str,
 ) -> dict[str, Any] | None:
+    init_archive_db(db_path)
     if not candidate_id:
         return None
     with sqlite3.connect(db_path) as conn:
@@ -628,6 +633,7 @@ def get_latest_family_winner(
     db_path: str | Path = DEFAULT_ARCHIVE_DB,
     family: str,
 ) -> dict[str, Any] | None:
+    init_archive_db(db_path)
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
             """
@@ -694,6 +700,7 @@ def get_best_family_winner(
     db_path: str | Path = DEFAULT_ARCHIVE_DB,
     family: str,
 ) -> dict[str, Any] | None:
+    init_archive_db(db_path)
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
             """
