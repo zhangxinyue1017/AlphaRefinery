@@ -475,13 +475,15 @@ Currently implemented pieces include:
 * unified `DecorrelationAssessment` in `search/decision/decorrelation_policy.py`,
 * rerank adjustment hooks,
 * three-level strong gate when complementarity mode or explicit decorrelation targets are active,
-* summary / rerank preview fields such as `decorrelation_grade`, `decorrelation_score`, and `decorrelation_gate_reason`.
+* high-correlation parent arbitration: strong but near-duplicate candidates can be kept as audit/reference signals without becoming decorrelated keeps or winners,
+* summary / rerank preview fields such as `decorrelation_grade`, `decorrelation_score`, `decorrelation_gate_reason`, `decorrelation_keep_allowed`, and `decorrelation_reference_allowed`.
 
 The first strong-gate version is intentionally tiered rather than all-or-nothing:
 
 | Condition | Gate behavior |
 | --- | --- |
-| very high nearest correlation | drop candidate |
+| very high nearest correlation with no strong/material edge | drop candidate |
+| very high nearest correlation with strong quality or material parent gain | reference-only; block keep and winner eligibility |
 | high nearest correlation without material gain | drop candidate |
 | elevated correlation without strong quality | keep candidate possible, but suppress winner eligibility |
 

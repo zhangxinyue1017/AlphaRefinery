@@ -122,6 +122,9 @@ class DecorrelationAssessment:
     quality_gate_passed: bool
     strong_quality_passed: bool
     winner_allowed: bool
+    keep_allowed: bool
+    reference_allowed: bool
+    arbitration_reason: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -167,6 +170,9 @@ def assess_decorrelation(
             quality_gate_passed=quality_gate_passed,
             strong_quality_passed=strong_quality_passed,
             winner_allowed=True,
+            keep_allowed=True,
+            reference_allowed=False,
+            arbitration_reason="",
         )
 
     grade = _grade(nearest_corr, policy)
@@ -181,15 +187,30 @@ def assess_decorrelation(
     gate_action = "pass"
     gate_reason = f"decorrelation {grade}: nearest_corr={nearest_corr:.4f}"
     winner_allowed = True
+    keep_allowed = True
+    reference_allowed = False
+    arbitration_reason = ""
 
     if policy.strong_gate_enabled:
         if nearest_corr > policy.hard_drop_corr_threshold:
-            gate_action = "drop"
-            gate_reason = (
-                f"decorrelation hard gate: nearest_corr={nearest_corr:.4f} "
-                f"> {policy.hard_drop_corr_threshold:.2f}"
-            )
+            if strong_quality_passed or bool(material_gain):
+                gate_action = "suppress_high_corr_reference"
+                arbitration_reason = (
+                    "high-corr candidate is strong/material vs parent, but cannot be a decorrelated keep"
+                )
+                gate_reason = (
+                    f"decorrelation hard gate reference-only: nearest_corr={nearest_corr:.4f} "
+                    f"> {policy.hard_drop_corr_threshold:.2f}; {arbitration_reason}"
+                )
+                reference_allowed = True
+            else:
+                gate_action = "drop"
+                gate_reason = (
+                    f"decorrelation hard gate: nearest_corr={nearest_corr:.4f} "
+                    f"> {policy.hard_drop_corr_threshold:.2f}"
+                )
             winner_allowed = False
+            keep_allowed = False
         elif nearest_corr > policy.soft_drop_corr_threshold and not bool(material_gain):
             gate_action = "drop"
             gate_reason = (
@@ -197,6 +218,7 @@ def assess_decorrelation(
                 f"> {policy.soft_drop_corr_threshold:.2f} and material_gain=false"
             )
             winner_allowed = False
+            keep_allowed = False
         elif nearest_corr > policy.suppress_winner_corr_threshold and not strong_quality_passed:
             gate_action = "suppress_winner"
             gate_reason = (
@@ -219,6 +241,9 @@ def assess_decorrelation(
         quality_gate_passed=quality_gate_passed,
         strong_quality_passed=strong_quality_passed,
         winner_allowed=winner_allowed,
+        keep_allowed=keep_allowed,
+        reference_allowed=reference_allowed,
+        arbitration_reason=arbitration_reason,
     )
 
 
@@ -236,6 +261,9 @@ def decorate_with_decorrelation_assessment(
     out["decorrelation_gate_action"] = assessment.gate_action
     out["decorrelation_gate_reason"] = assessment.gate_reason
     out["decorrelation_winner_allowed"] = assessment.winner_allowed
+    out["decorrelation_keep_allowed"] = assessment.keep_allowed
+    out["decorrelation_reference_allowed"] = assessment.reference_allowed
+    out["decorrelation_arbitration_reason"] = assessment.arbitration_reason
     out["decorrelation_quality_gate_passed"] = assessment.quality_gate_passed
     out["decorrelation_strong_quality_passed"] = assessment.strong_quality_passed
     out["decorrelation_adjustment"] = assessment.rerank_adjustment

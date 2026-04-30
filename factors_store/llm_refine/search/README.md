@@ -49,7 +49,7 @@ implementation modules have been removed to keep the package boundary explicit.
 | --- | --- | --- |
 | Search scoring / frontier policy | `core/policy.py`, `core/scoring.py` | Runtime `SearchPolicy`, frontier scoring, branch value, MMR-related search behavior. |
 | Candidate rerank / keep / winner | `decision/engine.py`, `decision/features.py` | Produces rerank previews and round-level best candidate / best keep records. |
-| De-correlation policy | `decision/decorrelation_policy.py` | Unified grade, score, rerank adjustment, and complementarity/decorrelation gates. |
+| De-correlation policy | `decision/decorrelation_policy.py` | Unified grade, score, rerank adjustment, complementarity/decorrelation gates, and high-corr reference-only arbitration. |
 | Saturation assessment | `decision/saturation_policy.py` | Advisory continuous family-saturation score written to artifacts; not a main-path action in v1. |
 | Stage transition policy | `transition/stage_transition.py`, `transition/signals.py`, `transition/table_policy.py` | Formal table-policy decision plus explicit signals and legacy audit comparison. |
 | Round transition controller | `transition/round_controller.py` | Converts the stage decision into an execution plan with authority and budget gates. |

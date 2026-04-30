@@ -16,6 +16,11 @@ Stage transition and round transition are intentionally separate:
 is the execution/budget gate that decides whether the stage decision can become
 another launched round.
 
+Protocol evaluation windows are also scoped explicitly in artifacts. Search
+window files are `decision_scope=diagnostic_only`; the configured decision
+window, usually selection, is `decision_scope=formal_decision` and is the source
+for canonical keep/drop/winner decisions.
+
 Thresholds are centralized in `search/policy_config.py` under
 `DEFAULT_POLICY_CONFIG`. The numeric values below document the default
 `refine_policy_config_v1`; they should not be duplicated as new hard-coded
@@ -191,6 +196,23 @@ Ordered levels are defined in `table_policy.py`:
 | `turnover_pressure` | `low < medium < high < critical` |
 | `frontier_health` | `exhausted < low < medium < high` |
 | `model_consensus` | `low < medium < high` |
+
+## Decorrelation Gate Arbitration
+
+Decorrelation thresholds live in `DecorrelationPolicyConfig`. In
+complementarity mode or when explicit decorrelation targets are present, the
+strong gate separates three outcomes:
+
+| Condition | Formal keep? | Winner? | Reference? | Behavior |
+|---|---:|---:|---:|---|
+| nearest target corr `> hard_drop_corr` and no strong/material parent edge | no | no | no | Ordinary decorrelation drop |
+| nearest target corr `> hard_drop_corr` with strong quality or material parent gain | no | no | yes | Keep as audit/reference only; parent or lower-corr branch remains the decorrelated path |
+| nearest target corr `> soft_drop_corr` and `material_gain=false` | no | no | no | Weak-fail drop |
+| nearest target corr `> suppress_winner_corr` and strong quality is false | yes | no | no | Candidate can remain a keep, but cannot be promoted to winner |
+
+The reference-only path records `decorrelation_keep_allowed=false`,
+`decorrelation_winner_allowed=false`, `decorrelation_reference_allowed=true`,
+and `decorrelation_arbitration_reason` in summary artifacts.
 
 ## Saturation Assessment
 

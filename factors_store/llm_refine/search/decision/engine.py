@@ -191,6 +191,8 @@ class DecisionEngine:
                 {
                     "factor_name": str(item.get("factor_name", "") or ""),
                     "status": str(item.get("status", "") or ""),
+                    "evaluation_stage": str(item.get("evaluation_stage", "") or ""),
+                    "decision_scope": str(item.get("decision_scope", "") or ""),
                     "source_model": str(item.get("source_model", "") or ""),
                     "quick_rank_icir": safe_float(item.get("quick_rank_icir"), default=float("nan")),
                     "net_ann_return": safe_float(item.get("net_ann_return"), default=float("nan")),
@@ -212,6 +214,9 @@ class DecisionEngine:
                     "decorrelation_gate_action": str(item.get("decorrelation_gate_action", "") or ""),
                     "decorrelation_gate_reason": str(item.get("decorrelation_gate_reason", "") or ""),
                     "decorrelation_winner_allowed": bool(item.get("decorrelation_winner_allowed", True)),
+                    "decorrelation_keep_allowed": bool(item.get("decorrelation_keep_allowed", True)),
+                    "decorrelation_reference_allowed": bool(item.get("decorrelation_reference_allowed", False)),
+                    "decorrelation_arbitration_reason": str(item.get("decorrelation_arbitration_reason", "") or ""),
                     "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
                     "decorrelation_adjusted_score": safe_float(
                         item.get("decorrelation_adjusted_score"), default=float("nan")
@@ -226,6 +231,8 @@ class DecisionEngine:
         return {
             "factor_name": str(item.get("factor_name", "") or ""),
             "status": str(item.get("status", "") or ""),
+            "evaluation_stage": str(item.get("evaluation_stage", "") or ""),
+            "decision_scope": str(item.get("decision_scope", "") or ""),
             "quick_rank_icir": safe_float(item.get("quick_rank_icir"), default=float("nan")),
             "net_ann_return": safe_float(item.get("net_ann_return"), default=float("nan")),
             "net_excess_ann_return": safe_float(item.get("net_excess_ann_return"), default=float("nan")),
@@ -244,6 +251,9 @@ class DecisionEngine:
             "decorrelation_gate_action": str(item.get("decorrelation_gate_action", "") or ""),
             "decorrelation_gate_reason": str(item.get("decorrelation_gate_reason", "") or ""),
             "decorrelation_winner_allowed": bool(item.get("decorrelation_winner_allowed", True)),
+            "decorrelation_keep_allowed": bool(item.get("decorrelation_keep_allowed", True)),
+            "decorrelation_reference_allowed": bool(item.get("decorrelation_reference_allowed", False)),
+            "decorrelation_arbitration_reason": str(item.get("decorrelation_arbitration_reason", "") or ""),
             "decorrelation_quality_score": safe_float(item.get("decorrelation_quality_score"), default=float("nan")),
             "decorrelation_adjustment": safe_float(item.get("decorrelation_adjustment"), default=float("nan")),
             "decorrelation_adjusted_score": safe_float(

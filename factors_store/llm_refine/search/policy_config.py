@@ -92,7 +92,7 @@ class StageTransitionPolicyConfig:
 
 @dataclass(frozen=True)
 class DecorrelationPolicyConfig:
-    version: str = "decorrelation_policy_v1"
+    version: str = "decorrelation_policy_v1_1"
     excellent_corr: float = 0.35
     good_corr: float = 0.55
     acceptable_corr: float = 0.70

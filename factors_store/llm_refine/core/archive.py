@@ -116,6 +116,8 @@ def init_archive_db(db_path: str | Path = DEFAULT_ARCHIVE_DB) -> Path:
                 mean_turnover REAL,
                 decision TEXT,
                 decision_reason TEXT,
+                evaluation_stage TEXT,
+                decision_scope TEXT,
                 evaluated_at TEXT
             );
 
@@ -134,6 +136,10 @@ def init_archive_db(db_path: str | Path = DEFAULT_ARCHIVE_DB) -> Path:
             conn.execute("ALTER TABLE candidates ADD COLUMN filter_stage TEXT")
         if not _has_column(conn, "candidates", "filter_reason"):
             conn.execute("ALTER TABLE candidates ADD COLUMN filter_reason TEXT")
+        if not _has_column(conn, "evaluations", "evaluation_stage"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN evaluation_stage TEXT")
+        if not _has_column(conn, "evaluations", "decision_scope"):
+            conn.execute("ALTER TABLE evaluations ADD COLUMN decision_scope TEXT")
     return path
 
 
@@ -244,8 +250,8 @@ def insert_evaluations(
             INSERT OR REPLACE INTO evaluations (
                 candidate_id, run_id, quick_rank_ic_mean, quick_rank_icir,
                 net_ann_return, net_excess_ann_return, net_sharpe, mean_turnover,
-                decision, decision_reason, evaluated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                decision, decision_reason, evaluation_stage, decision_scope, evaluated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -259,6 +265,8 @@ def insert_evaluations(
                     row.get("mean_turnover"),
                     row.get("decision"),
                     row.get("decision_reason"),
+                    row.get("evaluation_stage"),
+                    row.get("decision_scope"),
                     row.get("evaluated_at", utc_now_iso()),
                 )
                 for row in rows
@@ -515,6 +523,8 @@ def load_run_candidate_records(
                 e.net_excess_ann_return,
                 e.net_sharpe,
                 e.mean_turnover,
+                e.evaluation_stage,
+                e.decision_scope,
                 e.evaluated_at
             FROM candidates c
             LEFT JOIN evaluations e
@@ -543,6 +553,8 @@ def load_run_candidate_records(
         "net_excess_ann_return",
         "net_sharpe",
         "mean_turnover",
+        "evaluation_stage",
+        "decision_scope",
         "evaluated_at",
     )
     return [dict(zip(keys, row)) for row in rows]
@@ -575,7 +587,9 @@ def get_candidate_record(
                 e.net_ann_return,
                 e.net_excess_ann_return,
                 e.net_sharpe,
-                e.mean_turnover
+                e.mean_turnover,
+                e.evaluation_stage,
+                e.decision_scope
             FROM candidates c
             LEFT JOIN evaluations e
               ON c.candidate_id = e.candidate_id
@@ -603,6 +617,8 @@ def get_candidate_record(
         "net_excess_ann_return",
         "net_sharpe",
         "mean_turnover",
+        "evaluation_stage",
+        "decision_scope",
     )
     return dict(zip(keys, row))
 
@@ -633,6 +649,8 @@ def get_latest_family_winner(
                 e.net_excess_ann_return,
                 e.net_sharpe,
                 e.mean_turnover,
+                e.evaluation_stage,
+                e.decision_scope,
                 e.evaluated_at
             FROM candidates c
             LEFT JOIN evaluations e
@@ -664,6 +682,8 @@ def get_latest_family_winner(
         "net_excess_ann_return",
         "net_sharpe",
         "mean_turnover",
+        "evaluation_stage",
+        "decision_scope",
         "evaluated_at",
     )
     return dict(zip(keys, row))
@@ -695,6 +715,8 @@ def get_best_family_winner(
                 e.net_excess_ann_return,
                 e.net_sharpe,
                 e.mean_turnover,
+                e.evaluation_stage,
+                e.decision_scope,
                 e.evaluated_at
             FROM candidates c
             LEFT JOIN evaluations e
@@ -734,6 +756,8 @@ def get_best_family_winner(
         "net_excess_ann_return",
         "net_sharpe",
         "mean_turnover",
+        "evaluation_stage",
+        "decision_scope",
         "evaluated_at",
     )
     return dict(zip(keys, row))

@@ -740,6 +740,9 @@ def _attach_decorrelation_assessment(
         "decorrelation_gate_action": "pass",
         "decorrelation_gate_reason": "",
         "decorrelation_winner_allowed": True,
+        "decorrelation_keep_allowed": True,
+        "decorrelation_reference_allowed": False,
+        "decorrelation_arbitration_reason": "",
         "decorrelation_quality_gate_passed": False,
         "decorrelation_strong_quality_passed": False,
     }
@@ -756,6 +759,9 @@ def _attach_decorrelation_assessment(
         work.at[idx, "decorrelation_gate_action"] = assessment.gate_action
         work.at[idx, "decorrelation_gate_reason"] = assessment.gate_reason
         work.at[idx, "decorrelation_winner_allowed"] = assessment.winner_allowed
+        work.at[idx, "decorrelation_keep_allowed"] = assessment.keep_allowed
+        work.at[idx, "decorrelation_reference_allowed"] = assessment.reference_allowed
+        work.at[idx, "decorrelation_arbitration_reason"] = assessment.arbitration_reason
         work.at[idx, "decorrelation_quality_gate_passed"] = assessment.quality_gate_passed
         work.at[idx, "decorrelation_strong_quality_passed"] = assessment.strong_quality_passed
     return work
@@ -905,6 +911,12 @@ def _candidate_decision(
     )
     if decorrelation_strong_gate_active and decorrelation_gate_action == "drop":
         return "research_drop", decorrelation_gate_reason or "decorrelation strong gate dropped candidate"
+    if decorrelation_strong_gate_active and decorrelation_gate_action == "suppress_high_corr_reference":
+        return (
+            "research_drop",
+            decorrelation_gate_reason
+            or "decorrelation high-corr reference only; not eligible as decorrelated keep",
+        )
 
     turnover_parent = _num(parent, "mean_turnover")
     turnover_candidate = _num(row, "mean_turnover")
@@ -1046,11 +1058,18 @@ def _ensure_keep_floor(
     error_text = work.get("error", pd.Series(index=work.index, dtype=object)).fillna("").astype(str).str.strip()
     decision_text = work.get("decision", pd.Series(index=work.index, dtype=object)).fillna("").astype(str)
     decorrelation_gate = work.get("decorrelation_gate_action", pd.Series(index=work.index, dtype=object)).fillna("").astype(str)
+    decorrelation_keep_allowed = (
+        work.get("decorrelation_keep_allowed", pd.Series(True, index=work.index, dtype=bool))
+        .fillna(True)
+        .astype(bool)
+    )
     fallback_mask = (
         candidate_mask
         & error_text.eq("")
         & ~decision_text.str.startswith("drop_redundant")
         & decorrelation_gate.ne("drop")
+        & decorrelation_gate.ne("suppress_high_corr_reference")
+        & decorrelation_keep_allowed
     )
     fallback_df = work.loc[fallback_mask].copy()
     if fallback_df.empty:
@@ -1213,6 +1232,8 @@ def _slim_summary(summary_df: pd.DataFrame) -> pd.DataFrame:
     desired = [
         "factor_name",
         "role",
+        "evaluation_stage",
+        "decision_scope",
         "model",
         "expression",
         "winner_score",
@@ -1242,6 +1263,9 @@ def _slim_summary(summary_df: pd.DataFrame) -> pd.DataFrame:
         "decorrelation_gate_action",
         "decorrelation_gate_reason",
         "decorrelation_winner_allowed",
+        "decorrelation_keep_allowed",
+        "decorrelation_reference_allowed",
+        "decorrelation_arbitration_reason",
         "decorrelation_quality_gate_passed",
         "decorrelation_strong_quality_passed",
         "raw_neutral_rank_icir_gap",
@@ -1321,6 +1345,10 @@ def _markdown_report(
     for _, row in summary_df[summary_df["role"] == "candidate"].iterrows():
         lines.append(f"### {row.get('factor_name')}")
         lines.append(f"- model: {row.get('model')}")
+        if str(row.get("evaluation_stage", "")).strip():
+            lines.append(f"- evaluation_stage: {row.get('evaluation_stage')}")
+        if str(row.get("decision_scope", "")).strip():
+            lines.append(f"- decision_scope: {row.get('decision_scope')}")
         lines.append(f"- expression: `{row.get('expression', '')}`")
         lines.append(f"- research_decision: {row.get('decision', '')}")
         lines.append(f"- reason: {row.get('decision_reason', '')}")
@@ -1336,6 +1364,14 @@ def _markdown_report(
             f"- avg_abs_decorrelation_target_corr: "
             f"{_fmt_md_num(row.get('avg_abs_decorrelation_target_corr'))}"
         )
+        if str(row.get("decorrelation_gate_action", "")).strip():
+            lines.append(f"- decorrelation_gate_action: {row.get('decorrelation_gate_action')}")
+            lines.append(f"- decorrelation_gate_reason: {row.get('decorrelation_gate_reason', '')}")
+            lines.append(f"- decorrelation_keep_allowed: {row.get('decorrelation_keep_allowed')}")
+            lines.append(f"- decorrelation_winner_allowed: {row.get('decorrelation_winner_allowed')}")
+            lines.append(f"- decorrelation_reference_allowed: {row.get('decorrelation_reference_allowed')}")
+            if str(row.get("decorrelation_arbitration_reason", "")).strip():
+                lines.append(f"- decorrelation_arbitration_reason: {row.get('decorrelation_arbitration_reason')}")
         if str(row.get("top_style_exposure", "")).strip():
             lines.append(
                 f"- top_style_exposure: {row.get('top_style_exposure')} "
@@ -1649,8 +1685,11 @@ def _write_window_outputs(
     summary_full_path = evaluation_dir / f"{base_name}_summary_full.csv"
     ranked_full_path = evaluation_dir / f"{base_name}_ranked_full.csv"
 
-    ranked_full_df = _sorted_summary(summary_df)
+    decision_scope = "formal_decision" if make_canonical_alias else "diagnostic_only"
     summary_full_df = summary_df.copy()
+    summary_full_df["evaluation_stage"] = str(stage_name)
+    summary_full_df["decision_scope"] = decision_scope
+    ranked_full_df = _sorted_summary(summary_full_df)
     slim_summary_df = _slim_summary(summary_full_df)
     slim_ranked_df = _slim_summary(ranked_full_df)
 
@@ -1677,7 +1716,7 @@ def _write_window_outputs(
 
         report_text = _markdown_report(
             family=family,
-            summary_df=summary_df,
+            summary_df=summary_full_df,
             settings=settings,
             data_meta=data_meta,
         )
@@ -1852,6 +1891,12 @@ def evaluate_refinement_run(
             "stage_files": {key: str(value) for key, value in outputs.items()},
         }
         summary_df_for_archive = summary_df
+
+    archive_decision_stage = str(meta_payload.get("decision_stage", "selection"))
+    if not summary_df_for_archive.empty:
+        summary_df_for_archive = summary_df_for_archive.copy()
+        summary_df_for_archive["evaluation_stage"] = archive_decision_stage
+        summary_df_for_archive["decision_scope"] = "formal_decision"
 
     meta_path.write_text(
         json.dumps(meta_payload, ensure_ascii=False, indent=2, default=str),
