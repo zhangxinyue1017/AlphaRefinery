@@ -69,8 +69,8 @@ import pandas as pd
 
 VALID_DUPLICATE_POLICIES = ("error", "first", "last", "mean")
 DEFAULT_STOCK_REGEX = (
-    r"^(?:(?:000|001|002|003|300|301)\d{3}\.SZ|"
-    r"(?:600|601|603|605|688)\d{3}\.SH)$"
+    r"^(?:sh\.(?:600|601|603|605|688)\d{3}|"
+    r"sz\.(?:000|001|002|003|300|301)\d{3})$"
 )
 PRICE_COLUMNS = ("open", "high", "low", "close", "vwap", "preClose", "pre_close")
 VALUE_COLUMNS = ("volume", "amount")
