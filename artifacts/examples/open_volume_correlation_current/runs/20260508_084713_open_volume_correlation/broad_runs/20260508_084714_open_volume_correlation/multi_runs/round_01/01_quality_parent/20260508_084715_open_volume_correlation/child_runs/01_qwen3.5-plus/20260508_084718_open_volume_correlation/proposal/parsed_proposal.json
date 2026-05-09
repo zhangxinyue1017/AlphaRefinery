@@ -1,0 +1,51 @@
+{
+  "parent_factor": "llmgen.open_vol_amount_corr",
+  "diagnosed_weaknesses": [
+    "同家族冗余度较高",
+    "流动性暴露显著",
+    "信号抖动导致换手高",
+    "尺度敏感性较强"
+  ],
+  "refinement_rationale": "平滑输入降噪，引入波动过滤，替换流动性维度。",
+  "candidates": [
+    {
+      "name": "open_vol_corr_stable",
+      "expression": "neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 10), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 40), 1e-12))))",
+      "explanation": "放宽相关窗口，平滑流动性分母，降低信号抖动。",
+      "candidate_role": "conservative",
+      "rationale": "窗口放宽减少噪声，分母平滑稳定信号。",
+      "expected_improvement": "stability",
+      "risk": "signal_weakening",
+      "source_model": "qwen3.5-plus",
+      "source_provider": "kuai",
+      "parent_factor": "llmgen.open_vol_amount_corr",
+      "family": "open_volume_correlation",
+      "candidate_id": "cand::open_volume_correlation::r45::c2c0b34b46267fb4",
+      "round_id": 45,
+      "parent_candidate_id": "cand::open_volume_correlation::r42::2fbe706f075169f6",
+      "status": "proposed",
+      "validation_warnings": []
+    },
+    {
+      "name": "open_amt_cov_smooth",
+      "expression": "neg(mul(ema(ts_cov(cs_rank(ema(open, 10)), cs_rank(ema(amount, 20)), 5), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 20), 1e-12))))",
+      "explanation": "借鉴平滑协方差动机，对开盘与金额做平滑协方差。",
+      "candidate_role": "donor_transfer",
+      "rationale": "平滑输入提升协方差稳定性，借鉴成功动机。",
+      "expected_improvement": "rank_icir",
+      "risk": "overfitting",
+      "source_model": "qwen3.5-plus",
+      "source_provider": "kuai",
+      "parent_factor": "llmgen.open_vol_amount_corr",
+      "family": "open_volume_correlation",
+      "candidate_id": "cand::open_volume_correlation::r45::f8111bf7e360120a",
+      "round_id": 45,
+      "parent_candidate_id": "cand::open_volume_correlation::r42::2fbe706f075169f6",
+      "status": "proposed",
+      "validation_warnings": []
+    }
+  ],
+  "expected_behavior_change": "降低换手，提升稳定性，减少冗余。",
+  "risk_notes": "信号减弱，过拟合，冗余持续。",
+  "raw_response": "{\n  \"parent_factor\": \"llmgen.open_vol_amount_corr\",\n  \"diagnosed_weaknesses\": [\n    \"同家族冗余度较高\",\n    \"流动性暴露显著\",\n    \"信号抖动导致换手高\",\n    \"尺度敏感性较强\"\n  ],\n  \"refinement_rationale\": \"平滑输入降噪，引入波动过滤，替换流动性维度。\",\n  \"expected_behavior_change\": \"降低换手，提升稳定性，减少冗余。\",\n  \"risk_notes\": \"信号减弱，过拟合，冗余持续。\",\n  \"candidate_formulas\": [\n    {\n      \"name\": \"open_vol_corr_stable\",\n      \"candidate_role\": \"conservative\",\n      \"expression\": \"neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 10), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 40), 1e-12))))\",\n      \"explanation\": \"放宽相关窗口，平滑流动性分母，降低信号抖动。\",\n      \"rationale\": \"窗口放宽减少噪声，分母平滑稳定信号。\",\n      \"expected_improvement\": \"stability\",\n      \"risk\": \"signal_weakening\"\n    },\n    {\n      \"name\": \"open_amt_cov_smooth\",\n      \"candidate_role\": \"donor_transfer\",\n      \"expression\": \"neg(mul(ema(ts_cov(cs_rank(ema(open, 10)), cs_rank(ema(amount, 20)), 5), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 20), 1e-12))))\",\n      \"explanation\": \"借鉴平滑协方差动机，对开盘与金额做平滑协方差。\",\n      \"rationale\": \"平滑输入提升协方差稳定性，借鉴成功动机。\",\n      \"expected_improvement\": \"rank_icir\",\n      \"risk\": \"overfitting\"\n    },\n    {\n      \"name\": \"open_turnover_corr_div\",\n      \"candidate_role\": \"decorrelating\",\n      \"expression\": \"neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 5), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), div(ema(cs_rank(turnover), 120), add(ema(cs_rank(turnover), 20), 1e-12))))\",\n      \"explanation\": \"替换流动性定义为换手率，降低与成交量因子冗余。\",\n      \"rationale\": \"换手率维度不同于成交量，有效降低家族冗余。\",\n      \"expected_improvement\": \"redundancy\",\n      \"risk\": \"redundancy_persistence\"\n    },\n    {\n      \"name\": \"open_vol_corr_volgate\",\n      \"candidate_role\": \"confirmation\",\n      \"expression\": \"neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 5), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), where(ts_std(returns, 20) < cs_mean(ts_std(returns, 20), 250), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 20), 1e-12)), 0.5)))\",\n      \"explanation\": \"引入波动率门控，低波时段保留信号，抑制高波噪声。\",\n      \"rationale\": \"波动率过滤剔除极端行情，提升信号纯度。\",\n      \"expected_improvement\": \"stability\",\n      \"risk\": \"signal_weakening\"\n    },\n    {\n      \"name\": \"open_vol_corr_simple\",\n      \"candidate_role\": \"simplifying\",\n      \"expression\": \"neg(mul(ema(ts_corr(cs_rank(returns), cs_rank(open), 10), 20), cs_rank(ema(amount, 60))))\",\n      \"explanation\": \"移除市场拟合项，简化流动性处理，降低复杂度。\",\n      \"rationale\": \"去除冗余嵌套，保留核心量价逻辑，降低过拟合。\",\n      \"expected_improvement\": \"turnover\",\n      \"risk\": \"interpretability_loss\"\n    },\n    {\n      \"name\": \"open_vwap_corr_stretch\",\n      \"candidate_role\": \"stretch\",\n      \"expression\": \"neg(mul(ema(ts_corr(cs_rank(returns), cs_rank(vwap), 10), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 20), 1e-12))))\",\n      \"explanation\": \"使用 VWAP 替代开盘价，捕捉更稳健的成交价量关系。\",\n      \"rationale\": \"VWAP 含更多信息，增强价格代表性，提升 IC。\",\n      \"expected_improvement\": \"rank_icir\",\n      \"risk\": \"interpretability_loss\"\n    }\n  ]\n}"
+}

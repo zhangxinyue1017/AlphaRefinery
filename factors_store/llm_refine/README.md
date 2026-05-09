@@ -4,13 +4,14 @@
 ## ✨ What makes `llm_refine` different
 
 - 🧠 **Family-level refinement**, not one-shot formula mutation
-- 🧭 **Broad -> Anchor -> Focused** staged search progression
+- 🧭 **State/action scheduler** for broad search, focused refinement, saturation, and transfer
 - 🌿 **Dual-parent branch preservation** with path-aware continuation
 - 🎯 **Target-conditioned search** beyond raw-alpha-only optimization
 - 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
 - 🪢 **Shared context alignment** across prompting, decision trace, and orchestration
 - 🪄 **De-correlation-aware refinement** with unified assessment, rerank diagnostics, and early complementarity gates
 - 🔍 **Table-driven transition policy** with explicit signals and legacy logic retained as audit-only reference
+- 🧾 **Compact family state/action summaries** for scheduler outputs and transfer plans
 
 ---
 
@@ -150,6 +151,58 @@ This currently includes:
 The goal is not over-automation.  
 The goal is to make the refinement loop **more consistent, more traceable, and easier to reason about**.
 
+### 6. One public state/action vocabulary
+
+The internal scheduler still keeps its detailed stage policy, but public summaries use a compact family-flow vocabulary:
+
+```text
+Seed family -> exploring -> refining -> saturated / held -> donor export or donor import
+```
+
+Core family states:
+
+| State | Meaning |
+|---|---|
+| `new` | A family has not yet opened its search space. |
+| `exploring` | The family is broadening motifs, parents, or branches. |
+| `refining` | The family has a workable parent and is deepening or confirming it. |
+| `saturated` | The current objective or branch is mature enough to stop, switch objective, or export motifs. |
+| `held` | The family should pause or stop for now. |
+
+Core actions:
+
+| Detailed stage action | Public action |
+|---|---|
+| `continue_focused` | `continue_focused` |
+| `reopen_broad` | `reopen_broad` |
+| `switch_to_complementarity` | `switch_objective` |
+| `confirmation` | `confirm` |
+| `terminate` | `stop` |
+
+Transfer is represented as two explicit actions instead of a separate control system:
+
+| Action | Meaning |
+|---|---|
+| `export_donor` | A mature or saturated family can provide successful motifs to adjacent families. |
+| `import_donor` | The current family should borrow a motif from another family to open structural space. |
+
+Scheduler summaries expose this as `core_family_flow`, with `family_state`, `recommended_action`, `action_reason`, `next_run_hint`, and `transfer`.
+
+### 7. Family genesis is explicit
+
+Families are curated research units built around one seed motif. The public
+definition of each family lives in `config/refinement_seed_pool.yaml`; the
+default seed eligibility and boundary rules live in `family_origin_defaults`.
+
+Each loaded `SeedFamily` carries a `family_origin` payload with:
+
+- `discovery_mode`
+- `seed_source`
+- `seed_selection_reason`
+- `family_boundary`
+
+The full rules are documented in [docs/family_genesis.md](./docs/family_genesis.md).
+
 ---
 
 ## Current Key Capabilities
@@ -159,12 +212,12 @@ The goal is to make the refinement loop **more consistent, more traceable, and e
 - `run_refine_multi_model`
   - focused multi-model round
 - `run_refine_multi_model_scheduler`
-  - unified search + multi-round scheduler
+  - current default family controller: unified search + multi-round scheduler
 - `run_refine_family_explore`
   - multi-seed breadth exploration
-  - transitional family-level orchestration entry
+  - legacy/specialized breadth-first entry
 - `run_refine_family_loop`
-  - `Broad -> Anchor Graduation -> Focused` family controller v1
+  - legacy v1 deterministic broad-to-focused controller
 - MMR rerank
 - dual-parent round v1
 - Path Evaluation v2
@@ -204,11 +257,25 @@ For family-level control, the process can be staged as:
 
 ```mermaid
 graph LR
-    A[Family Start] --> B[Broad]
-    B --> C[Anchor Graduation]
-    C --> D[Focused]
-    D --> E[Branch Continue / Promote / Stop]
+    A[Seed Family] --> B[exploring]
+    B --> C[refining]
+    C --> D[saturated]
+    C --> E[held]
+    D --> F[export_donor]
+    B --> G[import_donor]
+    G --> C
 ```
+
+`run_next_experiments` writes a machine-readable `transfer_plan` in its JSON output. The scheduler can consume that plan directly:
+
+```bash
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
+  --family qp_weighted_price_centroid \
+  --donor-plan artifacts/reports/next_experiments/20260508_000000_next_experiments.json \
+  --max-donor-motifs 4
+```
+
+You can narrow transfer manually with `--donor-family` and `--donor-factor`.
 
 ---
 
@@ -298,9 +365,9 @@ factors_store/llm_refine/
 | ---------------------------------- | --------------------------------------------------------- |
 | `run_refine_loop`                  | Smoke testing whether a family can run                    |
 | `run_refine_multi_model`           | Focused round around an existing parent                   |
-| `run_refine_multi_model_scheduler` | Automatically continuing across multiple rounds           |
-| `run_refine_family_explore`        | New family breadth exploration when no main line is clear |
-| `run_refine_family_loop`           | Broad pass, anchor selection, and focused continuation    |
+| `run_refine_multi_model_scheduler` | Default multi-round family controller                     |
+| `run_refine_family_explore`        | Legacy/specialized breadth exploration                    |
+| `run_refine_family_loop`           | Legacy v1 deterministic broad-to-focused controller       |
 
 ---
 
@@ -700,9 +767,9 @@ Interfaces currently reserved:
 
 ## Where to Read Next
 
-### Want the formal search formulation
+### Want the family genesis / seed rules
 
-* [../../docs/family_search_formulation.md](../../docs/family_search_formulation.md)
+* [docs/family_genesis.md](./docs/family_genesis.md)
 
 ### Want to know which entry to use
 

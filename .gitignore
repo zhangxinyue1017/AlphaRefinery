@@ -68,3 +68,4 @@ artifacts/**
 !artifacts/
 !artifacts/**/
 !artifacts/README.md
+!artifacts/examples/**

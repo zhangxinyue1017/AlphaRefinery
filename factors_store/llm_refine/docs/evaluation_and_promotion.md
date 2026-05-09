@@ -96,7 +96,9 @@ evaluation 后，满足条件的 `research_winner` 会进入 pending promotion�
 时，会自动写入：
 
 - `factors_store/factors/llm_refined/*.py`
-- `llm_refined/__init__.py`
+
+但不会再写 `llm_refined/__init__.py`。`llm_refined` 通过动态发现加载本地
+`*_family.py` 模块，避免把 private / ignored family 模块静态 import 到公开仓库。
 
 ## auto_apply_promotion 的口径
 

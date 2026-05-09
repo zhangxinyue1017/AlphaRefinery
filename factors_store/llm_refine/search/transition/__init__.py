@@ -11,6 +11,15 @@ from .context_resolver import (
 )
 from .round_controller import RoundTransitionPlan, resolve_round_transition_plan
 from .signals import SignalExtractor, StageTransitionSignals
+from ..decision.state_actions import (
+    CoreFamilyAction,
+    CoreFamilyFlow,
+    CoreFamilyState,
+    build_core_family_flow_summary,
+    build_core_transfer_summary,
+    derive_core_family_state,
+    map_stage_action,
+)
 from .stage_transition import (
     EvaluationFeedback,
     FamilyState,
@@ -36,6 +45,9 @@ from .table_policy import (
 __all__ = [
     "ContextEvidence",
     "ContextProfile",
+    "CoreFamilyAction",
+    "CoreFamilyFlow",
+    "CoreFamilyState",
     "EvaluationFeedback",
     "FamilyState",
     "OrchestrationProfile",
@@ -49,7 +61,10 @@ __all__ = [
     "StageTransitionSignals",
     "build_stage_transition_evidence",
     "build_stage_transition_shadow",
+    "build_core_family_flow_summary",
+    "build_core_transfer_summary",
     "compare_stage_transition_decisions",
+    "derive_core_family_state",
     "get_phase_policy_table",
     "get_stage_policy_table",
     "get_shadow_stage_policy_table",
@@ -60,4 +75,5 @@ __all__ = [
     "resolve_shadow_table_policy",
     "resolve_stage_transition",
     "resolve_stage_transition_from_state",
+    "map_stage_action",
 ]

@@ -75,7 +75,7 @@
 - `child_cross_model_convergence`
   - 多模型是否收敛到同类结构
 
-### admission 友好度
+### deployability / library 友好度
 
 - `child_positive_excess_rate`
   - 正 excess 后代比例
@@ -84,7 +84,8 @@
 - `child_full_metrics_rate`
   - full metrics 完整后代比例
 - `child_admission_friendly_rate`
-  - 同时满足几项 formal 友好条件的比例
+  - 历史字段名；当前语义是 deployability / library-friendly rate
+  - 同时满足几项 formal / library-friendly 条件的比例
 
 ### 新意质量
 
@@ -122,7 +123,7 @@
 - 更偏：
   - 后代整体质量
   - 稳定性
-  - admission 友好度
+  - deployability / library 友好度
   - 新意
   - 时效性
 

@@ -1,0 +1,8 @@
+factor,source_stage,model,branch,role,rank_ic,rank_icir,net_ann_return,net_excess_ann_return,sharpe,turnover,comment
+llm_refined.amt_weighted_shadow_10,first_wave,kimi-k2,upper_body_rejection_amount,first_main_breakthrough,0.1010,0.6137,3.8818,0.3640,4.2253,0.1626,First clear move from event frequency to amount-weighted rejection.
+llm_refined.upper_body_reject_amt_10,round2p5_amt,gpt-5.4,upper_body_rejection_amount,price_structure_representative,0.1055,0.6558,3.6788,0.3079,4.0431,0.1988,Cleanest price-structure definition using high minus max(open close).
+llm_refined.shadow_pos_confirm_15,dual_parent_scheduler,qwen3.5-plus,turnover_confirmation,current_formal_strongest,0.0966,0.7409,5.2492,0.6531,5.9298,0.1443,Strong confirmation winner from dual-parent scheduler.
+llm_refined.llmgen_shadow_vol_rel_15,dual_parent_scheduler,deepseek-v3.1,geometry_volatility_normalization,best_node_representative,0.1001,0.6743,4.1525,0.3700,4.7100,0.1661,Representative of the current best-node branch.
+llm_refined.shadow_wm_half_life_40,dual_parent_scheduler,qwen3.5-plus,turnover_confirmation,smoothing_representative,0.0922,0.6423,3.9703,0.2919,4.8103,0.1201,Longer-window weighted mean and half-life smoothing.
+llm_refined.shadow_amt_relturn_15,dual_parent_scheduler,gpt-5.4,turnover_confirmation,relative_turnover_representative,0.0918,0.7349,3.9450,0.2857,5.3678,0.1765,Relative-turnover confirmation branch with strong risk-adjusted results.
+llm_refined.shadow_wma_smooth_20,target_conditioned_ab,qwen3.5-plus,target_conditioned_complementarity,complementarity_representative,0.1020,0.6246,3.3057,0.1018,3.8375,0.1407,Target-conditioned example showing complementarity-oriented smoothing.

@@ -1,0 +1,70 @@
+{
+  "family": {
+    "family": "open_volume_correlation",
+    "priority": "high",
+    "canonical_seed": "alpha101.alpha003",
+    "aliases": [
+      "alpha101.alpha006"
+    ],
+    "direction": "use_negative_sign",
+    "implementation_paths": [
+      "factors_store/factors/alpha101_like.py",
+      "factors_store/factors/alpha191_like.py"
+    ],
+    "formulas": {
+      "alpha101.alpha003": "-corr(rank(open), rank(volume), 10)",
+      "alpha101.alpha006": "-corr(open, volume, 10)"
+    },
+    "interpretation": "衡量开盘价相对位置与成交活跃度是否同步；更强的信号往往来自短期量价背离，或开盘阶段出现拥挤交易行为。",
+    "likely_weaknesses": [
+      "同家族冗余度较高。",
+      "raw 形式更容易受尺度和流动性水平影响。",
+      "可能带有流动性或规模暴露。"
+    ],
+    "refinement_axes": [
+      "对相关性结果加入 decay 或平滑，降低信号抖动",
+      "和波动惩罚项结合，抑制过度拥挤个股",
+      "比较 raw、rank、zscore 三种输入形式，找到最稳定的表达",
+      "在相关性计算前尝试行业中性化，去除风格暴露",
+      "适度缩短或拉长相关性窗口",
+      "把 volume 替换为 amount、turnover 或 volume/advN"
+    ],
+    "preferred_refine_seed": "",
+    "formula_directions": {},
+    "primary_objective": "降低换手，提升因子稳定性",
+    "secondary_objective": "在不明显增加换手的前提下提升 RankICIR",
+    "hard_constraints": [
+      "必须保留开盘价与成交活跃度之间的核心逻辑",
+      "最多只允许引入一个新的原始字段",
+      "不能只靠符号翻转完成改写"
+    ],
+    "candidate_roles": [
+      "conservative",
+      "decorrelating",
+      "enhancing"
+    ],
+    "anti_patterns": [
+      "只改时间窗",
+      "只多包一层 rank 或类似包装",
+      "三个候选几乎只是近重复变体",
+      "完全改写成另一套逻辑"
+    ],
+    "allowed_edit_types": [
+      "时间窗替换",
+      "算子替换",
+      "插入归一化",
+      "插入平滑或衰减",
+      "增加一条辅助分支"
+    ],
+    "relation_note": "alpha003 与 alpha006 本质上是同一套开盘价-成交活跃度逻辑，只是一个偏 rank 形式、一个偏 raw 形式。"
+  },
+  "provider": {
+    "name": "kuai",
+    "base_url": "https://api.kuai.host/v1",
+    "model": "qwen3.5-plus",
+    "temperature": 0.4,
+    "max_tokens": 2000,
+    "timeout": 600.0
+  },
+  "name_prefix": "llmgen"
+}

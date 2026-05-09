@@ -1,0 +1,11 @@
+[
+  {
+    "module_path": "/root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/open_volume_correlation_family.py",
+    "changed": true,
+    "entries": [
+      "llm_refined.open_vol_corr_stable"
+    ],
+    "llm_refined_init": "/root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/__init__.py",
+    "llm_refined_init_changed": "true"
+  }
+]

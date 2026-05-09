@@ -1,0 +1,84 @@
+{
+  "requested": 6,
+  "final_target": 2,
+  "selected_count": 2,
+  "dropped_count": 4,
+  "role_slots": [
+    "conservative",
+    "donor_transfer",
+    "decorrelating",
+    "confirmation",
+    "simplifying",
+    "stretch"
+  ],
+  "selected": [
+    {
+      "factor_name": "open_vol_corr_stable",
+      "candidate_id": "cand::open_volume_correlation::r45::c2c0b34b46267fb4",
+      "candidate_role": "conservative",
+      "selection_score": 0.53,
+      "complexity_delta": 0.0,
+      "max_similarity_to_parent": 0.9,
+      "max_similarity_to_selected": 0.0,
+      "selection_reason": "role_coverage:conservative",
+      "drop_reason": ""
+    },
+    {
+      "factor_name": "open_amt_cov_smooth",
+      "candidate_id": "cand::open_volume_correlation::r45::f8111bf7e360120a",
+      "candidate_role": "donor_transfer",
+      "selection_score": 0.745128,
+      "complexity_delta": -2.32,
+      "max_similarity_to_parent": 0.594872,
+      "max_similarity_to_selected": 0.594872,
+      "selection_reason": "role_coverage:donor_transfer",
+      "drop_reason": ""
+    }
+  ],
+  "dropped": [
+    {
+      "factor_name": "open_turnover_corr_div",
+      "candidate_id": "cand::open_volume_correlation::r45::42402679e350e8e2",
+      "candidate_role": "decorrelating",
+      "selection_score": 0.315385,
+      "complexity_delta": 0.0,
+      "max_similarity_to_parent": 0.884615,
+      "max_similarity_to_selected": 0.884615,
+      "selection_reason": "",
+      "drop_reason": ""
+    },
+    {
+      "factor_name": "open_vol_corr_volgate",
+      "candidate_id": "cand::open_volume_correlation::r45::08d0b70645adedc7",
+      "candidate_role": "confirmation",
+      "selection_score": 0.544545,
+      "complexity_delta": 4.66,
+      "max_similarity_to_parent": 0.775455,
+      "max_similarity_to_selected": 0.775455,
+      "selection_reason": "",
+      "drop_reason": ""
+    },
+    {
+      "factor_name": "open_vol_corr_simple",
+      "candidate_id": "cand::open_volume_correlation::r45::ff10c2e09c0a474a",
+      "candidate_role": "simplifying",
+      "selection_score": 0.808333,
+      "complexity_delta": -9.14,
+      "max_similarity_to_parent": 0.591667,
+      "max_similarity_to_selected": 0.591667,
+      "selection_reason": "",
+      "drop_reason": ""
+    },
+    {
+      "factor_name": "open_vwap_corr_stretch",
+      "candidate_id": "cand::open_volume_correlation::r45::4ee21a9ef0bd110e",
+      "candidate_role": "stretch",
+      "selection_score": 0.635769,
+      "complexity_delta": -4.48,
+      "max_similarity_to_parent": 0.644231,
+      "max_similarity_to_selected": 0.758333,
+      "selection_reason": "",
+      "drop_reason": ""
+    }
+  ]
+}

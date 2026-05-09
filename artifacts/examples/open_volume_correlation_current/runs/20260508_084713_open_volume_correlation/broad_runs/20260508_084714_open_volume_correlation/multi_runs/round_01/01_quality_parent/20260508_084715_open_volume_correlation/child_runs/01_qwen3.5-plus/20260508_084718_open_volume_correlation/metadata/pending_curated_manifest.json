@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "created_at": "2026-05-08T09:25:10.998097+00:00",
+  "family": "open_volume_correlation",
+  "canonical_seed": "alpha101.alpha003",
+  "run_id": "run::open_volume_correlation::r45::6d157bc298f9",
+  "round_id": 45,
+  "decision_stage": "selection",
+  "name_prefix": "llmgen",
+  "promotion_policy": {
+    "required_decision": "research_winner",
+    "broad_mode": true,
+    "require_nonempty_expression": true
+  },
+  "entries": [
+    {
+      "candidate_id": "cand::open_volume_correlation::r45::c2c0b34b46267fb4",
+      "factor_name": "llmgen.open_vol_corr_stable",
+      "suggested_registry_name": "llm_refined.open_vol_corr_stable",
+      "suggested_function_name": "llm_refined_open_vol_corr_stable",
+      "expression": "neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 10), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 40), 1e-12))))",
+      "candidate_role": "",
+      "source_model": "qwen3.5-plus",
+      "source_provider": "kuai",
+      "decision": "research_keep",
+      "decision_reason": "broad gate: beats parent on NetSharpe; full_metrics=4/4",
+      "selection_metrics": {
+        "quick_rank_ic_mean": 0.04200080449751649,
+        "quick_rank_icir": 0.6163130808732129,
+        "net_ann_return": 1.2253288993118345,
+        "net_excess_ann_return": -0.38206876367550324,
+        "net_sharpe": 4.62161849683993,
+        "mean_turnover": 0.1883450778955242
+      },
+      "promotion_context": {
+        "family": "open_volume_correlation",
+        "canonical_seed": "alpha101.alpha003",
+        "run_id": "run::open_volume_correlation::r45::6d157bc298f9",
+        "round_id": 45,
+        "run_dir": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation",
+        "decision_stage": "selection",
+        "name_prefix": "llmgen",
+        "target_family_module": "/root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/open_volume_correlation_family.py"
+      },
+      "promotion_gate_reason": "high-quality research_keep passed pending-curation gate"
+    }
+  ],
+  "dedup_skipped": []
+}

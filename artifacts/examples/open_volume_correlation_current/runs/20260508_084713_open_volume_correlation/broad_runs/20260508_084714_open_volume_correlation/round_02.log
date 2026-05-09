@@ -1,0 +1,7 @@
+[parent] role=quality_parent factor=llmgen.open_vol_amount_corr stage_mode=focused_refine models=qwen3.5-plus
+[launch] model=qwen3.5-plus round_id=46 pid=1615479 log=/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_02/01_quality_parent/20260508_092512_open_volume_correlation/01_qwen3.5-plus.log
+[progress] model=qwen3.5-plus round_id=46 phase=starting elapsed=?
+[progress] model=qwen3.5-plus round_id=46 phase=llm_request elapsed=0.0s message=requesting proposals from qwen3.5-plus
+[progress] model=qwen3.5-plus round_id=46 phase=failed elapsed=1.9s message=curl fallback failed: curl: (7) Failed to connect to 127.0.0.1 port 7890 after 0 ms: Connection refused
+[done] model=qwen3.5-plus round_id=46 status=failed returncode=1
+[summary] all 1 model run(s) failed

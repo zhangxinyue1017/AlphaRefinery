@@ -1,0 +1,6 @@
+[parent] role=quality_parent factor=llmgen.open_vol_amount_corr stage_mode=new_family_broad models=qwen3.5-plus
+[launch] model=qwen3.5-plus round_id=44 pid=206 log=/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084643_open_volume_correlation/broad_runs/20260508_084644_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084645_open_volume_correlation/01_qwen3.5-plus.log
+[progress] model=qwen3.5-plus round_id=44 phase=starting elapsed=?
+[progress] model=qwen3.5-plus round_id=44 phase=llm_request elapsed=0.0s message=requesting proposals from qwen3.5-plus
+[done] model=qwen3.5-plus round_id=44 status=failed returncode=1
+[summary] all 1 model run(s) failed

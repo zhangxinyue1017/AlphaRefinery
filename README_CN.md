@@ -13,7 +13,7 @@
 ## ✨ 项目亮点
 
 - 🧠 **核心引擎是 `llm_refine`**，重点不是一次性公式生成，而是 family-level refinement
-- 🧭 **Broad -> Anchor -> Focused** 的阶段化搜索推进
+- 🧭 面向 broad search、focused refinement、saturation 与 transfer 的 **state/action scheduler**
 - 🌿 **双父分支保留** 与 **Path Evaluation**
 - 🎯 面向 `raw_alpha`、`deployability`、`complementarity` 的**目标条件化搜索**
 - 🧩 用于 rerank、anchor selection、next-step recommendation 的**上下文感知决策**
@@ -211,7 +211,7 @@ graph TD
 
 它目前支持：
 
-* family loop（`Broad -> Anchor Graduation -> Focused`）
+* 带 `core_family_flow` 摘要的 multi-round scheduler
 * 基于 preferred/oriented seed、donor retrieval、role-constrained generation 的 round1 bootstrap
 * focused multi-model refinement rounds
 * multi-round schedulers
@@ -398,20 +398,20 @@ factor = registry.compute("alpha101.alpha013", data)
 print(factor.dropna().head())
 ```
 
-### 2. 用默认 family loop 启动一个新 family
+### 2. 用 scheduler 启动一个新 family
 
 ```bash
 source ./llm_refine_provider_env.sh
 
-python -m factors_store.llm_refine.cli.run_refine_family_loop \
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
   --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
-  --broad-policy-preset exploratory \
-  --focused-policy-preset balanced \
+  --stage-mode auto \
+  --policy-preset exploratory \
   --target-profile raw_alpha \
   --n-candidates 8 \
-  --broad-max-rounds 2 \
-  --focused-max-rounds 2 \
+  --max-rounds 3 \
+  --transition-authority guarded_control \
   --auto-apply-promotion
 ```
 
@@ -421,20 +421,16 @@ python -m factors_store.llm_refine.cli.run_refine_family_loop \
 
 ### 1. 启动一个新 family
 
-当你希望系统在当前 family controller 下自动执行：
-
-* broad pass
-* anchor graduation
-* focused continuation
-
-可以使用 `run_refine_family_loop`：
+当你希望系统自动选择 parent、路由 stage，并在多轮里持续推进 family，可以使用
+`run_refine_multi_model_scheduler`：
 
 ```bash
-python -m factors_store.llm_refine.cli.run_refine_family_loop \
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
   --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
-  --broad-policy-preset exploratory \
-  --focused-policy-preset balanced \
+  --stage-mode auto \
+  --policy-preset exploratory \
+  --max-rounds 3 \
   --target-profile raw_alpha
 ```
 
@@ -490,7 +486,6 @@ AlphaRefinery/
 │   ├── factor_manifests/
 │   └── refinement_seed_pool.yaml
 ├── docs/
-│   ├── family_search_formulation.md
 │   └── assets/
 ├── factors_store/
 │   ├── contract.py
@@ -523,7 +518,7 @@ AlphaRefinery/
 ### 如果你想先看旗舰子系统
 
 1. [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
-2. [docs/family_search_formulation.md](./docs/family_search_formulation.md)
+2. [factors_store/llm_refine/docs/family_genesis.md](./factors_store/llm_refine/docs/family_genesis.md)
 3. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
 4. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
 5. [factors_store/llm_refine/docs/stage_transition_signals.md](./factors_store/llm_refine/docs/stage_transition_signals.md)

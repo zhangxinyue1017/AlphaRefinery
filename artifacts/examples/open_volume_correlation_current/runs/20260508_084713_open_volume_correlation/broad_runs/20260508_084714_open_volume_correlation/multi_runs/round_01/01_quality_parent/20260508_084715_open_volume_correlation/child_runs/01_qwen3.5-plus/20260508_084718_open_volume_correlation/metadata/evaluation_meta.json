@@ -1,0 +1,173 @@
+{
+  "family": "open_volume_correlation",
+  "canonical_seed": "alpha101.alpha003",
+  "name_prefix": "llmgen",
+  "evaluation_mode": "protocol",
+  "protocol": {
+    "search": {
+      "start": "2016-01-01",
+      "end": "2022-12-30"
+    },
+    "selection": {
+      "start": "2023-01-03",
+      "end": "2026-03-09"
+    },
+    "final_oos": null,
+    "prompt_history_stage": "search",
+    "keep_decision_stage": "selection",
+    "promote_stage": "selection"
+  },
+  "decision_stage": "selection",
+  "stage_mode": "new_family_broad",
+  "decision_policy": "system-internal research decisions are based on selection. If final_oos is configured, it is review-only and excluded from optimization and auto-parenting.",
+  "decorrelation_targets": [],
+  "stage_details": {
+    "search": {
+      "settings": {
+        "panel_path": "/root/dmd/BaoStock/panel.parquet",
+        "benchmark_path": "/root/dmd/BaoStock/Index/sh.000001.csv",
+        "start": "2016-01-01",
+        "end": "2022-12-30",
+        "horizon": 5,
+        "n_groups": 5,
+        "pure_mode": "none",
+        "cost_bps": 10.0,
+        "min_stocks": 10
+      },
+      "data_meta": {
+        "filter_report": {
+          "rows_before": 6413405,
+          "cols_before": 13,
+          "index_quality": {
+            "duplicate_policy": "error",
+            "duplicated_index_rows_before": 0,
+            "duplicated_index_keys_before": 0,
+            "rows_dropped_by_duplicate_policy": 0,
+            "rows_aggregated_by_duplicate_policy": 0
+          },
+          "instrument_filter_regex": "^(?:sh\\.(?:600|601|603|605|688)\\d{3}|sz\\.(?:000|001|002|003|300|301)\\d{3})$",
+          "rows_dropped_by_instrument_filter": 1703,
+          "inf_to_nan_counts": {},
+          "nonpositive_price_to_nan_counts": {
+            "vwap": 2
+          },
+          "negative_volume_amount_to_nan_counts": {},
+          "zero_volume_price_na_enabled": true,
+          "rows_zero_volume_or_less": 171850,
+          "st_filter_enabled": true,
+          "st_filter_available": true,
+          "rows_dropped_by_st_filter": 214631,
+          "suspended_filter_enabled": true,
+          "suspended_filter_available": true,
+          "suspended_filter_source": "provided",
+          "rows_dropped_by_suspended_filter": 154078,
+          "min_listed_days": 60,
+          "listed_days_filter_available": true,
+          "listed_days_filter_source": "inferred_from_first_valid_trade_date",
+          "rows_dropped_by_listed_days_filter": 274369,
+          "rows_missing_listed_days": 0,
+          "min_turnover_quantile": null,
+          "min_liquidity_quantile": null,
+          "liquidity_filter_available": false,
+          "liquidity_filter_source": "none",
+          "rows_dropped_by_liquidity_filter": 0,
+          "rows_missing_liquidity": 0,
+          "rows_dropped_by_turnover_filter": 0,
+          "rows_missing_turnover": 0,
+          "drop_limit_move_enabled": false,
+          "drop_limit_move_rows": 0,
+          "drop_limit_move_missing_cols": [],
+          "rows_after": 5768624,
+          "cols_after": 13,
+          "instruments_after": 4926,
+          "first_date_after": "2016-04-01 00:00:00",
+          "last_date_after": "2022-12-30 00:00:00"
+        },
+        "panel_index": "MultiIndex([('2016-04-01', 'sh.600000'),\n            ('2016-04-01', 'sh.600004'),\n            ('2016-04-01', 'sh.600005'),\n            ('2016-04-01', 'sh.600007'),\n            ('2016-04-01', 'sh.600008'),\n            ('2016-04-01', 'sh.600009'),\n            ('2016-04-01', 'sh.600010'),\n            ('2016-04-01', 'sh.600011'),\n            ('2016-04-01', 'sh.600012'),\n            ('2016-04-01', 'sh.600015'),\n            ...\n            ('2022-12-30', 'sz.301328'),\n            ('2022-12-30', 'sz.301330'),\n            ('2022-12-30', 'sz.301331'),\n            ('2022-12-30', 'sz.301333'),\n            ('2022-12-30', 'sz.301336'),\n            ('2022-12-30', 'sz.301338'),\n            ('2022-12-30', 'sz.301339'),\n            ('2022-12-30', 'sz.301349'),\n            ('2022-12-30', 'sz.301366'),\n            ('2022-12-30', 'sz.301369')],\n           names=['datetime', 'instrument'], length=5768624)",
+        "rows_after_filter": 5768624,
+        "instruments_after_filter": 4926
+      }
+    },
+    "selection": {
+      "settings": {
+        "panel_path": "/root/dmd/BaoStock/panel.parquet",
+        "benchmark_path": "/root/dmd/BaoStock/Index/sh.000001.csv",
+        "start": "2023-01-03",
+        "end": "2026-03-09",
+        "horizon": 5,
+        "n_groups": 5,
+        "pure_mode": "none",
+        "cost_bps": 10.0,
+        "min_stocks": 10
+      },
+      "data_meta": {
+        "filter_report": {
+          "rows_before": 3906414,
+          "cols_before": 13,
+          "index_quality": {
+            "duplicate_policy": "error",
+            "duplicated_index_rows_before": 0,
+            "duplicated_index_keys_before": 0,
+            "rows_dropped_by_duplicate_policy": 0,
+            "rows_aggregated_by_duplicate_policy": 0
+          },
+          "instrument_filter_regex": "^(?:sh\\.(?:600|601|603|605|688)\\d{3}|sz\\.(?:000|001|002|003|300|301)\\d{3})$",
+          "rows_dropped_by_instrument_filter": 767,
+          "inf_to_nan_counts": {},
+          "nonpositive_price_to_nan_counts": {},
+          "negative_volume_amount_to_nan_counts": {},
+          "zero_volume_price_na_enabled": true,
+          "rows_zero_volume_or_less": 98,
+          "st_filter_enabled": true,
+          "st_filter_available": true,
+          "rows_dropped_by_st_filter": 109999,
+          "suspended_filter_enabled": true,
+          "suspended_filter_available": true,
+          "suspended_filter_source": "provided",
+          "rows_dropped_by_suspended_filter": 4897,
+          "min_listed_days": 60,
+          "listed_days_filter_available": true,
+          "listed_days_filter_source": "inferred_from_first_valid_trade_date",
+          "rows_dropped_by_listed_days_filter": 304941,
+          "rows_missing_listed_days": 0,
+          "min_turnover_quantile": null,
+          "min_liquidity_quantile": null,
+          "liquidity_filter_available": false,
+          "liquidity_filter_source": "none",
+          "rows_dropped_by_liquidity_filter": 0,
+          "rows_missing_liquidity": 0,
+          "rows_dropped_by_turnover_filter": 0,
+          "rows_missing_turnover": 0,
+          "drop_limit_move_enabled": false,
+          "drop_limit_move_rows": 0,
+          "drop_limit_move_missing_cols": [],
+          "rows_after": 3485810,
+          "cols_after": 13,
+          "instruments_after": 5248,
+          "first_date_after": "2023-04-03 00:00:00",
+          "last_date_after": "2026-03-09 00:00:00"
+        },
+        "panel_index": "MultiIndex([('2023-04-03', 'sh.600000'),\n            ('2023-04-03', 'sh.600004'),\n            ('2023-04-03', 'sh.600006'),\n            ('2023-04-03', 'sh.600007'),\n            ('2023-04-03', 'sh.600008'),\n            ('2023-04-03', 'sh.600009'),\n            ('2023-04-03', 'sh.600010'),\n            ('2023-04-03', 'sh.600011'),\n            ('2023-04-03', 'sh.600015'),\n            ('2023-04-03', 'sh.600016'),\n            ...\n            ('2026-03-09', 'sz.301632'),\n            ('2026-03-09', 'sz.301633'),\n            ('2026-03-09', 'sz.301636'),\n            ('2026-03-09', 'sz.301638'),\n            ('2026-03-09', 'sz.301656'),\n            ('2026-03-09', 'sz.301658'),\n            ('2026-03-09', 'sz.301662'),\n            ('2026-03-09', 'sz.301665'),\n            ('2026-03-09', 'sz.301668'),\n            ('2026-03-09', 'sz.301678')],\n           names=['datetime', 'instrument'], length=3485810)",
+        "rows_after_filter": 3485810,
+        "instruments_after_filter": 5248
+      }
+    }
+  },
+  "stage_files": {
+    "evaluation_dir": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation",
+    "search_summary": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_search_summary.csv",
+    "search_ranked": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_search_ranked.csv",
+    "search_summary_full": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_search_summary_full.csv",
+    "search_ranked_full": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_search_ranked_full.csv",
+    "selection_summary": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_selection_summary.csv",
+    "selection_ranked": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_selection_ranked.csv",
+    "selection_summary_full": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_selection_summary_full.csv",
+    "selection_ranked_full": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_selection_ranked_full.csv",
+    "family_backtest_summary": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_summary.csv",
+    "family_backtest_ranked": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_ranked.csv",
+    "family_backtest_summary_full": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_summary_full.csv",
+    "family_backtest_ranked_full": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/family_backtest_ranked_full.csv",
+    "keep_drop_report": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/keep_drop_report.md",
+    "research_gate_report": "/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084713_open_volume_correlation/broad_runs/20260508_084714_open_volume_correlation/multi_runs/round_01/01_quality_parent/20260508_084715_open_volume_correlation/child_runs/01_qwen3.5-plus/20260508_084718_open_volume_correlation/evaluation/research_gate_report.md"
+  }
+}

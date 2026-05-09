@@ -1,0 +1,46 @@
+metadata:
+  family: open_volume_correlation
+  canonical_seed: alpha101.alpha003
+  provider:
+    name: kuai
+    base_url: https://api.kuai.host/v1
+    model: qwen3.5-plus
+    temperature: 0.4
+    max_tokens: 2000
+    timeout: 600.0
+factors:
+- name: llmgen.open_vol_corr_stable
+  expr: neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 10), regression_rsq(cs_rank(returns),
+    cs_rank(market_return), 60)), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount),
+    40), 1e-12))))
+  candidate_role: conservative
+  explanation: 放宽相关窗口，平滑流动性分母，降低信号抖动。
+  rationale: 窗口放宽减少噪声，分母平滑稳定信号。
+  expected_improvement: stability
+  risk: signal_weakening
+  source_model: qwen3.5-plus
+  source_provider: kuai
+  parent_factor: llmgen.open_vol_amount_corr
+  family: open_volume_correlation
+  candidate_id: cand::open_volume_correlation::r45::c2c0b34b46267fb4
+  round_id: 45
+  parent_candidate_id: cand::open_volume_correlation::r42::2fbe706f075169f6
+  status: proposed
+  validation_warnings: []
+- name: llmgen.open_amt_cov_smooth
+  expr: neg(mul(ema(ts_cov(cs_rank(ema(open, 10)), cs_rank(ema(amount, 20)), 5), 20),
+    div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 20), 1e-12))))
+  candidate_role: donor_transfer
+  explanation: 借鉴平滑协方差动机，对开盘与金额做平滑协方差。
+  rationale: 平滑输入提升协方差稳定性，借鉴成功动机。
+  expected_improvement: rank_icir
+  risk: overfitting
+  source_model: qwen3.5-plus
+  source_provider: kuai
+  parent_factor: llmgen.open_vol_amount_corr
+  family: open_volume_correlation
+  candidate_id: cand::open_volume_correlation::r45::f8111bf7e360120a
+  round_id: 45
+  parent_candidate_id: cand::open_volume_correlation::r42::2fbe706f075169f6
+  status: proposed
+  validation_warnings: []

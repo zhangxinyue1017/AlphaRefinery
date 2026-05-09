@@ -18,7 +18,7 @@
 ## ✨ Highlights
 
 - 🧠 **Flagship engine: `llm_refine`**, built for family-level refinement rather than one-shot formula mutation
-- 🧭 **Broad -> Anchor -> Focused** staged search progression
+- 🧭 **State/action scheduler** for broad search, focused refinement, saturation, and transfer
 - 🌿 **Dual-parent branch preservation** with **Path Evaluation**
 - 🎯 **Target-conditioned search** for `raw_alpha`, `deployability`, and `complementarity`
 - 🧠 **Search-plan advisory layer** that frames family refinement as a state-action-feedback transition process
@@ -148,6 +148,20 @@ At the core of this layer are four objects:
 - `EvaluationFeedback`: what the last action actually produced,
 - `StageTransitionDecision`: whether the family should continue focused search, reopen exploration, switch objectives, confirm, or terminate.
 
+Scheduler summaries additionally expose a compact public flow:
+
+```text
+Seed family -> exploring -> refining -> saturated / held -> export_donor or import_donor
+```
+
+This keeps the README-facing vocabulary stable: `continue_focused`, `reopen_broad`, `switch_objective`, `confirm`, `stop`, `export_donor`, and `import_donor`. The detailed table policy remains available for audit, while readers can understand the main loop from `core_family_flow` in the scheduler summary.
+
+Family creation is also explicit. Seed families are curated research units
+defined in `config/refinement_seed_pool.yaml`; `family_origin_defaults` describes
+seed eligibility and family-boundary rules, and each loaded `SeedFamily` exposes
+a `family_origin` payload. See
+[`factors_store/llm_refine/docs/family_genesis.md`](./factors_store/llm_refine/docs/family_genesis.md).
+
 Formally, each family can be viewed as a stateful search process:
 
 ```text
@@ -243,7 +257,7 @@ The `llm_refine` subsystem is the main methodological core of the project.
 
 It currently supports:
 
-* family loop (`Broad -> Anchor Graduation -> Focused`)
+* multi-round scheduler with compact `core_family_flow` summaries
 * round1 bootstrap through preferred/oriented seeds, donor retrieval, and role-constrained generation
 * focused multi-model refinement rounds
 * multi-round schedulers
@@ -448,20 +462,20 @@ factor = registry.compute("alpha101.alpha013", data)
 print(factor.dropna().head())
 ```
 
-### 2. Start a new family with the default family loop
+### 2. Start a new family with the scheduler
 
 ```bash
 source ./llm_refine_provider_env.sh
 
-python -m factors_store.llm_refine.cli.run_refine_family_loop \
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
   --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
-  --broad-policy-preset exploratory \
-  --focused-policy-preset balanced \
+  --stage-mode auto \
+  --policy-preset exploratory \
   --target-profile raw_alpha \
   --n-candidates 8 \
-  --broad-max-rounds 2 \
-  --focused-max-rounds 2 \
+  --max-rounds 3 \
+  --transition-authority guarded_control \
   --auto-apply-promotion
 ```
 
@@ -471,20 +485,17 @@ python -m factors_store.llm_refine.cli.run_refine_family_loop \
 
 ### 1. Start a new family
 
-Use `run_refine_family_loop` when you want the system to run:
-
-* a broad pass,
-* anchor graduation,
-* and focused continuation
-
-under the current default family controller.
+Use `run_refine_multi_model_scheduler` when you want the system to choose
+parents, route stages, and continue across rounds under the current table-policy
+controller.
 
 ```bash
-python -m factors_store.llm_refine.cli.run_refine_family_loop \
+python -m factors_store.llm_refine.cli.run_refine_multi_model_scheduler \
   --family qp_low_price_accumulation_pressure \
   --models gpt-5.4,deepseek-v3.1,qwen3.5-plus \
-  --broad-policy-preset exploratory \
-  --focused-policy-preset balanced \
+  --stage-mode auto \
+  --policy-preset exploratory \
+  --max-rounds 3 \
   --target-profile raw_alpha
 ```
 
@@ -538,7 +549,6 @@ AlphaRefinery/
 │   ├── factor_manifests/
 │   └── refinement_seed_pool.yaml
 ├── docs/
-│   ├── family_search_formulation.md
 │   └── assets/
 ├── factors_store/
 │   ├── contract.py
@@ -570,7 +580,7 @@ Runtime outputs under `artifacts/**`, private factor families, provider secrets,
 ### If you want the flagship subsystem first
 
 1. [factors_store/llm_refine/README.md](./factors_store/llm_refine/README.md)
-2. [docs/family_search_formulation.md](./docs/family_search_formulation.md)
+2. [factors_store/llm_refine/docs/family_genesis.md](./factors_store/llm_refine/docs/family_genesis.md)
 3. [factors_store/llm_refine/docs/modes.md](./factors_store/llm_refine/docs/modes.md)
 4. [factors_store/llm_refine/docs/search_and_dual_parent.md](./factors_store/llm_refine/docs/search_and_dual_parent.md)
 5. [factors_store/llm_refine/docs/stage_transition_signals.md](./factors_store/llm_refine/docs/stage_transition_signals.md)

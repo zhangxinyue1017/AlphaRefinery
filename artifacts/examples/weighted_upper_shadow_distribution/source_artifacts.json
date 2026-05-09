@@ -1,0 +1,34 @@
+{
+  "example": "weighted_upper_shadow_distribution",
+  "created_for": "AlphaRefinery public example artifact",
+  "family": "weighted_upper_shadow_distribution",
+  "canonical_seed": "factor365.weighted_upper_shadow_frequency_40_hl10",
+  "source_reports": [
+    {
+      "path": "artifacts/reports/family/llm_refined_weighted_upper_shadow_distribution_report_20260402.md",
+      "copied_to": "reports/family_report_20260402.md",
+      "purpose": "family-level research summary"
+    },
+    {
+      "path": "artifacts/reports/evaluator/research_funnel_report.md",
+      "copied_to": "reports/research_funnel_report.md",
+      "purpose": "cross-family research funnel summary"
+    }
+  ],
+  "source_run_examples": [
+    {
+      "path": "artifacts/runs/llm_refine_multi/20260428_022423_weighted_upper_shadow_distribution",
+      "purpose": "focused multi-model refinement example"
+    },
+    {
+      "path": "artifacts/runs/llm_refine_family_loop/20260428_064340_weighted_upper_shadow_distribution",
+      "purpose": "family-loop broad/anchor/focused example"
+    }
+  ],
+  "public_packaging_notes": [
+    "Raw prompts are omitted.",
+    "Provider configuration is omitted.",
+    "Large per-run JSON summaries are omitted.",
+    "Selected candidate metrics are summarized in tables/selected_candidates.csv."
+  ]
+}

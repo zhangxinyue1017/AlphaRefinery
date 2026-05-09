@@ -12,6 +12,8 @@
   - promotion pending / auto-apply 中间层
 - [reports/](./reports)
   - 面向阅读的报告
+- [examples/](./examples)
+  - 面向开源仓库的精简示例产物
 - [logs/](./logs)
   - 原始日志
 

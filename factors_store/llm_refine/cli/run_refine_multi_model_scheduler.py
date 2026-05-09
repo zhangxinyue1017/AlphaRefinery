@@ -43,6 +43,7 @@ from ..search import (
     SearchPolicy,
     SignalExtractor,
     build_stage_transition_evidence,
+    build_core_family_flow_summary,
     build_search_normalizer,
     compare_stage_transition_decisions,
     resolve_round_transition_plan,
@@ -152,6 +153,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=list(multi.get_default("decorrelation_target") or []),
         help="explicit factor(s) to decorrelate from; may be repeated or passed as comma-separated names",
     )
+    parser.add_argument("--donor-plan", default="", help="optional next-experiments JSON used as donor motif source")
+    parser.add_argument("--donor-family", default="", help="optional donor family filter for transfer motifs")
+    parser.add_argument("--donor-factor", default="", help="optional donor factor filter for transfer motifs")
+    parser.add_argument(
+        "--max-donor-motifs",
+        type=int,
+        default=4,
+        help="maximum donor motifs propagated into child prompts when donor transfer is enabled",
+    )
 
     parser.add_argument("--skip-eval", action="store_true", help="skip backtest stage in each round")
     parser.add_argument("--dry-run", action="store_true", help="dry-run each round without provider calls")
@@ -258,6 +268,14 @@ def _build_round_cmd(
     for target in list(args.decorrelation_target or []):
         if str(target).strip():
             cmd.extend(["--decorrelation-target", str(target)])
+    if str(args.donor_plan or "").strip():
+        cmd.extend(["--donor-plan", str(args.donor_plan).strip()])
+    if str(args.donor_family or "").strip():
+        cmd.extend(["--donor-family", str(args.donor_family).strip()])
+    if str(args.donor_factor or "").strip():
+        cmd.extend(["--donor-factor", str(args.donor_factor).strip()])
+    if int(args.max_donor_motifs or 0) > 0:
+        cmd.extend(["--max-donor-motifs", str(int(args.max_donor_motifs or 0))])
     cmd.extend(["--current-parent-name", str(parent.get("factor_name", ""))])
     cmd.extend(["--current-parent-expression", str(parent.get("expression", ""))])
     if str(parent.get("candidate_id", "")).strip():
@@ -326,6 +344,21 @@ def _pick_round_prompt_trace(sub_runs: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
+def _donor_families_from_sub_runs(sub_runs: list[dict[str, Any]]) -> list[str]:
+    families: list[str] = []
+    for item in sub_runs:
+        prompt_trace = dict(item.get("prompt_trace") or {})
+        for family in list(prompt_trace.get("donor_families") or []):
+            text = str(family or "").strip()
+            if text and text not in families:
+                families.append(text)
+        for motif in list(item.get("donor_motifs") or []):
+            family = str(dict(motif or {}).get("source_family") or "").strip()
+            if family and family not in families:
+                families.append(family)
+    return families
+
+
 def _build_orchestration_trace(
     *,
     family: str,
@@ -355,6 +388,9 @@ def _build_orchestration_trace(
     transition_authority: str = "",
     policy_extension_count: int = 0,
     max_policy_extensions: int = 0,
+    has_donor_motifs: bool = False,
+    donor_motifs_count: int = 0,
+    donor_families: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     evidence = ContextEvidence.from_runtime(
         family=family,
@@ -363,7 +399,7 @@ def _build_orchestration_trace(
         policy_preset=policy_preset,
         is_seed_stage=stage_mode == "new_family_broad",
         has_bootstrap_frontier=stage_mode == "new_family_broad",
-        has_donor_motifs=False,
+        has_donor_motifs=bool(has_donor_motifs),
         has_decorrelation_targets=has_decorrelation_targets,
         selected_parent_kind=parent_kind,
         requested_candidate_count=requested_candidate_count,
@@ -387,6 +423,7 @@ def _build_orchestration_trace(
             "frontier_exhausted": bool(frontier_exhausted),
         },
         redundancy_state={"has_decorrelation_targets": bool(has_decorrelation_targets)},
+        motif_state={"has_donor_motifs": bool(has_donor_motifs)},
     )
     refinement_action = RefinementAction(
         stage_mode=stage_mode,
@@ -454,7 +491,30 @@ def _build_orchestration_trace(
         confidence=stage_transition.confidence,
         rationale_tags=stage_transition.rationale_tags,
     )
+    core_family_flow = build_core_family_flow_summary(
+        family=family,
+        stage_mode=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        rounds_completed=int(round_idx or 0),
+        round_status=round_status,
+        stage_transition=stage_transition.to_dict(),
+        stage_transition_signals=stage_transition_signals.to_dict(),
+        saturation_assessment=saturation_assessment.to_dict(),
+        round_transition_plan=round_transition_plan.to_dict(),
+        prompt_trace={
+            "donor_motifs_count": int(donor_motifs_count or 0),
+            "policy_preset": policy_preset,
+            "context_evidence": evidence.to_dict(),
+        },
+        donor_families=donor_families,
+    ).to_dict()
     return {
+        "core_family_flow": core_family_flow,
+        "recommended_action": core_family_flow.get("recommended_action", ""),
+        "action_reason": core_family_flow.get("action_reason", ""),
+        "next_run_hint": dict(core_family_flow.get("next_run_hint") or {}),
+        "transfer": dict(core_family_flow.get("transfer") or {}),
         "context_evidence": evidence.to_dict(),
         "context_profile": context_profile.to_dict(),
         "orchestration_profile": orchestration_profile.to_dict(),
@@ -549,6 +609,9 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
     last_best_keep = dict(summary.get("last_round_best_keep") or {})
     best_node = dict(summary.get("best_node") or {})
     prompt_trace = dict(summary.get("prompt_trace") or {})
+    core_family_flow = dict(summary.get("core_family_flow") or {})
+    transfer = dict(core_family_flow.get("transfer") or summary.get("transfer") or {})
+    next_run_hint = dict(core_family_flow.get("next_run_hint") or summary.get("next_run_hint") or {})
     context_evidence = dict(summary.get("orchestration_context_evidence") or {})
     context_profile = dict(summary.get("orchestration_context_profile") or {})
     orchestration_profile = dict(summary.get("orchestration_profile") or {})
@@ -587,6 +650,17 @@ def render_scheduler_markdown(summary: dict[str, Any]) -> str:
         f"- requested_candidate_count: `{prompt_trace.get('requested_candidate_count', '')}`",
         f"- bootstrap_frontier_count: `{prompt_trace.get('bootstrap_frontier_count', '')}`",
         f"- donor_motifs_count: `{prompt_trace.get('donor_motifs_count', '')}`",
+        "",
+        "## Core Family Flow",
+        f"- family_state: `{core_family_flow.get('family_state', '')}`",
+        f"- recommended_action: `{core_family_flow.get('recommended_action', summary.get('recommended_action', ''))}`",
+        f"- action_reason: {core_family_flow.get('action_reason', summary.get('action_reason', ''))}",
+        f"- next_stage_mode: `{next_run_hint.get('stage_mode', '')}`",
+        f"- next_target_profile: `{next_run_hint.get('target_profile', '')}`",
+        f"- transfer_mode: `{transfer.get('mode', '')}`",
+        f"- transfer_action: `{transfer.get('recommended_transfer_action', '')}`",
+        f"- transfer_donor_motifs_count: `{transfer.get('donor_motifs_count', '')}`",
+        f"- transfer_donor_families: `{', '.join(str(item) for item in list(transfer.get('donor_families') or []))}`",
         "",
         "## Shared Context",
         f"- search_phase: `{context_profile.get('search_phase', '')}`",
@@ -929,6 +1003,11 @@ def _build_scheduler_summary_payload(
         "last_best_keep_expression": str(last_round_best_keep.get("expression", "") or ""),
         "last_round_best_keep": last_round_best_keep,
         "prompt_trace": dict(last_round.get("prompt_trace") or {}),
+        "core_family_flow": dict(last_round.get("core_family_flow") or {}),
+        "recommended_action": str(last_round.get("recommended_action") or ""),
+        "action_reason": str(last_round.get("action_reason") or ""),
+        "next_run_hint": dict(last_round.get("next_run_hint") or {}),
+        "transfer": dict(last_round.get("transfer") or {}),
         "orchestration_context_evidence": dict(last_round.get("context_evidence") or {}),
         "orchestration_context_profile": dict(last_round.get("context_profile") or {}),
         "orchestration_profile": dict(last_round.get("orchestration_profile") or {}),
@@ -1319,6 +1398,14 @@ def main() -> int:
                 round_idx=round_idx,
                 last_round=round_records[-1] if round_records else None,
             )
+            prompt_trace = _pick_round_prompt_trace(sub_runs) or {
+                "stage_mode": resolved_child_stage_mode,
+                "seed_stage_active": resolved_child_stage_mode == "new_family_broad",
+                "selected_parent_kind": str(primary_parent.node_kind),
+                "selected_parent_factor_name": str(primary_parent.factor_name),
+            }
+            donor_families = _donor_families_from_sub_runs(sub_runs)
+            has_donor_motifs = int(prompt_trace.get("donor_motifs_count") or 0) > 0 or bool(donor_families)
             record = {
                 "round": round_idx,
                 "child_stage_mode": resolved_child_stage_mode,
@@ -1360,13 +1447,8 @@ def main() -> int:
                 "latest_winner": latest_archive_winner,
                 "latest_archive_winner": latest_archive_winner,
                 "best_archive_winner": best_archive_winner,
-                "prompt_trace": _pick_round_prompt_trace(sub_runs)
-                or {
-                    "stage_mode": resolved_child_stage_mode,
-                    "seed_stage_active": resolved_child_stage_mode == "new_family_broad",
-                    "selected_parent_kind": str(primary_parent.node_kind),
-                    "selected_parent_factor_name": str(primary_parent.factor_name),
-                },
+                "prompt_trace": prompt_trace,
+                "donor_families": donor_families,
                 "best_node": current_best,
                 "best_node_name": str(current_best.get("candidate_name", "") or current_best.get("factor_name", "") or ""),
                 "best_node_expression": str(current_best.get("expression", "") or ""),
@@ -1383,6 +1465,9 @@ def main() -> int:
                     requested_candidate_count=int(getattr(args, "n_candidates", 0) or 0),
                     final_candidate_target=int(getattr(args, "n_candidates", 0) or 0),
                     has_decorrelation_targets=bool(args.decorrelation_target),
+                    has_donor_motifs=bool(has_donor_motifs),
+                    donor_motifs_count=int(prompt_trace.get("donor_motifs_count") or 0),
+                    donor_families=donor_families,
                     round_status=round_status,
                     search_improved=bool(expansion.get("improved")),
                     winner=dict(round_best_candidate or round_winner or {}),

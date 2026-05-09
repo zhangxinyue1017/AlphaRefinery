@@ -49,10 +49,14 @@ source ./llm_refine_provider_env.sh
 - 文件：
   - `cli/run_refine_multi_model_scheduler.py`
 - 适合：
+  - 当前默认 family 主流程
   - 多模型 + 自动多轮
-  - family 已经有一定基础，想让系统自己连续滚动
+  - 新 family 首跑后的连续滚动
+  - 围绕已有 parent 做 stage-aware continuation
 - 特点：
   - 接入统一 `SearchEngine`
+  - 输出 `core_family_flow`
+  - 支持 `transfer_plan` donor import
   - 支持 `conditional dual-parent round v1`
   - 当前 dual-parent 是同轮双 parent、子批次可并行执行
 
@@ -65,8 +69,8 @@ source ./llm_refine_provider_env.sh
   - 不确定主线
   - 想从多个 family seed 同时起跑做广搜
 - 备注：
-  - 这是当前 family 级 orchestration 的过渡入口
-  - 后续会逐步让位给更完整的 `family_loop`
+  - legacy/specialized breadth-first entry
+  - 常规主流程优先用 `run_refine_multi_model_scheduler`
 
 ### `run_refine_family_loop`
 
@@ -77,10 +81,12 @@ source ./llm_refine_provider_env.sh
   - 自动再起一条 focused run
   - 想把“人工挑 strongest branch 再继续挖”的动作收成闭环
 - 当前 `v1`：
+  - legacy deterministic controller
   - deterministic graduation
   - 单 family
   - 单 anchor
   - broad -> focused -> summary
+  - 常规主流程优先用 `run_refine_multi_model_scheduler`
 
 ### `run_next_experiments`
 
@@ -100,17 +106,19 @@ source ./llm_refine_provider_env.sh
 
 - 用 `run_refine_multi_model`
 
-### 想让系统自己连续跑 2 到 3 轮
+### 想让系统自己连续跑 2 到 3 轮，或启动当前默认 family 主流程
 
 - 用 `run_refine_multi_model_scheduler`
 
 ### 想做 breadth-first family 探索
 
-- 用 `run_refine_family_explore`
+- 优先用 `run_refine_multi_model_scheduler`
+- 只有需要 legacy breadth-first 行为时，用 `run_refine_family_explore`
 
 ### 想把 broad -> focused 自动串起来
 
-- 用 `run_refine_family_loop`
+- 优先用 `run_refine_multi_model_scheduler`
+- 只有需要 legacy deterministic broad-to-focused 行为时，用 `run_refine_family_loop`
 
 ## parent 语义
 

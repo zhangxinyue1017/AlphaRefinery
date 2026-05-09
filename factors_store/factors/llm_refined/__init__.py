@@ -18,6 +18,7 @@ import pkgutil
 import re
 from types import ModuleType
 
+from .open_volume_correlation_family import *  # noqa: F401,F403
 from .common import LLM_REFINED_SOURCE
 
 _EXPRESSION_RE = re.compile(r'expression\s*=\s*"(?P<expr>(?:[^"\\]|\\.)*)"')

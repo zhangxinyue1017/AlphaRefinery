@@ -1,0 +1,9 @@
+{
+  "family": "open_volume_correlation",
+  "run_id": "run::open_volume_correlation::r44::68959865339d",
+  "model": "qwen3.5-plus",
+  "phase": "failed",
+  "message": "curl fallback failed: curl: (7) Couldn't connect to server",
+  "elapsed_seconds": 1.914,
+  "updated_at": "2026-05-08T08:46:50.855529+00:00"
+}

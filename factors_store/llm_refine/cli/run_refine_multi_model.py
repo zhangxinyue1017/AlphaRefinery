@@ -420,6 +420,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--prompt-template-version": str(single.get_default("prompt_template_version")),
         "--primary-objective": "",
         "--secondary-objective": "",
+        "--donor-plan": str(single.get_default("donor_plan")),
+        "--donor-family": str(single.get_default("donor_family")),
+        "--donor-factor": str(single.get_default("donor_factor")),
+        "--max-donor-motifs": single.get_default("max_donor_motifs"),
     }
     for arg, default in passthrough_defaults.items():
         name = arg.lstrip("-").replace("-", "_")
@@ -534,6 +538,14 @@ def _build_child_cmd(args: argparse.Namespace, *, model: str, round_id: int, chi
         cmd.extend(["--primary-objective", str(args.primary_objective).strip()])
     if str(args.secondary_objective or "").strip():
         cmd.extend(["--secondary-objective", str(args.secondary_objective).strip()])
+    if str(args.donor_plan or "").strip():
+        cmd.extend(["--donor-plan", str(args.donor_plan).strip()])
+    if str(args.donor_family or "").strip():
+        cmd.extend(["--donor-family", str(args.donor_family).strip()])
+    if str(args.donor_factor or "").strip():
+        cmd.extend(["--donor-factor", str(args.donor_factor).strip()])
+    if int(args.max_donor_motifs or 0) > 0:
+        cmd.extend(["--max-donor-motifs", str(int(args.max_donor_motifs or 0))])
     if args.disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     cmd.append("--auto-apply-promotion" if args.auto_apply_promotion else "--no-auto-apply-promotion")
@@ -792,6 +804,13 @@ def main() -> int:
         family=args.family,
         statuses=() if args.skip_eval else ("research_winner", "winner", "research_keep", "keep", "research_keep_exploratory"),
     )
+    prompt_trace = _pick_prompt_trace(completed) or {
+        "stage_mode": stage_mode,
+        "seed_stage_active": bool(args.round1_seed_stage),
+        "selected_parent_kind": str(selected_parent.node_kind),
+        "selected_parent_factor_name": str(selected_parent.factor_name),
+    }
+    has_donor_motifs = int(prompt_trace.get("donor_motifs_count") or 0) > 0
     decision_context = DecisionContext.from_runtime(
         family=args.family,
         stage_mode=stage_mode,
@@ -807,7 +826,7 @@ def main() -> int:
                 policy_preset=str(args.policy_preset),
                 is_seed_stage=bool(stage_mode == "new_family_broad"),
                 has_bootstrap_frontier=False,
-                has_donor_motifs=False,
+                has_donor_motifs=bool(has_donor_motifs),
                 has_decorrelation_targets=bool(args.decorrelation_target),
                 selected_parent_kind=str(getattr(selected_parent, "node_kind", "") or ""),
                 requested_candidate_count=int(getattr(args, "n_candidates", 0) or 0),
@@ -863,13 +882,7 @@ def main() -> int:
         "failed_model_count": len(failed),
         "search_policy": policy.to_dict(),
         "search_budget": budget.to_dict(),
-        "prompt_trace": _pick_prompt_trace(completed)
-        or {
-            "stage_mode": stage_mode,
-            "seed_stage_active": bool(args.round1_seed_stage),
-            "selected_parent_kind": str(selected_parent.node_kind),
-            "selected_parent_factor_name": str(selected_parent.factor_name),
-        },
+        "prompt_trace": prompt_trace,
         "child_runs": [
             {
                 "model": str(item["model"]),

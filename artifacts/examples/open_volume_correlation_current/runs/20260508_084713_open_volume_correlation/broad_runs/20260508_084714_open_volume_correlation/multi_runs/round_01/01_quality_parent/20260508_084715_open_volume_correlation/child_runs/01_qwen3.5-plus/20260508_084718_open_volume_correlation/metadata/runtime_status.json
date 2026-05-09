@@ -1,0 +1,12 @@
+{
+  "family": "open_volume_correlation",
+  "run_id": "run::open_volume_correlation::r45::6d157bc298f9",
+  "model": "qwen3.5-plus",
+  "phase": "completed",
+  "message": "run finished",
+  "elapsed_seconds": 2272.051,
+  "updated_at": "2026-05-08T09:25:11.050692+00:00",
+  "extra": {
+    "child_record_count": 2
+  }
+}

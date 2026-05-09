@@ -346,6 +346,13 @@ def _build_prompt_trace(
         "role_slots": list(role_slots),
         "bootstrap_frontier_count": len(list(bootstrap_frontier or [])),
         "donor_motifs_count": len(list(donor_motifs or [])),
+        "donor_families": list(
+            dict.fromkeys(
+                str(dict(item or {}).get("source_family") or "").strip()
+                for item in list(donor_motifs or [])
+                if str(dict(item or {}).get("source_family") or "").strip()
+            )
+        ),
         "decorrelation_target_count": len(list(decorrelation_targets or [])),
         "decorrelation_targets": list(decorrelation_targets or []),
         "context_evidence": context_evidence.to_dict(),
@@ -648,6 +655,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=[],
         help="explicit factor(s) to decorrelate from; may be repeated or passed as comma-separated names",
     )
+    parser.add_argument("--donor-plan", default="", help="optional next-experiments JSON used as donor motif source")
+    parser.add_argument("--donor-family", default="", help="optional donor family filter for transfer motifs")
+    parser.add_argument("--donor-factor", default="", help="optional donor factor filter for transfer motifs")
+    parser.add_argument(
+        "--max-donor-motifs",
+        type=int,
+        default=DEFAULT_ROUND1_DONOR_FACTOR_LIMIT,
+        help="maximum donor motifs propagated into the prompt when donor transfer is enabled",
+    )
     parser.add_argument("--dry-run", action="store_true", help="only write prompts, do not call the provider")
     parser.add_argument("--print-only", action="store_true", help="print the prompt bundle and exit")
     parser.add_argument("--skip-eval", action="store_true", help="skip automatic family backtest for generated candidates")
@@ -813,15 +829,22 @@ def main() -> int:
         metrics=explicit_parent_record or latest_winner or bootstrap_parent or {},
     )
     selected_parent = engine.select_next() or seed_node
+    donor_transfer_requested = any(
+        str(value or "").strip()
+        for value in (args.donor_plan, args.donor_family, args.donor_factor)
+    )
     donor_motifs = (
         retrieve_runtime_donor_motifs(
             seed_pool=seed_pool,
             target_family=family.family,
             db_path=archive_db,
-            max_donor_families=DEFAULT_ROUND1_DONOR_FAMILY_LIMIT,
-            max_donor_factors=DEFAULT_ROUND1_DONOR_FACTOR_LIMIT,
+            max_donor_families=1 if str(args.donor_family or "").strip() else DEFAULT_ROUND1_DONOR_FAMILY_LIMIT,
+            max_donor_factors=max(0, int(args.max_donor_motifs or 0)),
+            donor_plan_path=str(args.donor_plan or ""),
+            donor_family=str(args.donor_family or ""),
+            donor_factor=str(args.donor_factor or ""),
         )
-        if seed_stage_active
+        if seed_stage_active or donor_transfer_requested
         else []
     )
     prompt_trace = _build_prompt_trace(

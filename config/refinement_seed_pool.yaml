@@ -34,6 +34,27 @@ refinement_principles:
 - Penalize duplicate variants that are too correlated with the parent family.
 - Optimize for stability, lower turnover, and lower redundancy, not only headline
   IC.
+family_origin_defaults:
+  discovery_mode: manual_curated
+  seed_selection_reason:
+  - interpretable economic or microstructure motif
+  - stable enough to justify refinement
+  - editable formula with clear local mutation space
+  - not a near-duplicate of an existing seed family
+  - explicit weaknesses and refinement axes are known
+  family_boundary:
+    invariant: preserve the seed family's core economic story and primary variable interaction
+    allowed_neighbor_motifs:
+    - window changes
+    - variable proxy substitutions
+    - smoothing or decay
+    - normalization or neutralization
+    - one auxiliary interaction branch
+    excluded_motifs:
+    - pure sign flip
+    - unrelated economic story
+    - duplicate variant of another family
+    - complexity-only formula expansion
 seed_groups:
 - family: open_volume_correlation
   priority: high

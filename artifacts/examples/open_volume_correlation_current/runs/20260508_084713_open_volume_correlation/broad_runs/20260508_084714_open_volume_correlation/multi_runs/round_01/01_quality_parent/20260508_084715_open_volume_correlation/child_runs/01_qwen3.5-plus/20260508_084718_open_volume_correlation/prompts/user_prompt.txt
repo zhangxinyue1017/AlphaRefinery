@@ -1,0 +1,217 @@
+你的目标是：在不明显增加公式复杂度的前提下，尽量提升因子的 RankIC、RankICIR、Sharpe 和 excess return，并尽量改善稳定性、降低冗余、降低不必要的高换手。
+
+            # 1. 现有因子信息
+            当前 parent 因子名称：llmgen.open_vol_amount_corr
+            因子家族：open_volume_correlation
+            当前 parent 因子原始表达式：neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 5), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 20), 1e-12))))
+
+
+            经济假设：衡量开盘价相对位置与成交活跃度是否同步；更强的信号往往来自短期量价背离，或开盘阶段出现拥挤交易行为。
+            已知弱点：
+            1. 同家族冗余度较高。
+2. raw 形式更容易受尺度和流动性水平影响。
+3. 可能带有流动性或规模暴露。
+
+            相似/同家族因子：
+
+- alpha101.alpha003: -corr(rank(open), rank(volume), 10)
+- alpha101.alpha006: -corr(open, volume, 10)
+
+Round1 bootstrap frontier:
+
+- `alpha101.alpha006`: `-corr(open, volume, 10)` | ICIR=0.5361; Excess=1.7042; Sharpe=6.2487; TO=0.5473
+- `alpha101.alpha003`: `-corr(rank(open), rank(volume), 10)` | ICIR=0.7981; Excess=1.6765; Sharpe=7.8934; TO=0.5272
+
+Cross-family donor motifs:
+
+- `close_volume_covariance / llmgen.smoothed_close_amt_cov`: `-cs_rank(ts_cov(cs_rank(ema(close, 10)), cs_rank(ema(amount, 20)), 5))` | MotifScore=53.06; ICIR=0.6207; Excess=-0.2999; Sharpe=5.3479; TO=0.4990
+  rationale: Start from the target family's own canonical seed, but guide the prompt using the successful `llmgen.smoothed_close_amt_cov` motif from `close_volume_covariance`. The transfer is mainly theme-level (open_marketfit, volume_liquidity) and is further supported by keywords such as: alpha101, amount, decay, open, rank. Treat the source side as a open_marketfit, quality_momentum, volume_liquidity hint rather than a formula to copy.
+- `close_volume_covariance / llmgen.corr_vwap_turnover_10`: `-cs_rank(ts_corr(vwap, turnover, 10))` | MotifScore=53.01; ICIR=0.6841; Excess=0.0282; Sharpe=5.0017; TO=0.4820
+  rationale: Start from the target family's own canonical seed, but guide the prompt using the successful `llmgen.corr_vwap_turnover_10` motif from `close_volume_covariance`. The transfer is mainly theme-level (open_marketfit, volume_liquidity) and is further supported by keywords such as: alpha101, amount, decay, open, rank. Treat the source side as a open_marketfit, quality_momentum, volume_liquidity hint rather than a formula to copy.
+- `gp_return_open_marketfit / llmgen.cov_open_beta_r2_volgate`: `ema(where(ts_std(returns, 20) < ts_mean(ts_std(returns, 20), 250), add(ts_cov(returns, open, 5), regression_rsq(returns, market_return, 60)), 0), 20)` | MotifScore=51.95; ICIR=0.7816; Excess=-0.6895; Sharpe=5.8410; TO=0.0565
+  rationale: Start from the target family's own canonical seed, but guide the prompt using the successful `llmgen.cov_open_beta_r2_volgate` motif from `gp_return_open_marketfit`. The transfer is mainly theme-level (open_marketfit, volume_liquidity) and is further supported by keywords such as: open, raw, turnover, volume. Treat the source side as a open_marketfit, pressure_distribution, quality_momentum hint rather than a formula to copy.
+- `gp_return_open_marketfit / llmgen.cov_r2_turnover_weight`: `mul(ema(add(ts_cov(returns, open, 5), regression_rsq(returns, market_return, 60)), 20), div(ema(turnover, 120), add(ema(turnover, 20), 1e-12)))` | MotifScore=47.11; ICIR=0.7002; Excess=-0.0109; Sharpe=5.5847; TO=0.0685
+  rationale: Start from the target family's own canonical seed, but guide the prompt using the successful `llmgen.cov_r2_turnover_weight` motif from `gp_return_open_marketfit`. The transfer is mainly theme-level (open_marketfit, volume_liquidity) and is further supported by keywords such as: open, raw, turnover, volume. Treat the source side as a open_marketfit, quality_momentum, volume_liquidity hint rather than a formula to copy.
+
+            历史表现：
+            历史表现时间边界说明：
+- 以下历史表现仅来自 `search` 阶段。
+- `search` 时间范围：2016-01-01 至 2022-12-30。
+- 这些指标只用于帮助你理解该 family 在搜索阶段的强项、短板和可能失败模式，不代表最终样本外结论。
+- `selection` 与 `selection` 阶段结果不在本 prompt 中，你不能假设已经看到了更晚时期的表现。
+- 请不要把 `search` 阶段表现直接理解为最终保留或最终样本外表现。
+
+            search 阶段历史快照：
+Parent seed snapshot:
+- alpha101.alpha003: RankIC=-0.040639, RankICIR=-0.798114, AnnReturn=-1.676468, ExcessReturn=NA, Sharpe=7.893445, Turnover=0.527205
+Peer/alias snapshots:
+- alpha101.alpha006: RankIC=-0.038813, RankICIR=-0.536085, AnnReturn=-1.704201, ExcessReturn=NA, Sharpe=6.248658, Turnover=0.547267
+Previous refined family snapshot:
+- llm_refined.open_amount_corr_10: RankIC=-0.041983, RankICIR=-0.794082, AnnReturn=-1.739820, ExcessReturn=NA, Sharpe=NA, Turnover=0.523955
+- llm_refined.open_turnover_corr_10: RankIC=-0.041253, RankICIR=-0.781571, AnnReturn=-1.643751, ExcessReturn=NA, Sharpe=NA, Turnover=0.526135
+- alpha101.alpha003: RankIC=-0.040639, RankICIR=-0.798114, AnnReturn=-1.676468, ExcessReturn=NA, Sharpe=NA, Turnover=0.527205
+
+            改进轨迹提示：
+            - 请结合当前 parent 所在的 lineage，不要把每一轮都当成从零开始。
+            - 优先延续最近 2~3 代里被证明有效的 edit axis；如果某类改写在 lineage 中退化，请避免继续沿同一路径机械外推。
+            - canonical seed 到当前 parent 的链路，比单个 winner 更重要。
+
+            最近经验记忆：
+            最近有效经验（来自 archive 检索，用于启发，不要求机械模仿）：
+- 原则：优先吸收“有效改法”和“失败模式”，不要直接复制旧表达式。
+
+优先延续的有效模式：
+- (none after quality filter)
+
+可借鉴但未完全确认的改法：
+- llmgen.r2_turnover_weight_open_amount_norm (reason=broad gate: beats parent on RankIC, RankICIR, NetAnn, NetExcess, NetSharpe; full_metrics=4/4, tags=amount,turnover,ema,ts_cov,smoothing)
+
+近期要避免的失败模式：
+- llmgen.r2_turnover_weight_ema_decay [drop_redundant_parent] reason=corr with parent llmgen.r2_turnover_weight = 0.9752 >= 0.950
+- llmgen.r2_turnover_weight_plus_volume_confirm [drop_redundant_parent] reason=corr with parent llmgen.r2_turnover_weight = 0.9577 >= 0.950
+
+当前 parent 最近 lineage：
+- seed: llmgen.open_vol_decay_corr, mutation=conditionalization, Sharpe=6.2925
+- step_1: llmgen.r2_turnover_weight, mutation=liquidity_proxy_swap, Sharpe=-5.7295, delta=mixed
+- step_2: llmgen.open_vol_amount_corr, mutation=rank_wrapper_added, Sharpe=4.5023, delta=improved
+
+最近一次总结：
+- summary: open_volume_correlation: winner=(none), keeps=3, failures=3
+- next_focus: 优先考虑增加平滑、分母稳定化或更低换手的确认项。
+
+
+
+            显式去相关 target set：
+            - (none)
+
+            # 2. 可用资源
+            可用字段：
+            ["amount", "benchmark_close", "benchmark_open", "cap", "close", "float_market_cap", "high", "hml", "is_st", "low", "market_return", "open", "pct_chg", "pre_close", "returns", "size", "smb", "trade_status", "turnover", "volume", "vwap"]
+
+            可用算子：
+            ["add(x, y) / x + y", "sub(x, y) / x - y", "mul(x, y) / x * y", "div(x, y) / x / y", "gt(x, y) / x > y", "lt(x, y) / x < y", "ge(x, y) / x >= y", "le(x, y) / x <= y", "eq(x, y) / x == y", "ne(x, y) / x != y", "and(x, y) / logical and", "or(x, y) / logical or", "not(x) / logical not", "neg(x) / -x", "where(cond, x, y)", "if_then_else(cond, x, y)", "rank(x)", "zscore(x)", "cs_mean(x)", "cs_sum(x)", "cs_std(x)", "cs_skew(x, min_count=3)", "cs_rank(x)", "cs_zscore(x)", "ts_var(x, window)", "ts_ir(x, window)", "ts_skew(x, window)", "ts_kurt(x, window)", "ts_rank(x, window)", "corr(x, y, window)", "ts_corr(x, y, window)", "cov(x, y, window)", "ts_cov(x, y, window)", "std(x, window)", "ts_std(x, window)", "mean(x, window)", "ts_mean(x, window)", "sma(x, window, 1)", "wma(x, window)", "product(x, window)", "sum(x, window)", "ts_sum(x, window)", "ts_count(x, window)", "ts_med(x, window)", "ts_mad(x, window)", "count(cond, window)", "sumif(x, window, cond)", "bucket_sum(x, key, window, q, side)", "max(x, window)", "ts_max(x, window)", "min(x, window)", "ts_min(x, window)", "delay(x, window)", "ref(x, window)", "delta(x, window)", "ts_pct_change(x, window)", "ema(x, window)", "decay_linear(x, window)", "ts_linear_decay_mean(x, window)", "ts_exp_weighted_mean_lagged(x, window)", "weighted_mean(x, window, half_life=H)", "volume_weighted_mean(x, weight, window)", "ts_turnover_ref_price(close, turnover, window)", "ts_sorted_mean_spread(value, sort_key, window, ratio)", "rolling_cs_spearman_mean(x, window, min_obs=10)", "cs_reg_resid(y, x, min_obs=20)", "cs_multi_reg_resid(y, x1, x2, ..., min_obs=20)", "ts_argmax(x, window)", "ts_argmin(x, window)", "ts_quantile(x, window, q)", "ts_max_diff(x, window)", "ts_min_diff(x, window)", "ts_min_max_diff(x, window)", "scale(x)", "abs(x)", "sign(x)", "log(x)", "slog1p(x)", "inv(x)", "sqrt(x)", "power(x, p)", "rowmax(x, y)", "rowmin(x, y)", "greater(x, y)", "less(x, y)", "highday(x, window)", "lowday(x, window)", "upper_shadow(high, open, close, preclose)", "macd(x, fast_window, slow_window)", "regbeta(x, window)", "regression_slope(y, x, window)", "regression_rsq(y, x, window)", "regression_residual(y, x, window)", "slope(x, window)", "rsquare(x, window)", "resi(x, window)", "rel_volume(N) = volume / mean(volume, N)", "rel_amount(N) = amount / mean(amount, N)", "advN shorthand when it clearly means mean(volume, N)", "indneutralize(x, industry/subindustry) when the parent family already relies on industry-neutral logic"]
+
+            可用时间窗：
+            [3, 5, 10, 14, 15, 20, 28, 40, 60, 100, 120, 180, 250, 375]
+
+
+
+
+            注意：
+            1. 原因子默认应继承当前 family 的有效符号方向：use_negative_sign
+            2. 不要只是机械调窗口。
+            3. 必须保留当前 family 的核心经济逻辑，不要彻底换思路。
+            4. 不要引入未来信息、外部财务字段、或当前 contract 中没有的字段。
+
+            # 3. 优化要求
+            本轮优化优先级：
+- 主目标：降低换手，提升因子稳定性
+- 次目标：在不明显增加换手的前提下提升 RankICIR
+
+主线要求：
+- 必须保留开盘价与成交活跃度之间的核心逻辑
+- 最多只允许引入一个新的原始字段
+- 不能只靠符号翻转完成改写
+- 不要脱离当前 family 的核心经济逻辑，不要彻底换题。
+- 优先修 parent 当前最明显的弱点，不要同时解决太多问题。
+- 如果 parent 是两段式或 hybrid 结构，先调整方向、权重或平滑方式；不要默认删掉其中一段。
+
+优先考虑以下改进方向：
+- 对相关性结果加入 decay 或平滑，降低信号抖动
+- 和波动惩罚项结合，抑制过度拥挤个股
+- 比较 raw、rank、zscore 三种输入形式，找到最稳定的表达
+
+改写幅度：
+- 可以做方向修正、平滑、归一化、替换一个确认项。
+- 不要把整个主结构重写成另一类因子。
+- 改动要轻，不要无意义增加嵌套、字段和条件分支。
+
+候选分工：
+- 三个候选不要做成同一种改法。
+- 一个偏稳健，一个偏去重，一个偏增强。
+- 不要求每个候选同时兼顾稳健、去重和增强。
+- 不要输出和 parent / peer 只有表面差别的公式。
+
+你必须生成 6 个候选，并优先保证前 6 个候选按下面这些 role slots 覆盖：
+- Candidate A: conservative；尽量保留 parent 逻辑，主要修稳定性/换手
+- Candidate B: donor_transfer；借 donor motif，但必须翻译到当前 family 逻辑里
+- Candidate C: decorrelating；尽量与 parent / peer 拉开结构差异，主要解决冗余
+- Candidate D: confirmation；保持主逻辑，只增加一个轻量确认项
+- Candidate E: simplifying；减少复杂度或压平不必要嵌套，保留有效主结构
+- Candidate F: stretch；允许更大胆改写，但仍必须保持 family 经济故事
+
+允许的 edit 类型：
+- 时间窗替换
+- 算子替换
+- 插入归一化
+- 插入平滑或衰减
+- 增加一条辅助分支
+
+当前表达式引擎语法限制：
+- 除 `half_life` 和 `min_obs` 外，不要使用任何 keyword argument。
+- 也就是说，不要写 `q=0.3`、`m=1`、`side="low"`、`window=20`、`cond=...`。
+- 请统一使用位置参数，例如：
+  `ts_quantile(close, 20, 0.3)`
+  `sma(x, 20, 1)`
+  `bucket_sum(x, key, 60, 0.3, "low")`
+- 不要输出带点号的引用，不要写 `family.factor_name`、`module.helper(...)`、`qp_pressure.xxx` 这类 dotted reference。
+- 不要发明新的 helper 名、标签名、宏名；只能使用 contract 中已有字段和算子。
+- 如果一个想法需要 helper function 才能表达，请改写成基础原语组合，而不是直接输出 helper 名。
+
+同时兼顾：
+- 提高稳定性
+- 降低换手
+- 降低家族内冗余
+- 保持经济解释清晰
+- 至少 1 个候选要明确借用 donor motif，但必须翻译到当前 family 语义里
+- 系统会先收集更宽的 seed-stage 候选，再轻量 rerank 到最终保留的 2 条；请优先保证 role 覆盖和结构差异
+
+禁止项：
+- 只改时间窗
+- 只多包一层 rank 或类似包装
+- 三个候选几乎只是近重复变体
+- 完全改写成另一套逻辑
+
+            # 4. 分析要求
+            请先在内部完成分析，但不要展示推理过程。必须综合以下三个维度：
+            1. Optimization Strategy
+            2. Alpha Idea
+            3. Factor Interpretation
+
+            你最终输出的 explanation 必须把这三部分信息融合成自然语言，但要极短、直白、能让研究员快速理解。
+
+        # 5. 输出格式要求（必须严格遵循）
+        你必须生成 6 个 candidate，并且只能输出一个 JSON object。
+        每个 candidate 都必须是一个“低冗余、可落地、与 parent family 同逻辑但有明显差异”的小步改写。
+        每个 `name` 用 snake_case，简短稳定。
+        Candidate 列表顺序很重要：前 6 个候选必须分别对应上面的 role slots，后续额外候选可自由竞争。
+        每个 `candidate_role` 必须从 ["conservative", "donor_transfer", "decorrelating", "confirmation", "simplifying", "stretch"] 中选择。
+        每个 `explanation` 必须是极简自然语言，不超过 40 个汉字。
+        每个 `rationale` 必须不超过 24 个汉字，尽量只写一个因果短句。
+        `expected_improvement` 必须从 `stability | turnover | redundancy | rank_icir | economic_clarity` 中选择一个。
+        `risk` 必须从 `signal_weakening | turnover_rise | overfitting | redundancy_persistence | interpretability_loss` 中选择一个。
+        `expression` 只写公式本身，不要包代码块。
+        `diagnosed_weaknesses` 最多 4 条，每条不超过 28 个汉字。
+        `refinement_rationale`、`expected_behavior_change`、`risk_notes` 都必须尽量压缩成 1 句短话，不超过 50 个汉字。
+
+        请严格按下面这个 JSON 结构输出：
+        {
+  "parent_factor": "llmgen.open_vol_amount_corr",
+  "diagnosed_weaknesses": [
+    "..."
+  ],
+  "refinement_rationale": "...",
+  "expected_behavior_change": "...",
+  "risk_notes": "...",
+  "candidate_formulas": [
+    {
+      "name": "short_snake_case_name",
+      "candidate_role": "conservative | donor_transfer | decorrelating | confirmation | simplifying | stretch",
+      "expression": "<formula>",
+      "explanation": "very brief explanation within 40 Chinese characters",
+      "rationale": "very brief why-this-may-help within 24 Chinese characters",
+      "expected_improvement": "one of: stability | turnover | redundancy | rank_icir | economic_clarity",
+      "risk": "one of: signal_weakening | turnover_rise | overfitting | redundancy_persistence | interpretability_loss"
+    }
+  ]
+}

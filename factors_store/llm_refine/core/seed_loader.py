@@ -176,6 +176,69 @@ def _ensure_tuple(values: Any) -> tuple[str, ...]:
     return tuple(str(item) for item in values)
 
 
+def _ensure_list(values: Any) -> list[str]:
+    if values is None:
+        return []
+    return [str(item) for item in values]
+
+
+def _infer_seed_source(canonical_seed: str) -> str:
+    prefix = str(canonical_seed or "").split(".", 1)[0].strip()
+    if prefix in {"alpha101", "alpha158", "alpha191", "alpha360"}:
+        return prefix
+    if prefix in {"qp_pressure", "qp_momentum", "qp_volatility", "qp_salience"}:
+        return "qp"
+    if prefix == "gp_mined":
+        return "gp_mined"
+    if prefix == "factor365":
+        return "factor365"
+    if prefix == "cicc_daily":
+        return "cicc_daily"
+    if prefix == "llm_refined":
+        return "llm_refined"
+    if prefix == "seed_baseline":
+        return "seed_baseline"
+    return prefix or "manual"
+
+
+def _load_family_origin(
+    item: dict[str, Any],
+    *,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    explicit = dict(item.get("family_origin") or {})
+    boundary_defaults = dict(defaults.get("family_boundary") or {})
+    boundary_explicit = dict(explicit.get("family_boundary") or {})
+    seed_selection_reason = _ensure_list(
+        explicit.get("seed_selection_reason") or defaults.get("seed_selection_reason")
+    )
+    discovery_mode = str(explicit.get("discovery_mode") or defaults.get("discovery_mode") or "manual_curated")
+    canonical_seed = str(item.get("canonical_seed", "") or "")
+    return {
+        "discovery_mode": discovery_mode,
+        "seed_source": str(explicit.get("seed_source") or _infer_seed_source(canonical_seed)),
+        "seed_selection_reason": seed_selection_reason,
+        "family_boundary": {
+            "invariant": str(
+                boundary_explicit.get("invariant")
+                or boundary_defaults.get("invariant")
+                or item.get("interpretation")
+                or ""
+            ),
+            "allowed_neighbor_motifs": _ensure_list(
+                boundary_explicit.get("allowed_neighbor_motifs")
+                or item.get("refinement_axes")
+                or boundary_defaults.get("allowed_neighbor_motifs")
+            ),
+            "excluded_motifs": _ensure_list(
+                boundary_explicit.get("excluded_motifs")
+                or item.get("anti_patterns")
+                or boundary_defaults.get("excluded_motifs")
+            ),
+        },
+    }
+
+
 def _load_window(payload: Any) -> EvaluationWindow:
     data = dict(payload or {})
     return EvaluationWindow(
@@ -207,6 +270,7 @@ def _load_protocol(payload: Any) -> EvaluationProtocol | None:
 def load_seed_pool(path: str | Path = DEFAULT_SEED_POOL) -> SeedPool:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     evaluation_defaults = dict(payload.get("evaluation_defaults", {}))
+    family_origin_defaults = dict(payload.get("family_origin_defaults", {}))
     if not str(evaluation_defaults.get("panel_path", "") or "").strip():
         evaluation_defaults["panel_path"] = str(DEFAULT_PANEL_PATH)
     families = tuple(
@@ -230,6 +294,7 @@ def load_seed_pool(path: str | Path = DEFAULT_SEED_POOL) -> SeedPool:
             anti_patterns=_ensure_tuple(item.get("anti_patterns")),
             allowed_edit_types=_ensure_tuple(item.get("allowed_edit_types")),
             relation_note=str(item.get("relation_note", "")),
+            family_origin=_load_family_origin(item, defaults=family_origin_defaults),
         )
         for item in payload.get("seed_groups", [])
     )
@@ -241,6 +306,7 @@ def load_seed_pool(path: str | Path = DEFAULT_SEED_POOL) -> SeedPool:
         evaluation_defaults=evaluation_defaults,
         evaluation_protocol=_load_protocol(payload.get("evaluation_protocol")),
         refinement_principles=_ensure_tuple(payload.get("refinement_principles")),
+        family_origin_defaults=family_origin_defaults,
         families=families,
         llm_refinement_template=dict(payload.get("llm_refinement_template", {})),
     )

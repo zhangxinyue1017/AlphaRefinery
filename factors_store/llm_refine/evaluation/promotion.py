@@ -495,54 +495,19 @@ def _merge_existing_module(
     return text
 
 
-def _ensure_line_token(text: str, *, prefix: str, token: str) -> str:
-    pattern = rf"^{re.escape(prefix)}(.+)$"
-    match = re.search(pattern, text, flags=re.MULTILINE)
-    if not match:
-        return text
-    items = [item.strip() for item in match.group(1).split(",") if item.strip()]
-    if token not in items:
-        items.append(token)
-    replacement = prefix + ", ".join(items)
-    return re.sub(pattern, replacement, text, count=1, flags=re.MULTILINE)
-
-
-def _ensure_star_import(text: str, *, module_stem: str) -> str:
-    line = f"from .{module_stem} import *  # noqa: F401,F403"
-    if line in text:
-        return text
-    marker = "from .common import LLM_REFINED_SOURCE"
-    if marker in text:
-        return text.replace(marker, f"{line}\n{marker}", 1)
-    return text + ("\n" if not text.endswith("\n") else "") + line + "\n"
-
-
-def _ensure_family_module_tuple(text: str, *, module_stem: str) -> str:
-    pattern = r"FAMILY_MODULES = \(\n(?P<body>.*?)\n\)"
-    match = re.search(pattern, text, flags=re.DOTALL)
-    if not match:
-        return text
-    body = match.group("body")
-    if re.search(rf"^\s*{re.escape(module_stem)},\s*$", body, flags=re.MULTILINE):
-        return text
-    updated_body = body + f"\n    {module_stem},"
-    return text[: match.start('body')] + updated_body + text[match.end('body') :]
-
-
 def _ensure_llm_refined_init_registered(module_path: Path) -> dict[str, str]:
+    """Compatibility no-op.
+
+    `llm_refined.__init__` now discovers local `*_family.py` modules
+    dynamically. Auto-apply should not write static imports for ignored/private
+    family modules, otherwise public clones can break on missing local files.
+    """
+
     init_path = DEFAULT_LLM_REFINED_INIT
-    old_text = init_path.read_text(encoding="utf-8")
-    module_stem = module_path.stem
-    new_text = old_text
-    new_text = _ensure_line_token(new_text, prefix="from . import ", token=module_stem)
-    new_text = _ensure_star_import(new_text, module_stem=module_stem)
-    new_text = _ensure_family_module_tuple(new_text, module_stem=module_stem)
-    changed = new_text != old_text
-    if changed:
-        init_path.write_text(new_text, encoding="utf-8")
     return {
         "llm_refined_init": str(init_path),
-        "llm_refined_init_changed": "true" if changed else "false",
+        "llm_refined_init_changed": "false",
+        "llm_refined_init_registration": "dynamic_discovery",
     }
 
 

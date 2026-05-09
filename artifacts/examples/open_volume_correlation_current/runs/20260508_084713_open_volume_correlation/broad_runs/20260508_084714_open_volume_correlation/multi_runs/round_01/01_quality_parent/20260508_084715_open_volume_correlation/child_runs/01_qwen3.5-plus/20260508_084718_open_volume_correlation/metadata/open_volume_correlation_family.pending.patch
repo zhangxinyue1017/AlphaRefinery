@@ -1,0 +1,41 @@
+--- /root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/open_volume_correlation_family.py
++++ /root/workspace/zxy_workspace/AlphaRefinery/factors_store/factors/llm_refined/open_volume_correlation_family.py
+@@ -390,6 +390,19 @@
+     )
+ 
+ 
++def llm_refined_open_vol_corr_stable(data: dict[str, pd.Series]) -> pd.Series:
++    """parent factor: alpha101.alpha003
++    round: llm_refine_round_45
++    source model: qwen3.5-plus
++    keep-drop status: research_keep
++    """
++    return evaluate_expression_factor(
++        data,
++        expression="neg(mul(ema(add(ts_corr(cs_rank(returns), cs_rank(open), 10), regression_rsq(cs_rank(returns), cs_rank(market_return), 60)), 20), div(ema(cs_rank(amount), 120), add(ema(cs_rank(amount), 40), 1e-12))))",
++        factor_name="llm_refined.open_vol_corr_stable",
++    )
++
++
+ FACTOR_SPECS: tuple[FactorSpec, ...] = (
+     FactorSpec(
+         name="llm_refined.open_vol_cov_vol_adj",
+@@ -564,6 +577,12 @@
+         func=llm_refined_decorrelated_turnover_open_r2,
+         required_fields=("open", "returns", "turnover", "volume"),
+         notes="Auto-promoted pending candidate for open_volume_correlation; run_id=run::open_volume_correlation::r43::dacaebb30939; round_id=43; source_model=claude-sonnet-4-6; decision=research_keep. Selection summary: RankIC=0.034595410291391335, NetAnn=0.727589612133158, Turnover=0.10868001248022163.",
++    ),
++    FactorSpec(
++        name="llm_refined.open_vol_corr_stable",
++        func=llm_refined_open_vol_corr_stable,
++        required_fields=("amount", "market_return", "open", "returns"),
++        notes="Auto-promoted pending candidate for open_volume_correlation; run_id=run::open_volume_correlation::r45::6d157bc298f9; round_id=45; source_model=qwen3.5-plus; decision=research_keep. Selection summary: RankIC=0.04200080449751649, NetAnn=1.2253288993118345, Turnover=0.1883450778955242.",
+     ),
+ )
+ 
+@@ -603,4 +622,5 @@
+     "llm_refined_open_vol_rank_smooth",
+     "llm_refined_open_vol_decay_rsq",
+     "llm_refined_decorrelated_turnover_open_r2",
++    "llm_refined_open_vol_corr_stable",
+ ]

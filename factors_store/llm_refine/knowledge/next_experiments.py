@@ -266,6 +266,7 @@ class NextExperiment:
     canonical_formula: str
     source_family: str
     source_factor_name: str
+    source_expression: str
     source_model: str
     source_status: str
     source_tags: tuple[str, ...]
@@ -580,6 +581,7 @@ def build_next_experiments(
                     canonical_formula=state.canonical_formula,
                     source_family="",
                     source_factor_name="",
+                    source_expression="",
                     source_model="",
                     source_status="",
                     source_tags=(),
@@ -631,6 +633,7 @@ def build_next_experiments(
                     canonical_formula=state.canonical_formula,
                     source_family="",
                     source_factor_name="",
+                    source_expression="",
                     source_model="",
                     source_status="",
                     source_tags=(),
@@ -661,6 +664,7 @@ def build_next_experiments(
                     canonical_formula=state.canonical_formula,
                     source_family=str(record.get("family", "")),
                     source_factor_name=str(record.get("factor_name", "")),
+                    source_expression=str(record.get("expression", "")),
                     source_model=str(record.get("source_model", "")),
                     source_status=str(record.get("status", "")),
                     source_tags=tuple(record.get("expression_tags") or ()),
@@ -692,6 +696,173 @@ def build_next_experiments(
     return states, experiments
 
 
+def _core_family_state_from_inventory_status(status: str, *, run_count: int = 0) -> str:
+    text = str(status or "").strip()
+    if text == "seed_only":
+        return "new"
+    if text in {"legacy_refresh", "new_framework_started"}:
+        return "exploring"
+    if int(run_count or 0) >= 8:
+        return "saturated"
+    return "refining"
+
+
+def _donor_motif_from_experiment(item: NextExperiment) -> dict[str, Any]:
+    return {
+        "source_family": item.source_family,
+        "source_factor_name": item.source_factor_name,
+        "source_expression": item.source_expression,
+        "source_model": item.source_model,
+        "source_status": item.source_status,
+        "source_tags": list(item.source_tags),
+        "source_themes": list(item.source_themes),
+        "theme_overlap": list(item.theme_overlap),
+        "overlap_keywords": list(item.overlap_keywords),
+        "motif_score": float(item.motif_score),
+        "rationale": item.rationale,
+        "retrieval_mode": "transfer_plan",
+    }
+
+
+def build_transfer_plan(
+    *,
+    family_states: list[FamilyState],
+    experiments: list[NextExperiment],
+) -> dict[str, Any]:
+    state_by_family = {item.family: item for item in family_states}
+    imports: list[dict[str, Any]] = []
+    exports_by_family: dict[str, dict[str, Any]] = {}
+
+    for item in experiments:
+        if not item.source_family or not item.source_factor_name:
+            continue
+        target_state = state_by_family.get(item.target_family)
+        source_state = state_by_family.get(item.source_family)
+        motif = _donor_motif_from_experiment(item)
+        imports.append(
+            {
+                "family_state": _core_family_state_from_inventory_status(
+                    item.target_status,
+                    run_count=int(target_state.archive_run_count if target_state else 0),
+                ),
+                "recommended_action": "import_donor",
+                "action_reason": item.rationale,
+                "transfer": {
+                    "mode": "import",
+                    "target_family": item.target_family,
+                    "donor_family": item.source_family,
+                    "donor_factors": [item.source_factor_name],
+                    "donor_motifs": [motif],
+                },
+            }
+        )
+
+        export = exports_by_family.setdefault(
+            item.source_family,
+            {
+                "family_state": _core_family_state_from_inventory_status(
+                    source_state.status if source_state else "new_framework_done",
+                    run_count=int(source_state.archive_run_count if source_state else 0),
+                ),
+                "recommended_action": "export_donor",
+                "action_reason": "Successful motif is reusable by adjacent target families.",
+                "transfer": {
+                    "mode": "export",
+                    "donor_family": item.source_family,
+                    "donor_factors": [],
+                    "suggested_target_families": [],
+                },
+            },
+        )
+        factors = export["transfer"]["donor_factors"]
+        targets = export["transfer"]["suggested_target_families"]
+        if item.source_factor_name not in factors:
+            factors.append(item.source_factor_name)
+        if item.target_family not in targets:
+            targets.append(item.target_family)
+
+    return {
+        "schema_version": "transfer_plan.v1",
+        "imports": imports,
+        "exports": list(exports_by_family.values()),
+    }
+
+
+def _split_filter_text(value: str) -> tuple[str, ...]:
+    return tuple(part.strip() for part in str(value or "").split(",") if part.strip())
+
+
+def _matches_filter(value: object, filter_text: str) -> bool:
+    filters = _split_filter_text(filter_text)
+    if not filters:
+        return True
+    text = str(value or "").strip()
+    return text in filters
+
+
+def _normalize_plan_motif(
+    motif: dict[str, Any],
+    *,
+    donor_family: str = "",
+    donor_factor: str = "",
+) -> dict[str, Any]:
+    family = str(motif.get("source_family") or donor_family or "").strip()
+    factor = str(motif.get("source_factor_name") or motif.get("donor_factor") or donor_factor or "").strip()
+    return {
+        "source_family": family,
+        "source_factor_name": factor,
+        "source_expression": str(motif.get("source_expression") or ""),
+        "source_model": str(motif.get("source_model") or ""),
+        "source_status": str(motif.get("source_status") or ""),
+        "source_tags": tuple(motif.get("source_tags") or ()),
+        "source_themes": tuple(motif.get("source_themes") or ()),
+        "theme_overlap": tuple(motif.get("theme_overlap") or ()),
+        "overlap_keywords": tuple(motif.get("overlap_keywords") or ()),
+        "motif_score": float(motif.get("motif_score") or 0.0),
+        "rationale": str(motif.get("rationale") or ""),
+        "retrieval_mode": str(motif.get("retrieval_mode") or "transfer_plan"),
+    }
+
+
+def _load_runtime_donor_motifs_from_plan(
+    *,
+    donor_plan_path: str | Path,
+    target_family: str,
+    donor_family: str = "",
+    donor_factor: str = "",
+) -> list[dict[str, Any]]:
+    path = Path(donor_plan_path).expanduser()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    plan = dict(payload.get("transfer_plan") or payload)
+    motifs: list[dict[str, Any]] = []
+    for entry in list(plan.get("imports") or []):
+        transfer = dict(dict(entry or {}).get("transfer") or {})
+        if str(transfer.get("target_family") or "").strip() != str(target_family or "").strip():
+            continue
+        entry_family = str(transfer.get("donor_family") or "").strip()
+        if not _matches_filter(entry_family, donor_family):
+            continue
+        donor_motifs = list(transfer.get("donor_motifs") or [])
+        if not donor_motifs:
+            donor_motifs = [
+                {"source_family": entry_family, "source_factor_name": factor}
+                for factor in list(transfer.get("donor_factors") or [])
+            ]
+        for motif in donor_motifs:
+            normalized = _normalize_plan_motif(
+                dict(motif or {}),
+                donor_family=entry_family,
+            )
+            if not normalized["source_family"] or not normalized["source_factor_name"]:
+                continue
+            if not _matches_filter(normalized["source_family"], donor_family):
+                continue
+            if not _matches_filter(normalized["source_factor_name"], donor_factor):
+                continue
+            motifs.append(normalized)
+    return motifs
+
+
 def retrieve_runtime_donor_motifs(
     *,
     seed_pool: SeedPool,
@@ -699,8 +870,13 @@ def retrieve_runtime_donor_motifs(
     db_path: str | Path = DEFAULT_ARCHIVE_DB,
     max_donor_families: int = 2,
     max_donor_factors: int = 4,
+    donor_plan_path: str | Path = "",
+    donor_family: str = "",
+    donor_factor: str = "",
 ) -> list[dict[str, Any]]:
     def _choose(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if int(max_donor_factors or 0) <= 0 or int(max_donor_families or 0) <= 0:
+            return []
         chosen_local: list[dict[str, Any]] = []
         chosen_families_local: list[str] = []
         per_family_counts_local: dict[str, int] = {}
@@ -709,6 +885,10 @@ def retrieve_runtime_donor_motifs(
             family_name = str(item_local.get("source_family", "")).strip()
             factor_name = str(item_local.get("source_factor_name", "")).strip()
             if not family_name or not factor_name:
+                continue
+            if not _matches_filter(family_name, donor_family):
+                continue
+            if not _matches_filter(factor_name, donor_factor):
                 continue
             pair = (family_name, factor_name)
             if pair in seen_pairs_local:
@@ -725,6 +905,16 @@ def retrieve_runtime_donor_motifs(
             if len(chosen_local) >= int(max_donor_factors):
                 break
         return chosen_local
+
+    if str(donor_plan_path or "").strip():
+        return _choose(
+            _load_runtime_donor_motifs_from_plan(
+                donor_plan_path=donor_plan_path,
+                target_family=target_family,
+                donor_family=donor_family,
+                donor_factor=donor_factor,
+            )
+        )
 
     family_states = build_family_inventory(seed_pool=seed_pool, db_path=db_path)
     state_by_family = {item.family: item for item in family_states}
@@ -890,6 +1080,30 @@ def render_next_experiments_markdown(
             f"`{item.source_family or '-'}` | `{item.source_factor_name or '-'}` | {item.motif_score:.2f} | {theme_overlap} | {overlap} |"
         )
 
+    transfer_plan = build_transfer_plan(family_states=family_states, experiments=experiments)
+    lines.extend(
+        [
+            "",
+            "## Transfer Plan",
+            "",
+            "The JSON report includes a machine-readable `transfer_plan` with explicit `import_donor` and `export_donor` actions.",
+            "",
+            "| Mode | Family | Donor Family | Donor Factors | Targets |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    for entry in list(transfer_plan.get("imports") or []):
+        transfer = dict(entry.get("transfer") or {})
+        factors = ", ".join(str(item) for item in list(transfer.get("donor_factors") or [])) or "-"
+        lines.append(
+            f"| `import` | `{transfer.get('target_family', '-')}` | `{transfer.get('donor_family', '-')}` | {factors} | - |"
+        )
+    for entry in list(transfer_plan.get("exports") or []):
+        transfer = dict(entry.get("transfer") or {})
+        factors = ", ".join(str(item) for item in list(transfer.get("donor_factors") or [])) or "-"
+        targets = ", ".join(str(item) for item in list(transfer.get("suggested_target_families") or [])) or "-"
+        lines.append(f"| `export` | - | `{transfer.get('donor_family', '-')}` | {factors} | {targets} |")
+
     lines.extend(["", "## Notes", ""])
     for item in experiments:
         lines.append(f"- `{item.target_family}`: {item.rationale}")
@@ -921,6 +1135,7 @@ def write_next_experiments_report(
         "archive_db": str(Path(db_path).expanduser().resolve()),
         "family_states": [item.to_dict() for item in family_states],
         "experiments": [item.to_dict() for item in experiments],
+        "transfer_plan": build_transfer_plan(family_states=family_states, experiments=experiments),
     }
 
     json_path = root / f"{stem}.json"

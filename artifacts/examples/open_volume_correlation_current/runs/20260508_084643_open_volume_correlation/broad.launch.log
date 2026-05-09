@@ -1,0 +1,3 @@
+[launch] family=open_volume_correlation round=1 log=/root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084643_open_volume_correlation/broad_runs/20260508_084644_open_volume_correlation/round_01.log
+[stop] round=1 failed with returncode=1
+[scheduler_dir] /root/workspace/zxy_workspace/AlphaRefinery/artifacts/examples/open_volume_correlation_current/runs/20260508_084643_open_volume_correlation/broad_runs/20260508_084644_open_volume_correlation

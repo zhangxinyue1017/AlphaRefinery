@@ -69,6 +69,7 @@ class SeedFamily:
     anti_patterns: tuple[str, ...] = ()
     allowed_edit_types: tuple[str, ...] = ()
     relation_note: str = ""
+    family_origin: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -83,6 +84,7 @@ class SeedPool:
     evaluation_defaults: dict[str, Any]
     evaluation_protocol: EvaluationProtocol | None
     refinement_principles: tuple[str, ...]
+    family_origin_defaults: dict[str, Any]
     families: tuple[SeedFamily, ...]
     llm_refinement_template: dict[str, Any]
 

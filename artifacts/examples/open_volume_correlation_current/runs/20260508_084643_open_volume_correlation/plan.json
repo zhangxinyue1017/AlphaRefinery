@@ -1,0 +1,35 @@
+{
+  "family": "open_volume_correlation",
+  "generated_at": "2026-05-08T08:46:43.274111+00:00",
+  "models": [
+    "qwen3.5-plus"
+  ],
+  "target_profile": "raw_alpha",
+  "broad_stage_preset": "new_family_broad",
+  "focused_stage_preset": "focused_refine",
+  "broad_protocol": {
+    "policy_preset": "exploratory",
+    "n_candidates": 2,
+    "max_rounds": 1,
+    "stop_if_no_new_winner": 1,
+    "stage_preset": "new_family_broad"
+  },
+  "focused_protocol": {
+    "policy_preset": "balanced",
+    "n_candidates": 2,
+    "max_rounds": 1,
+    "stop_if_no_new_winner": 1,
+    "stage_preset": "focused_refine"
+  },
+  "anchor_gate": {
+    "min_icir": 0.45,
+    "min_sharpe": 3.0,
+    "max_turnover": 0.45,
+    "min_metrics_completeness": 0.75,
+    "max_parent_similarity": 0.8,
+    "max_true_parent_corr": 0.995,
+    "max_true_sibling_corr": 0.98,
+    "min_material_excess_gain": 0.02,
+    "min_material_icir_gain": 0.05
+  }
+}

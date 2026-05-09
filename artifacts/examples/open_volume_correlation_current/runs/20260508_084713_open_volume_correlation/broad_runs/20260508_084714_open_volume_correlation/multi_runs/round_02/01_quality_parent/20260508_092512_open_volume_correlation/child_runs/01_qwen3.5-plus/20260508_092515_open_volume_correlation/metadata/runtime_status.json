@@ -1,0 +1,9 @@
+{
+  "family": "open_volume_correlation",
+  "run_id": "run::open_volume_correlation::r46::3113d3314c8f",
+  "model": "qwen3.5-plus",
+  "phase": "failed",
+  "message": "curl fallback failed: curl: (7) Failed to connect to 127.0.0.1 port 7890 after 0 ms: Connection refused",
+  "elapsed_seconds": 1.895,
+  "updated_at": "2026-05-08T09:25:17.897144+00:00"
+}

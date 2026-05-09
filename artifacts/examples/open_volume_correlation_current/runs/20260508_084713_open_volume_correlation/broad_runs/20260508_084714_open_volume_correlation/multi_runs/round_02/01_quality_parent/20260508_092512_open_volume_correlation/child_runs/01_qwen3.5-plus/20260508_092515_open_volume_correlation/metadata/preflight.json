@@ -1,0 +1,27 @@
+{
+  "runtime_mode": "live",
+  "python_executable": "/opt/conda/bin/python",
+  "provider_name": "kuai",
+  "base_url": "https://api.kuai.host/v1",
+  "model": "qwen3.5-plus",
+  "provider_env_loaded": true,
+  "using_cli_fallback_defaults": false,
+  "checks": [
+    {
+      "name": "provider_env_or_explicit_provider",
+      "passed": true,
+      "detail": "provider env loaded"
+    },
+    {
+      "name": "api_key_present",
+      "passed": true,
+      "detail": "api key is configured"
+    },
+    {
+      "name": "openai_dependency",
+      "passed": true,
+      "detail": "openai importable via /opt/conda/bin/python"
+    }
+  ],
+  "ok": true
+}
