@@ -1,0 +1,48 @@
+{
+  "example": "qp_weighted_price_centroid_family_loop",
+  "family": "qp_weighted_price_centroid",
+  "canonical_seed": "qp_pressure.vwap_minus_mean_30",
+  "seed_direction": "use_negative_sign",
+  "source_run_dir": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid",
+  "source_reports": {
+    "experiment_analysis_report": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid/experiment_analysis_report.md",
+    "family_loop_summary": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid/family_loop_summary.md",
+    "family_loop_summary_json": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid/family_loop_summary.json",
+    "broad_summary_json": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid/broad_runs/20260511_081153_qp_weighted_price_centroid/summary.json",
+    "focused_summary_json": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid/focused_runs/20260511_130501_qp_weighted_price_centroid/summary.json"
+  },
+  "source_metric_tables": {
+    "seed_anchor_selection_summary": "artifacts/runs/llm_refine_family_loop/20260511_081152_qp_weighted_price_centroid/broad_runs/20260511_081153_qp_weighted_price_centroid/multi_runs/round_01/01_quality_parent/20260511_081158_qp_weighted_price_centroid/child_runs/02_deepseek-v3.1/20260511_081203_qp_weighted_price_centroid/evaluation/family_backtest_selection_summary.csv"
+  },
+  "generated_files": {
+    "readme": "artifacts/examples/qp_weighted_price_centroid_family_loop/README.md",
+    "experiment_report_copy": "artifacts/examples/qp_weighted_price_centroid_family_loop/reports/experiment_analysis_report.md",
+    "family_loop_summary_copy": "artifacts/examples/qp_weighted_price_centroid_family_loop/reports/family_loop_summary.md",
+    "seed_anchor_focused_comparison": "artifacts/examples/qp_weighted_price_centroid_family_loop/tables/seed_anchor_focused_comparison.csv",
+    "top_candidates": "artifacts/examples/qp_weighted_price_centroid_family_loop/tables/top_candidates.csv"
+  },
+  "metrics": {
+    "seed": {
+      "quick_rank_icir": 0.499499775771584,
+      "net_sharpe": 3.9109368389109376,
+      "mean_turnover": 0.136459471818149
+    },
+    "anchor_r7": {
+      "factor_name": "llmgen.vwap_mean_volconfirm_20",
+      "quick_rank_icir": 0.7323962631429299,
+      "net_sharpe": 6.058614539849375,
+      "mean_turnover": 0.2155440538735811
+    },
+    "focused_best_r52": {
+      "factor_name": "llmgen.llmgen_vwap_typical_medvol20",
+      "quick_rank_icir": 0.7608326215062498,
+      "net_sharpe": 6.295373748212872,
+      "mean_turnover": 0.2907346445619619
+    }
+  },
+  "notes": [
+    "Provider credentials, raw provider environment, and full raw prompts are intentionally excluded.",
+    "This is a research/family-loop example, not an admission or production-ingestion artifact.",
+    "Decorrelation diagnostics were mostly unknown because no decorrelation targets were configured for this run."
+  ]
+}

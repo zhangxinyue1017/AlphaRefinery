@@ -566,8 +566,7 @@ def build_scheduler_cmd(
         cmd.append("--skip-eval")
     if dry_run:
         cmd.append("--dry-run")
-    if auto_apply_promotion:
-        cmd.append("--auto-apply-promotion")
+    cmd.append("--auto-apply-promotion" if auto_apply_promotion else "--no-auto-apply-promotion")
     if disable_mmr_rerank:
         cmd.append("--disable-mmr-rerank")
     return cmd
