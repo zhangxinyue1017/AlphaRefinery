@@ -3,15 +3,11 @@
 
 ## ✨ What makes `llm_refine` different
 
-- 🧠 **Family-level refinement**, not one-shot formula mutation
-- 🧭 **State/action scheduler** for broad search, focused refinement, saturation, and transfer
-- 🌿 **Dual-parent branch preservation** with path-aware continuation
-- 🎯 **Target-conditioned search** beyond raw-alpha-only optimization
-- 🧩 **Context-aware decision support** for rerank, anchor selection, and next-step recommendation
-- 🪢 **Shared context alignment** across prompting, decision trace, and orchestration
-- 🪄 **De-correlation-aware refinement** with unified assessment, rerank diagnostics, and early complementarity gates
-- 🔍 **Table-driven transition policy** with explicit signals and legacy logic retained as audit-only reference
-- 🧾 **Compact family state/action summaries** for scheduler outputs and transfer plans
+- 🧠 **Stateful family-level search**, not one-shot factor generation
+- 🔁 **Closed-loop refinement** across proposal, validation, backtest, rerank, archive, and continuation
+- 🧭 **Scheduler-driven research flow** from broad exploration to focused refinement, confirmation, saturation, and transfer
+- 🧬 **Layered memory and lineage tracking** for recent winners, failures, family motifs, and cross-family donor transfer
+- 🎯 **Research-grade controls** for target-conditioned search, de-correlation, redundancy gates, and auditable transition decisions
 
 ---
 
@@ -87,121 +83,94 @@ This document focuses on the `llm_refine` subsystem itself:
 
 ## Core Ideas
 
-### 1. Family-level search, not isolated formula proposals
+### 1. Stateful family-level search, not isolated formula proposals
 
-`llm_refine` treats refinement as search over a **family-level state**, not as a sequence of disconnected candidate batches.
+`llm_refine` treats factor refinement as search over a persistent **family state**, not as a sequence of disconnected LLM candidate batches.
 
-This is why it supports:
+Each family is a curated research unit built around one seed motif. The public definition of each family lives in `config/refinement_seed_pool.yaml`, including:
 
-- family loop orchestration,
-- staged progression control,
-- parent selection beyond immediate top1,
-- branch-aware continuation,
-- and search-policy tuning.
+- canonical seed and aliases,
+- family interpretation and boundary,
+- preferred refinement seed,
+- likely weaknesses,
+- allowed edit axes,
+- hard constraints and anti-patterns.
 
-### 2. Controlled progression, not flat batch generation
+This lets the system reason about a family as a search object with parents, branches, lineage, motifs, and accumulated evidence.
 
-The subsystem can explicitly separate:
+The full family-origin rules are documented in [docs/family_genesis.md](./docs/family_genesis.md).
 
-- **Broad** exploration for motif opening and search-space coverage,
-- **Anchor** graduation for parent selection,
-- **Focused** continuation for local deepening and confirmation.
+### 2. Closed-loop refinement, not prompt-only generation
 
-This gives the system a more deliberate search progression than plain multi-sample prompting.
+The subsystem is built around an end-to-end refinement loop:
 
-### 3. Branch preservation, not premature winner-take-all collapse
+```text
+seed / parent
+  -> LLM proposal
+  -> parser and repair
+  -> validation and structure filtering
+  -> backtest and redundancy checks
+  -> rerank and keep/drop decisions
+  -> archive, reflection, promotion, and continuation
+```
 
-Strong families do not always evolve along a single line.  
-`llm_refine` therefore preserves branch diversity long enough to let the search process learn from it.
+Each round can therefore contribute to more than a local batch result. It can update the archive, preserve useful branches, generate reflection cards, and feed the next scheduler decision.
 
-This includes:
+### 3. Scheduler-driven research flow, not manual continuation
 
-- dual-parent continuation,
-- path-aware evaluation,
-- comparative continuation across rounds,
-- and parent selection beyond raw top1 scores.
+The scheduler controls how a family moves through research phases:
 
-### 4. Target-conditioned refinement, not raw-alpha-only optimization
+- **broad exploration** for motif opening and search-space coverage,
+- **anchor graduation** for selecting promising parents,
+- **focused refinement** for local deepening,
+- **confirmation** for validating a mature branch,
+- **saturation handling** for stopping, switching objective, or exporting motifs,
+- **donor import / export** for cross-family transfer.
 
-The subsystem can refine toward different research objectives, such as:
+Public summaries use a compact family-flow vocabulary:
+
+```text
+Seed family -> exploring -> refining -> saturated / held -> donor export or donor import
+```
+
+Scheduler summaries expose this through `core_family_flow`, including `family_state`, `recommended_action`, `action_reason`, `next_run_hint`, and `transfer`.
+
+### 4. Layered memory and lineage tracking, not stateless prompting
+
+Each child run writes a structured memory snapshot under `metadata/`:
+
+- `memory_snapshot_pre_prompt.json`
+- `memory_snapshot.json`
+
+The snapshot organizes what the run knows into four layers:
+
+- **working memory**: current family, stage, target, selected parent, role slots, candidates, and round-local context
+- **short-term memory**: recent winners, keeps, failures, reflection, donor usage, and rejected motifs
+- **family long-term memory**: lineage, successful patterns, failure patterns, promoted anchors, saturation, and search summary
+- **global cross-family memory**: donor motifs, transfer references, and similar-family success hints
+
+Prompt construction consumes this shared snapshot, so the prompt, artifacts, and later reports stay aligned instead of rebuilding memory from scattered local heuristics.
+
+### 5. Research-grade controls, not raw-alpha-only optimization
+
+`llm_refine` can refine toward different research objectives, such as:
 
 - `raw_alpha`
 - `deployability`
 - `complementarity`
 - `robustness`
 
-This makes refinement more useful for downstream research goals such as:
+It also exposes controls that are important for factor-library research rather than one-off score chasing:
 
-- promotion,
-- redundancy control,
-- factor library complementarity,
-- and optional admission-oriented evaluation.
+- target-conditioned scoring,
+- de-correlation-aware prompts and diagnostics,
+- redundancy gates,
+- path-aware evaluation,
+- dual-parent continuation,
+- table-driven stage transition signals,
+- and legacy decision logic retained as audit-only reference.
 
-### 5. Context-aware decision support, not scattered local heuristics
-
-Several decision points that were previously separate are being unified into a more shared decision layer.
-
-This currently includes:
-
-- round-level rerank,
-- anchor selection,
-- family-level next action recommendation,
-- optional de-correlation-aware candidate preference.
-
-The goal is not over-automation.  
-The goal is to make the refinement loop **more consistent, more traceable, and easier to reason about**.
-
-### 6. One public state/action vocabulary
-
-The internal scheduler still keeps its detailed stage policy, but public summaries use a compact family-flow vocabulary:
-
-```text
-Seed family -> exploring -> refining -> saturated / held -> donor export or donor import
-```
-
-Core family states:
-
-| State | Meaning |
-|---|---|
-| `new` | A family has not yet opened its search space. |
-| `exploring` | The family is broadening motifs, parents, or branches. |
-| `refining` | The family has a workable parent and is deepening or confirming it. |
-| `saturated` | The current objective or branch is mature enough to stop, switch objective, or export motifs. |
-| `held` | The family should pause or stop for now. |
-
-Core actions:
-
-| Detailed stage action | Public action |
-|---|---|
-| `continue_focused` | `continue_focused` |
-| `reopen_broad` | `reopen_broad` |
-| `switch_to_complementarity` | `switch_objective` |
-| `confirmation` | `confirm` |
-| `terminate` | `stop` |
-
-Transfer is represented as two explicit actions instead of a separate control system:
-
-| Action | Meaning |
-|---|---|
-| `export_donor` | A mature or saturated family can provide successful motifs to adjacent families. |
-| `import_donor` | The current family should borrow a motif from another family to open structural space. |
-
-Scheduler summaries expose this as `core_family_flow`, with `family_state`, `recommended_action`, `action_reason`, `next_run_hint`, and `transfer`.
-
-### 7. Family genesis is explicit
-
-Families are curated research units built around one seed motif. The public
-definition of each family lives in `config/refinement_seed_pool.yaml`; the
-default seed eligibility and boundary rules live in `family_origin_defaults`.
-
-Each loaded `SeedFamily` carries a `family_origin` payload with:
-
-- `discovery_mode`
-- `seed_source`
-- `seed_selection_reason`
-- `family_boundary`
-
-The full rules are documented in [docs/family_genesis.md](./docs/family_genesis.md).
+The goal is not over-automation. The goal is to make factor refinement **repeatable, inspectable, and controllable** across rounds.
 
 ---
 
@@ -474,6 +443,30 @@ The long-term goal is:
 
 * first, let orchestration speak the same context language as prompting and decision
 * then gradually automate only the most stable and most interpretable orchestration behaviors
+
+---
+
+## Additional Notes on Layered Memory Snapshots
+
+Each `run_refine_loop` child run now writes a unified layered memory snapshot under `metadata/`:
+
+* `memory_snapshot_pre_prompt.json`
+
+  * the exact memory view used to render the prompt before the LLM request
+* `memory_snapshot.json`
+
+  * the post-run memory view after candidates, evaluation records, reflection, and search summary are available
+
+The snapshot is a light integration layer over existing archive/search/reflection/transfer mechanisms. It does not make scheduling decisions by itself.
+
+Current top-level sections are:
+
+* `working_memory`: current family, stage, target profile, selected parent, role slots, current candidates, and round-local context
+* `short_term_memory`: recent winners / keeps / failures, latest reflection, recent donor usage, and rejected motifs
+* `family_long_term_memory`: family metadata, lineage, successful patterns, failure patterns, promoted anchors, saturation/search summaries
+* `global_cross_family_memory`: donor motifs, donor families, transfer references, and similar-family success hints
+
+Prompt construction consumes this shared snapshot through the memory renderer instead of directly assembling all memory blocks inside the prompt builder. This keeps prompt, artifacts, and later reports aligned while preserving the existing conservative decision flow.
 
 ---
 

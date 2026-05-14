@@ -59,6 +59,7 @@ from ..prompting.prompt_plan import build_prompt_plan
 from ..core.providers import OpenAICompatProvider
 from ..evaluation.redundancy import filter_structurally_redundant, structure_filter_markdown
 from ..knowledge.next_experiments import retrieve_runtime_donor_motifs
+from ..memory import build_memory_snapshot, write_memory_snapshot
 from ..knowledge.round1 import (
     build_bootstrap_frontier,
     light_rerank_candidates,
@@ -863,6 +864,28 @@ def main() -> int:
         prompt_template_version=str(args.prompt_template_version),
     )
     prompt_parent_row = load_prompt_history_row(seed_pool, selected_parent.factor_name, family=family)
+    run_dir = create_run_dir(family=family.family, runs_dir=args.runs_dir)
+    metadata_dir = ensure_run_subdir(run_dir, "metadata")
+    pre_prompt_memory_snapshot = build_memory_snapshot(
+        db_path=archive_db,
+        family=family,
+        run_dir=str(run_dir),
+        round_id=int(effective_round_id),
+        stage_mode=stage_mode,
+        target_profile=str(args.target_profile),
+        policy_preset=str(args.policy_preset),
+        selected_parent=selected_parent.to_dict(),
+        requested_candidate_count=int(requested_candidate_count),
+        final_candidate_target=int(args.n_candidates),
+        role_slots=role_slots,
+        bootstrap_frontier=bootstrap_frontier,
+        donor_motifs=donor_motifs,
+        decorrelation_targets=decorrelation_targets,
+        prompt_trace=prompt_trace,
+        current_model_name=args.model,
+        current_parent_candidate_id=selected_parent.candidate_id or effective_parent_candidate_id,
+    )
+    write_memory_snapshot(metadata_dir / "memory_snapshot_pre_prompt.json", pre_prompt_memory_snapshot)
     prompt = build_refinement_prompt(
         seed_pool=seed_pool,
         family=family,
@@ -885,6 +908,7 @@ def main() -> int:
         target_profile=str(args.target_profile),
         policy_preset=str(args.policy_preset),
         prompt_template_version=str(args.prompt_template_version),
+        memory_snapshot=pre_prompt_memory_snapshot,
         context_profile=resolve_context_profile(
             ContextEvidence.from_runtime(
                 family=family.family,
@@ -901,7 +925,6 @@ def main() -> int:
             )
         ),
     )
-    run_dir = create_run_dir(family=family.family, runs_dir=args.runs_dir)
 
     if args.print_only:
         print("=== SYSTEM PROMPT ===")
@@ -937,7 +960,6 @@ def main() -> int:
         status="running",
         started_at=started_at,
     )
-    metadata_dir = ensure_run_subdir(run_dir, "metadata")
     _write_json(
         metadata_dir / "search_plan.json",
         {
@@ -1390,6 +1412,31 @@ def main() -> int:
             reflection_markdown(reflection_card),
             encoding="utf-8",
         )
+        search_summary = engine.summary()
+        final_memory_snapshot = build_memory_snapshot(
+            db_path=archive_db,
+            family=family,
+            run_id=run_id,
+            run_dir=str(run_dir),
+            round_id=int(effective_round_id),
+            stage_mode=stage_mode,
+            target_profile=str(args.target_profile),
+            policy_preset=str(args.policy_preset),
+            selected_parent=selected_parent.to_dict(),
+            requested_candidate_count=int(requested_candidate_count),
+            final_candidate_target=int(args.n_candidates),
+            role_slots=role_slots,
+            bootstrap_frontier=bootstrap_frontier,
+            donor_motifs=donor_motifs,
+            decorrelation_targets=decorrelation_targets,
+            prompt_trace=prompt_trace,
+            current_model_name=args.model,
+            current_parent_candidate_id=selected_parent.candidate_id or effective_parent_candidate_id,
+            child_records=child_records,
+            reflection_card=reflection_card,
+            search_summary=search_summary,
+        )
+        memory_snapshot_path = write_memory_snapshot(metadata_dir / "memory_snapshot.json", final_memory_snapshot)
         top_level_summary = {
             "family": family.family,
             "target_profile": str(args.target_profile),
@@ -1407,15 +1454,16 @@ def main() -> int:
             "children": child_records,
             "search_policy": search_policy.to_dict(),
             "search_budget": search_budget.to_dict(),
-            "search": engine.summary(),
+            "search": search_summary,
             "bootstrap_frontier": bootstrap_frontier,
             "donor_motifs": donor_motifs,
             "decorrelation_targets": list(decorrelation_targets),
             "light_rerank": light_rerank_report,
             "reflection": reflection_card,
+            "memory_snapshot_path": str(memory_snapshot_path),
         }
         _write_json(run_dir / "summary.json", top_level_summary)
-        _write_json(metadata_dir / "search_summary.json", engine.summary())
+        _write_json(metadata_dir / "search_summary.json", search_summary)
         runtime_status("completed", "run finished", child_record_count=len(child_records))
         mark_run_finished(db_path=archive_db, run_id=run_id, status="completed")
         return 0

@@ -21,9 +21,9 @@ from ..core.seed_loader import (
     resolve_family_formula,
     resolve_preferred_refine_seed,
 )
-from ..knowledge.retrieval import build_family_memory_payload, render_family_memory_block
+from ..memory import build_memory_snapshot, render_memory_snapshot_prompt_block
 from ..parsing.operator_contract import PROMPT_OPERATOR_DESCRIPTIONS
-from .prompt_plan import PromptConstraintPlan, PromptExamplesPlan, PromptMemoryPlan, PromptPlan, build_prompt_plan
+from .prompt_plan import PromptConstraintPlan, PromptExamplesPlan, build_prompt_plan
 from ..search.transition.context_resolver import ContextProfile
 
 DEFAULT_WINDOWS = (3, 5, 10, 14, 15, 20, 28, 40, 60, 100, 120, 180, 250, 375)
@@ -321,19 +321,6 @@ def _render_examples_section(
             ]
         )
     return "\n\n".join(blocks).strip()
-
-
-def _render_memory_section(payload: dict[str, object], *, plan: PromptMemoryPlan) -> str:
-    if not plan.include:
-        return ""
-    return render_family_memory_block(
-        payload,
-        max_winners=plan.max_winners,
-        max_keeps=plan.max_keeps,
-        max_failures=plan.max_failures,
-        include_lineage=plan.include_lineage,
-        include_reflection=plan.include_reflection,
-    )
 
 
 def _render_constraints_section(
@@ -853,6 +840,7 @@ def build_refinement_prompt(
     policy_preset: str = "balanced",
     prompt_template_version: str = "current_compact",
     context_profile: ContextProfile | None = None,
+    memory_snapshot: dict[str, object] | None = None,
 ) -> PromptBundle:
     available_fields = sorted({*CORE_FIELDS, *DERIVED_FIELDS, *EXTENDED_DAILY_FIELDS, *OPTIONAL_CONTEXT_FIELDS})
     history_stage = prompt_history_stage(seed_pool)
@@ -869,13 +857,6 @@ def build_refinement_prompt(
         if history_stage
         else current_parent_row
     )
-    memory_payload = build_family_memory_payload(
-        db_path=archive_db,
-        family=family,
-        exclude_run_id=exclude_run_id,
-        current_model_name=current_model_name,
-        current_parent_candidate_id=current_parent_candidate_id,
-    )
     prompt_plan = build_prompt_plan(
         stage_mode=stage_mode,
         target_profile=target_profile,
@@ -886,7 +867,28 @@ def build_refinement_prompt(
         has_decorrelation_targets=bool(decorrelation_targets),
         context_profile=context_profile,
     )
-    memory_block = _render_memory_section(memory_payload, plan=prompt_plan.memory)
+    effective_memory_snapshot = memory_snapshot or build_memory_snapshot(
+        db_path=archive_db,
+        family=family,
+        run_id=exclude_run_id,
+        stage_mode=stage_mode,
+        target_profile=target_profile,
+        policy_preset=policy_preset,
+        selected_parent={
+            "factor_name": effective_parent_name,
+            "expression": effective_parent_expression,
+            **(dict(current_parent_row or {})),
+        },
+        requested_candidate_count=requested_count,
+        final_candidate_target=final_count,
+        role_slots=active_roles,
+        bootstrap_frontier=list(bootstrap_frontier or []),
+        donor_motifs=list(donor_motifs or []),
+        decorrelation_targets=decorrelation_targets,
+        current_model_name=current_model_name,
+        current_parent_candidate_id=current_parent_candidate_id,
+    )
+    memory_block = render_memory_snapshot_prompt_block(effective_memory_snapshot, plan=prompt_plan.memory)
     examples_block = _render_examples_section(
         family=family,
         plan=prompt_plan.examples,
