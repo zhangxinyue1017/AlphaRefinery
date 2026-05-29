@@ -1,16 +1,11 @@
 '''Registry exports for LLM-refined factor families.
 
-Imports refined family specs so promoted formulas are available through the default registry.
-'''
-
-from __future__ import annotations
-
-"""Local/private bucket for LLM-refined factor families.
-
 This package is allowed to be empty in the public repository. When local
 `*_family.py` modules are present, they are discovered and registered
 automatically.
-"""
+'''
+
+from __future__ import annotations
 
 import importlib
 import inspect
@@ -18,7 +13,11 @@ import pkgutil
 import re
 from types import ModuleType
 
+<<<<<<< HEAD
 from .open_volume_correlation_family import *  # noqa: F401,F403
+=======
+
+>>>>>>> 37848fa (save local changes)
 from .common import LLM_REFINED_SOURCE
 
 _EXPRESSION_RE = re.compile(r'expression\s*=\s*"(?P<expr>(?:[^"\\]|\\.)*)"')

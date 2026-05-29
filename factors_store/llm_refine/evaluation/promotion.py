@@ -496,6 +496,7 @@ def _merge_existing_module(
 
 
 def _ensure_llm_refined_init_registered(module_path: Path) -> dict[str, str]:
+<<<<<<< HEAD
     """Compatibility no-op.
 
     `llm_refined.__init__` now discovers local `*_family.py` modules
@@ -508,6 +509,12 @@ def _ensure_llm_refined_init_registered(module_path: Path) -> dict[str, str]:
         "llm_refined_init": str(init_path),
         "llm_refined_init_changed": "false",
         "llm_refined_init_registration": "dynamic_discovery",
+=======
+    return {
+        "llm_refined_init": str(DEFAULT_LLM_REFINED_INIT),
+        "llm_refined_init_changed": "false",
+        "llm_refined_init_registration": "auto_discovery",
+>>>>>>> 37848fa (save local changes)
     }
 
 

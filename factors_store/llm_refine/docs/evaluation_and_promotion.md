@@ -97,8 +97,19 @@ evaluation 后，满足条件的 `research_winner` 会进入 pending promotion�
 
 - `factors_store/factors/llm_refined/*.py`
 
+<<<<<<< HEAD
 但不会再写 `llm_refined/__init__.py`。`llm_refined` 通过动态发现加载本地
 `*_family.py` 模块，避免把 private / ignored family 模块静态 import 到公开仓库。
+=======
+`llm_refined/__init__.py` 不再需要被 promotion 修改；该 package 通过
+`*_family.py` 自动发现 refined modules。
+
+默认不开 auto-apply。未显式传 `--auto-apply-promotion` 时，系统只写：
+
+- run metadata 下的 `pending_curated_manifest.*`
+- `artifacts/llm_refine_promotions/pending/`
+- preview module 和 patch
+>>>>>>> 37848fa (save local changes)
 
 ## auto_apply_promotion 的口径
 

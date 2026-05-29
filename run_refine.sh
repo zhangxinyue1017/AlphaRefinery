@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ROOT_DIR}/llm_refine_provider_env.sh"
 ENV_TEMPLATE="${ROOT_DIR}/llm_refine_provider_env.example.sh"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${ROOT_DIR}/.matplotlib_cache}"
+mkdir -p "${MPLCONFIGDIR}"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "Missing ${ENV_FILE}"

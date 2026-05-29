@@ -7,6 +7,9 @@
 #
 # The copied `llm_refine_provider_env.sh` stays local and is ignored by git.
 
+LLM_REFINE_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${LLM_REFINE_ENV_ROOT}/.matplotlib_cache}"
+mkdir -p "${MPLCONFIGDIR}"
 
 # ===== OpenAI-compatible default example =====
 # Replace the values below with the provider and model you actually use.

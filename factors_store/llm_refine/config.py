@@ -98,7 +98,7 @@ DEFAULT_N_CANDIDATES = 3  # Default number of candidates requested per model cal
 DEFAULT_POLICY_PRESET = "balanced"  # Default high-level search preset.
 DEFAULT_TARGET_PROFILE = "raw_alpha"  # Default target-conditioned profile.
 DEFAULT_MAX_PARALLEL = 0  # 0 means "use all available child slots/models".
-DEFAULT_AUTO_APPLY_PROMOTION = True  # Default to auto-applying pending curated promotions into llm_refined modules.
+DEFAULT_AUTO_APPLY_PROMOTION = False  # Default to writing pending promotion artifacts without mutating factor modules.
 
 
 # ---------------------------------------------------------------------------
