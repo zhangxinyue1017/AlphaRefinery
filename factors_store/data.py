@@ -236,6 +236,7 @@ def build_data_bundle(
     liquidity_col: str = "amount",
     liquidity_fallback_col: str = "volume",
     liquidity_rolling_days: int = 20,
+    infer_cap_fields: bool = True,
 ) -> tuple[SeriesDict, dict[str, object]]:
     panel = load_panel(
         panel_path,
@@ -280,7 +281,8 @@ def build_data_bundle(
     if "close" in data:
         data["returns"] = data["close"].groupby(level="instrument", group_keys=False).pct_change().rename("returns")
 
-    _infer_cap_fields(data)
+    if infer_cap_fields:
+        _infer_cap_fields(data)
 
     if benchmark_path is not None:
         benchmark = load_benchmark_series(benchmark_path)
@@ -325,6 +327,7 @@ def build_data(
     liquidity_col: str = "amount",
     liquidity_fallback_col: str = "volume",
     liquidity_rolling_days: int = 20,
+    infer_cap_fields: bool = True,
 ) -> SeriesDict:
     data, _ = build_data_bundle(
         panel_path,
@@ -347,6 +350,7 @@ def build_data(
         liquidity_col=liquidity_col,
         liquidity_fallback_col=liquidity_fallback_col,
         liquidity_rolling_days=liquidity_rolling_days,
+        infer_cap_fields=infer_cap_fields,
     )
     return data
 

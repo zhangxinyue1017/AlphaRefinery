@@ -20,7 +20,11 @@ htmlcov/
 venv/
 .env
 .env.*
+api_keys.env
 .python-version
+
+# Local market-data snapshots and derived pilot outputs
+data/
 
 # Notebook / editor / OS junk
 .ipynb_checkpoints/

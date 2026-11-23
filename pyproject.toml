@@ -19,6 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+us-data = [
+    "alpaca-py>=0.45",
+]
 performance = [
     "numba>=0.59",
 ]

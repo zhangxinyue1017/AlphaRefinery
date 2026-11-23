@@ -7,6 +7,9 @@ openai>=1.0
 matplotlib>=3.7
 scipy>=1.10
 
+# US historical-data adapter
+alpaca-py>=0.45
+
 # Optional performance / extended evaluation
 # numba>=0.59
 # alphalens-reloaded>=0.4

@@ -357,8 +357,10 @@ def wide_correlation(x: pd.DataFrame, y: pd.DataFrame, window: int = 10) -> pd.D
     cov = np.sum(xc * yc, axis=2) / max(window - 1, 1)
     sx = np.sqrt(np.sum(xc * xc, axis=2) / max(window - 1, 1))
     sy = np.sqrt(np.sum(yc * yc, axis=2) / max(window - 1, 1))
-    tail = cov / (sx * sy + _WIDE_EPS)
-    tail[~valid] = 0.0
+    nonzero_variance = valid & (sx > _WIDE_EPS) & (sy > _WIDE_EPS)
+    tail = np.zeros_like(cov)
+    np.divide(cov, sx * sy, out=tail, where=nonzero_variance)
+    tail = np.round(tail, decimals=12)
     bad = ~np.isfinite(tail)
     tail[bad & valid] = 0.0
     out = _fill_tail_result(x_frame, tail, window)
