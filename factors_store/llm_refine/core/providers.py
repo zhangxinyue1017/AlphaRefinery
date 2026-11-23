@@ -19,6 +19,55 @@ class OpenAICompatProvider:
 
     def __init__(self, config: LLMProviderConfig) -> None:
         self.config = config
+        self.request_count = 0
+        self.last_usage: dict[str, object] | None = None
+        self.last_response_id = ""
+        self.retries_disabled = os.getenv("LLM_DISABLE_PROVIDER_RETRIES", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+    def telemetry(self) -> dict[str, object]:
+        return {
+            "provider": self.config.name,
+            "model": self.config.model,
+            "token_limit_parameter": self._token_limit_parameter(),
+            "temperature_sent": self._supports_configured_temperature(),
+            "request_count": int(self.request_count),
+            "retries_disabled": bool(self.retries_disabled),
+            "usage": self.last_usage,
+            "response_id": self.last_response_id or None,
+        }
+
+    def _token_limit_parameter(self) -> str:
+        provider = self.config.name.strip().lower()
+        model = self.config.model.strip().lower()
+        if provider == "openai" and (model.startswith("gpt-5") or model.startswith("o")):
+            return "max_completion_tokens"
+        return "max_tokens"
+
+    def _supports_configured_temperature(self) -> bool:
+        provider = self.config.name.strip().lower()
+        model = self.config.model.strip().lower()
+        return not (provider == "openai" and (model.startswith("gpt-5") or model.startswith("o")))
+
+    def _record_response(self, response) -> None:
+        self.last_response_id = str(getattr(response, "id", "") or "")
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            self.last_usage = None
+        elif hasattr(usage, "model_dump"):
+            self.last_usage = dict(usage.model_dump())
+        elif isinstance(usage, dict):
+            self.last_usage = dict(usage)
+        else:
+            self.last_usage = {
+                key: getattr(usage, key)
+                for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+                if getattr(usage, key, None) is not None
+            }
 
     def generate(self, messages: Sequence[dict[str, str]]) -> str:
         try:
@@ -40,21 +89,30 @@ class OpenAICompatProvider:
                 api_key=self.config.api_key,
                 base_url=self.config.base_url,
                 timeout=self.config.timeout,
+                max_retries=0 if self.retries_disabled else 2,
             )
             request_max_tokens = int(self.config.max_tokens)
             last_error: Exception | None = None
-            for attempt in range(3):
+            max_attempts = 1 if self.retries_disabled else 3
+            for attempt in range(max_attempts):
                 try:
+                    self.request_count += 1
+                    token_limit = {self._token_limit_parameter(): request_max_tokens}
+                    sampling = (
+                        {"temperature": self.config.temperature}
+                        if self._supports_configured_temperature()
+                        else {}
+                    )
                     response = client.chat.completions.create(
                         model=self.config.model,
                         messages=list(messages),
-                        temperature=self.config.temperature,
-                        max_tokens=request_max_tokens,
+                        **sampling,
+                        **token_limit,
                     )
                 except Exception as exc:
                     last_error = exc
-                    if not self._is_retryable_error(exc) or attempt >= 2:
-                        if self._should_try_curl_fallback(exc):
+                    if not self._is_retryable_error(exc) or attempt >= max_attempts - 1:
+                        if not self.retries_disabled and self._should_try_curl_fallback(exc):
                             return self._generate_via_curl(
                                 messages=messages,
                                 max_tokens=request_max_tokens,
@@ -64,6 +122,7 @@ class OpenAICompatProvider:
                     time.sleep(1.5 * (attempt + 1))
                     continue
 
+                self._record_response(response)
                 choice = response.choices[0]
                 message = choice.message
                 content = self._extract_content(message.content)
@@ -79,7 +138,7 @@ class OpenAICompatProvider:
                     finish_reason == "length"
                     and not reasoning_text
                     and not refusal_text
-                    and attempt < 2
+                    and attempt < max_attempts - 1
                 ):
                     request_max_tokens = max(request_max_tokens + 1000, int(request_max_tokens * 1.5), 3000)
                     time.sleep(0.8 * (attempt + 1))
@@ -93,7 +152,7 @@ class OpenAICompatProvider:
                     f"max_tokens={request_max_tokens})"
                 )
             if last_error is not None:
-                if self._should_try_curl_fallback(last_error):
+                if not self.retries_disabled and self._should_try_curl_fallback(last_error):
                     return self._generate_via_curl(
                         messages=messages,
                         max_tokens=request_max_tokens,
@@ -115,9 +174,10 @@ class OpenAICompatProvider:
         payload = {
             "model": self.config.model,
             "messages": list(messages),
-            "temperature": self.config.temperature,
-            "max_tokens": int(max_tokens),
+            self._token_limit_parameter(): int(max_tokens),
         }
+        if self._supports_configured_temperature():
+            payload["temperature"] = self.config.temperature
         endpoint = self.config.base_url.rstrip("/") + "/chat/completions"
         env = os.environ.copy()
         for key, value in restored_proxy_env.items():
@@ -133,6 +193,7 @@ class OpenAICompatProvider:
             "-d",
             json.dumps(payload, ensure_ascii=False),
         ]
+        self.request_count += 1
         completed = subprocess.run(
             command,
             capture_output=True,
@@ -161,6 +222,9 @@ class OpenAICompatProvider:
         if not choices:
             raise RuntimeError("curl fallback returned no choices")
         message = choices[0].get("message") or {}
+        self.last_response_id = str(response.get("id") or "")
+        usage = response.get("usage")
+        self.last_usage = dict(usage) if isinstance(usage, dict) else None
         content = self._extract_content(message.get("content"))
         if content:
             return content

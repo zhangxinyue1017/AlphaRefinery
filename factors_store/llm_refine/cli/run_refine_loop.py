@@ -1029,12 +1029,15 @@ def main() -> int:
         else:
             provider = OpenAICompatProvider(provider_config)
             runtime_status("llm_request", f"requesting proposals from {provider_config.model}")
-            raw_response = provider.generate(
-                [
-                    {"role": "system", "content": prompt.system_prompt},
-                    {"role": "user", "content": prompt.user_prompt},
-                ]
-            )
+            try:
+                raw_response = provider.generate(
+                    [
+                        {"role": "system", "content": prompt.system_prompt},
+                        {"role": "user", "content": prompt.user_prompt},
+                    ]
+                )
+            finally:
+                _write_json(metadata_dir / "provider_telemetry.json", provider.telemetry())
             runtime_status("llm_response", "provider response received")
 
         retry_budget = max(int(args.retry_on_parse_fail), 0)
