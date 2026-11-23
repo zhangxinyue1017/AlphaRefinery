@@ -13,6 +13,7 @@ import os
 import sys
 import time
 
+from ...data import build_data_bundle
 from ..config import (
     DEFAULT_AUTO_APPLY_PROMOTION,
     DEFAULT_API_KEY,
@@ -156,6 +157,45 @@ def _api_key_required(args: argparse.Namespace) -> bool:
     return not any(base_url.startswith(prefix) for prefix in local_prefixes)
 
 
+def _resolve_run_available_fields(*, seed_pool: object, args: argparse.Namespace) -> tuple[str, ...]:
+    defaults = dict(getattr(seed_pool, "evaluation_defaults", {}) or {})
+    panel_path = str(getattr(args, "panel_path", "") or defaults.get("panel_path") or "").strip()
+    if not panel_path:
+        raise ValueError("panel_path is required to resolve fields for the generation prompt")
+    benchmark_path = str(getattr(args, "benchmark_path", "") or "").strip() or None
+    data, _ = build_data_bundle(
+        panel_path,
+        benchmark_path=benchmark_path,
+        start=defaults.get("start"),
+        end=defaults.get("end"),
+        apply_filters=bool(defaults.get("apply_filters", False)),
+        stock_only=bool(defaults.get("stock_only", False)),
+        exclude_st=bool(defaults.get("exclude_st", False)),
+        exclude_suspended=bool(defaults.get("exclude_suspended", False)),
+        min_listed_days=defaults.get("min_listed_days"),
+        drop_limit_move=bool(defaults.get("drop_limit_move", False)),
+        min_turnover_quantile=defaults.get("min_turnover_quantile"),
+        min_liquidity_quantile=defaults.get("min_liquidity_quantile"),
+        infer_cap_fields=bool(defaults.get("infer_cap_fields", True)),
+    )
+    return tuple(sorted(data))
+
+
+def _validate_focused_refine_request(
+    *,
+    stage_mode: str,
+    explicit_parent_name: str,
+    seed_stage_active: bool,
+    requested_candidate_count: int,
+) -> None:
+    if stage_mode != "focused_refine" or not explicit_parent_name:
+        return
+    if seed_stage_active:
+        raise ValueError("focused_refine with an explicit parent cannot enable seed-stage role expansion")
+    if int(requested_candidate_count) > 2:
+        raise ValueError("focused_refine with an explicit parent supports at most two candidates")
+
+
 def _run_preflight_checks(args: argparse.Namespace) -> dict[str, object]:
     checks: list[dict[str, object]] = []
 
@@ -253,9 +293,18 @@ def _make_runtime_status_writer(
     return _write
 
 
-def _with_validation(candidate: RefinementCandidate) -> RefinementCandidate:
+def _with_validation(
+    candidate: RefinementCandidate,
+    *,
+    available_fields: tuple[str, ...] | None = None,
+) -> RefinementCandidate:
     merged_warnings = tuple(
-        dict.fromkeys((*candidate.validation_warnings, *validate_expression(candidate.expression)))
+        dict.fromkeys(
+            (
+                *candidate.validation_warnings,
+                *validate_expression(candidate.expression, available_fields=available_fields),
+            )
+        )
     )
     return RefinementCandidate(
         name=candidate.name,
@@ -380,10 +429,24 @@ def _hard_validation_filter_reason(candidate: RefinementCandidate) -> str:
         return "contains unsupported keyword argument(s) for current expression engine"
     if any(item.startswith("contains tokens outside current whitelist:") for item in warnings):
         return "contains tokens outside current expression whitelist"
+    unavailable = next((item for item in warnings if item.startswith("uses unavailable fields:")), "")
+    if unavailable:
+        return unavailable
     return ""
 
 
-def _build_parse_retry_user_prompt(*, original_user_prompt: str, parse_error: str) -> str:
+def _build_parse_retry_user_prompt(
+    *,
+    original_user_prompt: str,
+    parse_error: str,
+    prompt_template_version: str = "legacy_v1",
+) -> str:
+    concise_limits = (
+        "- Make `explanation` very short (<= 40 Chinese chars).\n"
+        "- Make `rationale` very short (<= 24 Chinese chars).\n"
+        if prompt_template_version == "legacy_v1"
+        else "- Keep `explanation` to at most 24 words.\n- Keep `rationale` to at most 16 words.\n"
+    )
     return (
         f"{original_user_prompt}\n\n"
         "Your previous reply could not be parsed as valid JSON.\n"
@@ -391,8 +454,7 @@ def _build_parse_retry_user_prompt(*, original_user_prompt: str, parse_error: st
         "Re-emit the full response from scratch as exactly one complete JSON object.\n"
         "Requirements:\n"
         "- Output JSON only, no markdown fences, no commentary.\n"
-        "- Make `explanation` very short (<= 40 Chinese chars).\n"
-        "- Make `rationale` very short (<= 24 Chinese chars).\n"
+        f"{concise_limits}"
         "- Keep `diagnosed_weaknesses` <= 4 short bullets.\n"
         "- Keep `refinement_rationale`, `expected_behavior_change`, and `risk_notes` to one short sentence each.\n"
         "- Keep `expected_improvement` and `risk` concise enum values only.\n"
@@ -425,7 +487,8 @@ def _build_validation_retry_user_prompt(
         "- Output JSON only, no markdown fences, no commentary.\n"
         "- Re-emit the full response from scratch as exactly one complete JSON object.\n"
         "- Keep the same schema with `parent_factor` and `candidate_formulas`.\n"
-        "- Use only fields and operators already defined by the current contract.\n"
+        "- Use only the available data fields and operators listed in the original prompt.\n"
+        "- If `pre_close` is unavailable, use `delay(close, 1)` for previous close.\n"
         "- Do not invent helper names, macro names, alias names, or dotted references.\n"
         "- Do not use keyword arguments except `half_life` and `min_obs`.\n"
         "- Use positional arguments for windows, quantiles, sides, and branch arguments.\n"
@@ -447,6 +510,7 @@ def _parse_proposal_with_retries(
     retry_budget: int,
     runtime_status,
     dry_run: bool,
+    prompt_template_version: str = "legacy_v1",
 ) -> tuple[LLMProposal, str, list[dict[str, object]]]:
     parse_retry_records: list[dict[str, object]] = []
     last_parse_error: Exception | None = None
@@ -473,6 +537,7 @@ def _parse_proposal_with_retries(
             retry_prompt = _build_parse_retry_user_prompt(
                 original_user_prompt=user_prompt,
                 parse_error=str(exc),
+                prompt_template_version=prompt_template_version,
             )
             runtime_status("parse_retry", f"retrying parse via provider call #{retry_index}")
             retry_raw_response = provider.generate(
@@ -500,6 +565,7 @@ def _rebuild_and_validate_candidates(
     family_name: str,
     effective_round_id: int,
     effective_parent_candidate_id: str,
+    available_fields: tuple[str, ...] | None = None,
 ) -> tuple[LLMProposal, tuple[RefinementCandidate, ...], list[dict[str, object]], list[dict[str, object]]]:
     unique_candidates, dropped_duplicates = deduplicate_candidates(proposal.candidates)
     proposal = _rebuild_proposal(proposal, unique_candidates)
@@ -531,7 +597,8 @@ def _rebuild_and_validate_candidates(
                     parent_candidate_id=effective_parent_candidate_id,
                     status="proposed",
                     validation_warnings=candidate.validation_warnings,
-                )
+                ),
+                available_fields=available_fields,
             )
         )
 
@@ -789,6 +856,17 @@ def main() -> int:
         role_slots=role_slots,
         seed_stage_active=seed_stage_active,
     )
+    _validate_focused_refine_request(
+        stage_mode=stage_mode,
+        explicit_parent_name=explicit_parent_name,
+        seed_stage_active=seed_stage_active,
+        requested_candidate_count=requested_candidate_count,
+    )
+    run_available_fields = (
+        _resolve_run_available_fields(seed_pool=seed_pool, args=args)
+        if str(args.prompt_template_version) == "current_compact"
+        else None
+    )
     decorrelation_targets = _normalize_multi_text(args.decorrelation_target)
     search_budget = SearchBudget(
         max_rounds=1,
@@ -863,6 +941,7 @@ def main() -> int:
         decorrelation_targets=list(decorrelation_targets),
         prompt_template_version=str(args.prompt_template_version),
     )
+    prompt_trace["available_fields"] = list(run_available_fields or ())
     prompt_parent_row = load_prompt_history_row(seed_pool, selected_parent.factor_name, family=family)
     run_dir = create_run_dir(family=family.family, runs_dir=args.runs_dir)
     metadata_dir = ensure_run_subdir(run_dir, "metadata")
@@ -924,6 +1003,7 @@ def main() -> int:
                 final_candidate_target=int(args.n_candidates),
             )
         ),
+        available_fields=run_available_fields,
     )
 
     if args.print_only:
@@ -1055,6 +1135,7 @@ def main() -> int:
                 retry_budget=retry_budget,
                 runtime_status=runtime_status,
                 dry_run=bool(args.dry_run),
+                prompt_template_version=str(args.prompt_template_version),
             )
             candidate_raw_response = raw_response
         except Exception as exc:
@@ -1096,6 +1177,7 @@ def main() -> int:
                 family_name=family.family,
                 effective_round_id=int(effective_round_id),
                 effective_parent_candidate_id=effective_parent_candidate_id,
+                available_fields=run_available_fields,
             )
             if dropped_duplicates:
                 print(
@@ -1148,6 +1230,7 @@ def main() -> int:
                 retry_budget=retry_budget,
                 runtime_status=runtime_status,
                 dry_run=bool(args.dry_run),
+                prompt_template_version=str(args.prompt_template_version),
             )
             validation_retry_records.append(
                 {

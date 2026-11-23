@@ -42,8 +42,10 @@ evaluation_protocol:
   promote_stage: selection
 
 refinement_principles:
+  - Daily US equities using split-adjusted Alpaca bars.
+  - Signals are available only after the daily bar is complete.
+  - Evaluate predictive Rank IC on a 5-day forward-return horizon.
   - Preserve the open-price and trading-activity relationship.
-  - Keep the fixed engineering candidate simple and interpretable.
 
 seed_groups:
   - family: open_volume_correlation
@@ -59,9 +61,9 @@ seed_groups:
     likely_weaknesses:
       - The ten-stock universe makes cross-sectional estimates noisy.
     refinement_axes:
-      - Normalize the opening price by the previous close before correlation.
-    primary_objective: Verify the existing offline evaluation and decision path.
-    secondary_objective: Measure candidate redundancy and parent-relative behavior.
+      - Normalize the opening price with delay(close, 1) before correlation.
+    primary_objective: Improve the parent factor's cross-sectional predictive stability while preserving the open-volume hypothesis.
+    secondary_objective: Reduce turnover and parent redundancy with a simple, interpretable expression.
     hard_constraints:
       - Preserve the open-volume relationship.
       - Do not use unavailable market-cap fields.

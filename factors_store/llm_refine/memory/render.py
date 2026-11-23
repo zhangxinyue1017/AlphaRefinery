@@ -24,13 +24,13 @@ def _shorten(text: Any, *, max_chars: int = 120) -> str:
     return value[: max_chars - 3].rstrip() + "..."
 
 
-def _render_working_context(snapshot: dict[str, Any]) -> str:
+def _render_working_context(snapshot: dict[str, Any], *, language: str = "zh") -> str:
     working = dict(snapshot.get("working_memory") or {})
     parent = dict(working.get("current_parent") or {})
     context = dict(working.get("context") or {})
     round_state = dict(working.get("round") or {})
     lines = [
-        "当前工作记忆：",
+        "Working context:" if str(language).lower().startswith("en") else "当前工作记忆：",
         f"- stage={working.get('stage', '')}, target={working.get('target_profile', '')}, policy={working.get('policy_preset', '')}",
         f"- parent={parent.get('factor_name', '') or parent.get('candidate_name', '') or '(unknown)'}; round={round_state.get('round_id', 0)}",
     ]
@@ -89,6 +89,7 @@ def render_memory_snapshot_prompt_block(
     snapshot: dict[str, Any],
     *,
     plan: PromptMemoryPlan,
+    language: str = "zh",
 ) -> str:
     if not plan.include:
         return ""
@@ -102,7 +103,7 @@ def render_memory_snapshot_prompt_block(
             "lineage_trace": list(dict(snapshot.get("family_long_term_memory") or {}).get("lineage") or []),
         }
     blocks = [
-        _render_working_context(snapshot),
+        _render_working_context(snapshot, language=language),
         render_family_memory_block(
             payload,
             max_winners=plan.max_winners,
@@ -110,6 +111,7 @@ def render_memory_snapshot_prompt_block(
             max_failures=plan.max_failures,
             include_lineage=plan.include_lineage,
             include_reflection=plan.include_reflection,
+            language=language,
         ),
         _render_family_long_term(snapshot),
         _render_global_memory(snapshot),

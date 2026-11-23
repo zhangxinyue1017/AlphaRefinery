@@ -10,6 +10,7 @@ import re
 from factors_store.contract import CORE_FIELDS, DERIVED_FIELDS, EXTENDED_DAILY_FIELDS, OPTIONAL_CONTEXT_FIELDS
 
 from .operator_contract import KNOWN_EXTRA_TOKENS, KNOWN_OPERATOR_TOKENS
+from .expression_engine import guess_required_fields
 from ..prompting.prompt_builder import DEFAULT_WINDOWS
 
 _ALLOWED_FIELDS = {str(item) for item in {*CORE_FIELDS, *DERIVED_FIELDS, *EXTENDED_DAILY_FIELDS, *OPTIONAL_CONTEXT_FIELDS}}
@@ -19,7 +20,11 @@ _KEYWORD_ARG_PATTERN = re.compile(r"(?<![<>=!])\b([A-Za-z_][A-Za-z0-9_]*)\s*=")
 _ALLOWED_KEYWORD_ARGS = {"half_life", "min_obs"}
 
 
-def validate_expression(expr: str) -> tuple[str, ...]:
+def validate_expression(
+    expr: str,
+    *,
+    available_fields: tuple[str, ...] | list[str] | set[str] | None = None,
+) -> tuple[str, ...]:
     warnings: list[str] = []
     if not expr:
         return ("empty expression",)
@@ -65,4 +70,12 @@ def validate_expression(expr: str) -> tuple[str, ...]:
         unknown.add(token)
     if unknown:
         warnings.append(f"contains tokens outside current whitelist: {sorted(unknown)}")
+    if available_fields is not None:
+        available = {str(field).strip().lower() for field in available_fields if str(field).strip()}
+        unavailable = sorted(set(guess_required_fields(expr)) - available)
+        if unavailable:
+            message = f"uses unavailable fields: {unavailable}"
+            if "pre_close" in unavailable:
+                message += "; use delay(close, 1) for previous close"
+            warnings.append(message)
     return tuple(warnings)

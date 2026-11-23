@@ -160,15 +160,24 @@ def render_family_memory_block(
     max_failures: int = 3,
     include_lineage: bool = True,
     include_reflection: bool = True,
+    language: str = "zh",
 ) -> str:
-    lines = [
-        "最近有效经验（来自 archive 检索，用于启发，不要求机械模仿）：",
-        "- 原则：优先吸收“有效改法”和“失败模式”，不要直接复制旧表达式。",
-    ]
+    english = str(language).lower().startswith("en")
+    lines = (
+        [
+            "Recent archive evidence for inspiration:",
+            "- Reuse effective edit patterns and avoid known failures; do not copy old expressions directly.",
+        ]
+        if english
+        else [
+            "最近有效经验（来自 archive 检索，用于启发，不要求机械模仿）：",
+            "- 原则：优先吸收“有效改法”和“失败模式”，不要直接复制旧表达式。",
+        ]
+    )
     raw_winners = payload.get("recent_winners") or []
     winners = [item for item in raw_winners if _winner_is_prompt_worthy(item)][: max(int(max_winners), 0)]
     if winners:
-        lines.extend(["", "优先延续的有效模式："])
+        lines.extend(["", "Effective patterns to continue:" if english else "优先延续的有效模式："])
         for item in winners:
             lines.append(
                 "- "
@@ -178,13 +187,13 @@ def render_family_memory_block(
                 f"tags={','.join(item.get('expression_tags', ())) or 'none'})"
             )
     elif raw_winners:
-        lines.extend(["", "优先延续的有效模式：", "- (none after quality filter)"])
+        lines.extend(["", "Effective patterns to continue:" if english else "优先延续的有效模式：", "- (none after quality filter)"])
     else:
-        lines.extend(["", "优先延续的有效模式：", "- (none)"])
+        lines.extend(["", "Effective patterns to continue:" if english else "优先延续的有效模式：", "- (none)"])
 
     keeps = (payload.get("recent_keeps") or [])[: max(int(max_keeps), 0)]
     if keeps:
-        lines.extend(["", "可借鉴但未完全确认的改法："])
+        lines.extend(["", "Promising but unconfirmed edits:" if english else "可借鉴但未完全确认的改法："])
         for item in keeps:
             lines.append(
                 "- "
@@ -195,7 +204,7 @@ def render_family_memory_block(
 
     failures = (payload.get("recent_failures") or [])[: max(int(max_failures), 0)]
     if failures:
-        lines.extend(["", "近期要避免的失败模式："])
+        lines.extend(["", "Recent failure patterns to avoid:" if english else "近期要避免的失败模式："])
         for item in failures:
             lines.append(
                 "- "
@@ -206,7 +215,7 @@ def render_family_memory_block(
 
     lineage = payload.get("lineage_trace") or []
     if include_lineage and lineage:
-        lines.extend(["", "当前 parent 最近 lineage："])
+        lines.extend(["", "Recent parent lineage:" if english else "当前 parent 最近 lineage："])
         for idx, item in enumerate(lineage[:3]):
             prefix = "seed" if idx == 0 else f"step_{idx}"
             parts = [
@@ -220,7 +229,7 @@ def render_family_memory_block(
 
     reflection = payload.get("latest_reflection") or {}
     if include_reflection and reflection:
-        lines.extend(["", "最近一次总结："])
+        lines.extend(["", "Latest reflection:" if english else "最近一次总结："])
         if reflection.get("summary"):
             lines.append(f"- summary: {reflection.get('summary')}")
         next_focus = reflection.get("suggested_next_focus") or []
