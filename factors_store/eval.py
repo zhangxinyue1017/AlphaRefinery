@@ -163,8 +163,12 @@ def build_style_exposures(
     data: dict[str, pd.Series],
     *,
     extra_exposures: pd.DataFrame | None = None,
+    use_proxy_exposures: bool = True,
 ) -> pd.DataFrame:
-    exposures = build_proxy_exposures(data)
+    if use_proxy_exposures:
+        exposures = build_proxy_exposures(data)
+    else:
+        exposures = pd.DataFrame(index=data["close"].index)
     if extra_exposures is None or extra_exposures.empty:
         return exposures
 
@@ -282,10 +286,15 @@ def prepare_backtest_inputs(
     *,
     horizon: int = 5,
     extra_style_exposures: pd.DataFrame | None = None,
+    use_proxy_exposures: bool = True,
 ) -> dict[str, pd.Series | pd.DataFrame]:
     label = make_forward_return(data["close"], horizon=horizon).rename("label")
     price_panel = build_price_panel(data)
-    exposures = build_style_exposures(data, extra_exposures=extra_style_exposures)
+    exposures = build_style_exposures(
+        data,
+        extra_exposures=extra_style_exposures,
+        use_proxy_exposures=use_proxy_exposures,
+    )
     return {
         "label": label,
         "price_panel": price_panel,
@@ -451,6 +460,7 @@ def run_factor_backtest_dual(
     alphalens_periods: tuple[int, ...] = (1, 5, 10),
     alphalens_quantiles: int = 5,
     alphalens_max_loss: float = 0.35,
+    enable_neutralization: bool = True,
 ) -> dict[str, object]:
     if prepared is None:
         if data is None:
@@ -502,46 +512,47 @@ def run_factor_backtest_dual(
     )
 
     diagnostics = style_exposure_diagnostics(aligned_factor, exposures=aligned_exposures)
-    neutralization_status = "ok"
+    neutralization_status = "disabled" if not enable_neutralization else "ok"
     neutralized_result: dict[str, object] | None = None
     neutralized_factor_nonnull = 0
     neutralized_factor_std = np.nan
 
-    try:
-        neutralized_factor = neutralize_factor(
-            aligned_factor,
-            exposures=aligned_exposures,
-            min_stocks=min_stocks,
-        )
-        neutralized_factor = neutralized_factor.reindex(aligned_factor.index).astype(float).rename(factor_name)
-        neutralized_factor_nonnull = int(neutralized_factor.notna().sum())
-        neutralized_factor_std = float(neutralized_factor.std(skipna=True))
-        if neutralized_factor_nonnull <= 0 or not np.isfinite(neutralized_factor_std) or neutralized_factor_std <= EPS:
-            neutralization_status = "degenerate_residual"
-        else:
-            neutralized_result = _run_factor_backtest_on_aligned(
-                neutralized_factor,
-                label=aligned_label,
-                price_panel=aligned_price_panel,
+    if enable_neutralization:
+        try:
+            neutralized_factor = neutralize_factor(
+                aligned_factor,
                 exposures=aligned_exposures,
-                factor_name=factor_name,
-                horizon=horizon,
                 min_stocks=min_stocks,
-                winsorize=winsorize,
-                zscore=zscore,
-                pure_mode=pure_mode,
-                rolling_window=rolling_window,
-                n_groups=n_groups,
-                long_group=long_group,
-                short_group=short_group,
-                cost_bps=cost_bps,
-                enable_alphalens=enable_alphalens,
-                alphalens_periods=alphalens_periods,
-                alphalens_quantiles=alphalens_quantiles,
-                alphalens_max_loss=alphalens_max_loss,
             )
-    except Exception as exc:
-        neutralization_status = f"failed: {exc}"
+            neutralized_factor = neutralized_factor.reindex(aligned_factor.index).astype(float).rename(factor_name)
+            neutralized_factor_nonnull = int(neutralized_factor.notna().sum())
+            neutralized_factor_std = float(neutralized_factor.std(skipna=True))
+            if neutralized_factor_nonnull <= 0 or not np.isfinite(neutralized_factor_std) or neutralized_factor_std <= EPS:
+                neutralization_status = "degenerate_residual"
+            else:
+                neutralized_result = _run_factor_backtest_on_aligned(
+                    neutralized_factor,
+                    label=aligned_label,
+                    price_panel=aligned_price_panel,
+                    exposures=aligned_exposures,
+                    factor_name=factor_name,
+                    horizon=horizon,
+                    min_stocks=min_stocks,
+                    winsorize=winsorize,
+                    zscore=zscore,
+                    pure_mode=pure_mode,
+                    rolling_window=rolling_window,
+                    n_groups=n_groups,
+                    long_group=long_group,
+                    short_group=short_group,
+                    cost_bps=cost_bps,
+                    enable_alphalens=enable_alphalens,
+                    alphalens_periods=alphalens_periods,
+                    alphalens_quantiles=alphalens_quantiles,
+                    alphalens_max_loss=alphalens_max_loss,
+                )
+        except Exception as exc:
+            neutralization_status = f"failed: {exc}"
 
     return {
         "raw_result": raw_result,

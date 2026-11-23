@@ -9,6 +9,7 @@ import pandas as pd
 
 from factors_store.data import build_data, load_panel
 from factors_store.datahub.panel import PANEL_FIELDS, normalize_alpaca_bars, save_panel, validate_panel
+from factors_store.eval import prepare_backtest_inputs, run_factor_backtest_dual
 from factors_store.operators import wide_correlation
 from factors_store.registry import create_default_registry
 
@@ -82,6 +83,36 @@ class USDataPanelTests(unittest.TestCase):
         self.assertEqual(factor.name, "alpha101.alpha003")
         self.assertEqual(len(factor), len(self.panel))
         self.assertTrue(np.isfinite(factor.dropna()).all())
+
+    def test_us_evaluation_can_disable_proxy_exposures(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "panel.parquet"
+            save_panel(self.panel, path)
+            data = build_data(path, infer_cap_fields=False)
+        prepared = prepare_backtest_inputs(data, horizon=5, use_proxy_exposures=False)
+        exposures = prepared["exposures"]
+        self.assertIsInstance(exposures, pd.DataFrame)
+        self.assertEqual(exposures.shape, (len(self.panel), 0))
+        self.assertTrue(exposures.index.equals(data["close"].index))
+
+    def test_us_evaluation_can_disable_neutralization(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "panel.parquet"
+            save_panel(self.panel, path)
+            data = build_data(path, infer_cap_fields=False)
+        prepared = prepare_backtest_inputs(data, horizon=5, use_proxy_exposures=False)
+        result = run_factor_backtest_dual(
+            data["close"],
+            prepared=prepared,
+            factor_name="test.close",
+            horizon=5,
+            min_stocks=10,
+            n_groups=5,
+            enable_neutralization=False,
+        )
+        self.assertEqual(result["neutralization_status"], "disabled")
+        self.assertIsNone(result["neutralized_result"])
+        self.assertEqual(result["neutralized_factor_nonnull"], 0)
 
     def test_zero_variance_rolling_correlation_is_zero(self) -> None:
         dates = pd.bdate_range("2024-01-02", periods=12)

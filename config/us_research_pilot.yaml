@@ -1,0 +1,75 @@
+version: 1
+created_at: '2026-11-23'
+project: factors_store_us_pilot
+purpose: Offline US research-pipeline reconnection with one fixed candidate
+
+us_pilot:
+  baseline_commit: 6ba6930
+  dataset_sha256: 9985f004a46d67b73d3e20478456d5f0e4d671061f45d1abda771478dbc8839b
+  archive_db: artifacts/us_research_pilot/archive.db
+  runs_dir: artifacts/us_research_pilot/runs
+  automatic_promotion: false
+  fixed_candidate:
+    name: open_gap_volume_corr_10
+    expression: neg(ts_corr(cs_rank(div(open, delay(close, 1))), cs_rank(volume), 10))
+    role: conservative
+
+evaluation_defaults:
+  panel_path: data/us/alpaca_daily_2023-01-01_2025-12-31.parquet
+  apply_filters: false
+  stock_only: false
+  exclude_st: false
+  exclude_suspended: false
+  drop_limit_move: false
+  infer_cap_fields: false
+  use_proxy_exposures: false
+  enable_neutralization: false
+  horizon: 5
+  min_stocks: 10
+  n_groups: 5
+  pure_mode: none
+  cost_bps: 10.0
+
+evaluation_protocol:
+  search:
+    start: '2023-01-03'
+    end: '2023-12-29'
+  selection:
+    start: '2024-01-02'
+    end: '2025-12-31'
+  prompt_history_stage: search
+  keep_decision_stage: selection
+  promote_stage: selection
+
+refinement_principles:
+  - Preserve the open-price and trading-activity relationship.
+  - Keep the fixed engineering candidate simple and interpretable.
+
+seed_groups:
+  - family: open_volume_correlation
+    priority: high
+    canonical_seed: alpha101.alpha003
+    aliases: []
+    direction: use_negative_sign
+    implementation_paths:
+      - factors_store/factors/alpha101_like.py
+    formulas:
+      alpha101.alpha003: -corr(rank(open), rank(volume), 10)
+    interpretation: Opening-price position versus trading-activity correlation.
+    likely_weaknesses:
+      - The ten-stock universe makes cross-sectional estimates noisy.
+    refinement_axes:
+      - Normalize the opening price by the previous close before correlation.
+    primary_objective: Verify the existing offline evaluation and decision path.
+    secondary_objective: Measure candidate redundancy and parent-relative behavior.
+    hard_constraints:
+      - Preserve the open-volume relationship.
+      - Do not use unavailable market-cap fields.
+    candidate_roles:
+      - conservative
+    anti_patterns:
+      - Pure sign flip.
+    allowed_edit_types:
+      - Insert one price normalization.
+
+llm_refinement_template: {}

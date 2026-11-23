@@ -84,7 +84,11 @@ def _evaluate_one_window(
         start=start,
         end=end,
     )
-    prepared = prepare_backtest_inputs(data, horizon=int(settings["horizon"]))
+    prepared = prepare_backtest_inputs(
+        data,
+        horizon=int(settings["horizon"]),
+        use_proxy_exposures=bool(settings["use_proxy_exposures"]),
+    )
 
     parent_factor_name = (
         str(parent_factor_name_override or "").strip()
@@ -205,6 +209,7 @@ def _evaluate_one_window(
                 n_groups=int(settings["n_groups"]),
                 cost_bps=float(settings["cost_bps"]),
                 enable_alphalens=False,
+                enable_neutralization=bool(settings["enable_neutralization"]),
             )
             result = dual_result["raw_result"]
             result["metrics"]["candidate_rank"] = item["candidate_rank"]

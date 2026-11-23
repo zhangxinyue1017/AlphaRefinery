@@ -91,6 +91,7 @@ def _build_data_for_family(
         drop_limit_move=bool(defaults.get("drop_limit_move", False)),
         min_turnover_quantile=defaults.get("min_turnover_quantile"),
         min_liquidity_quantile=defaults.get("min_liquidity_quantile"),
+        infer_cap_fields=bool(defaults.get("infer_cap_fields", True)),
     )
     settings = {
         "panel_path": effective_panel_path,
@@ -102,6 +103,9 @@ def _build_data_for_family(
         "pure_mode": str(defaults.get("pure_mode", "none")),
         "cost_bps": float(defaults.get("cost_bps", 10.0)),
         "min_stocks": int(defaults.get("min_stocks", 10)),
+        "infer_cap_fields": bool(defaults.get("infer_cap_fields", True)),
+        "use_proxy_exposures": bool(defaults.get("use_proxy_exposures", True)),
+        "enable_neutralization": bool(defaults.get("enable_neutralization", True)),
     }
     return data, meta, settings
 
@@ -515,4 +519,3 @@ def _decorrelation_diagnostics(
         "signed_corr_to_nearest_decorrelation_target": nearest_signed,
         "avg_abs_decorrelation_target_corr": float(abs_corr.mean()),
     }
-
